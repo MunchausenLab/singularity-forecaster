@@ -4,6 +4,7 @@ compatibility_date = "2024-01-01"
 
 [site]
 bucket = "./"
+pages_build_output_dir = "."
 
 [[routes]]
 # Uncomment and set your domain after deploying:
