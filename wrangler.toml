@@ -1,0 +1,10 @@
+name = "singularity-forecaster"
+main = "index.html"
+compatibility_date = "2024-01-01"
+
+[site]
+bucket = "./"
+
+[[routes]]
+# Uncomment and set your domain after deploying:
+# pattern = "singularity.your-domain.dev/*"
