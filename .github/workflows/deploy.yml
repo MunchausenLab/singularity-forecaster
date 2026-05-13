@@ -11,24 +11,57 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+      - name: Install zip
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zip jq
 
-      - name: Install dependencies
-        run: npm install 2>&1 | tail -3
+      - name: Create zip bundle
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          rm -f bundle.zip
+          zip -r bundle.zip \
+            index.html \
+            singularity-core.js \
+            package.json \
+            wrangler.toml
+          echo "Bundle size: $(wc -c < bundle.zip) bytes"
+          echo "Files:"
+          unzip -l bundle.zip
 
-      - name: Check wrangler version
-        run: npx wrangler --version
-
-      - name: Deploy to Cloudflare Pages
-        run: npx wrangler pages deploy --project-name singularity-forecaster . --verbose 2>&1
+      - name: Deploy to Cloudflare Pages via API
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE }}
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE }}
+          CF_ACCOUNT_ID: c97a8486d857b84b0c73526ba91a0221
+          CF_PROJECT: singularity-forecaster
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          echo "Creating upload URL..."
+          UPLOAD_RESPONSE=$(curl -s -X POST \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects/${CF_PROJECT}/upload-configuration" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json")
+
+          UPLOAD_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.upload_url')
+          echo "Upload URL: $UPLOAD_URL"
+
+          echo "Uploading bundle..."
+          UPLOAD_RESULT=$(curl -s -w "\n%{http_code}" -F "metadata={\"branch\":\"${GITHUB_REF_NAME:-main}\", \"commit_hash\":\"${COMMIT_SHA}\"}" -F "file=@bundle.zip" "${UPLOAD_URL}")
+
+          HTTP_CODE=$(echo "$UPLOAD_RESULT" | tail -1)
+          BODY=$(echo "$UPLOAD_RESULT" | head -n -1)
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "ERROR: Upload failed with status $HTTP_CODE"
+            exit 1
+          fi
+
+          echo ""
+          echo "Deployed successfully! Visit: https://${CF_PROJECT}.pages.dev"
