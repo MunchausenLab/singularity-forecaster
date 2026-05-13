@@ -11,6 +11,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,11 +20,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm install 2>&1 | tail -3
+
+      - name: Check wrangler version
+        run: npx wrangler --version
 
       - name: Deploy to Cloudflare Pages
-        run: npx wrangler pages deploy --project-name singularity-forecaster .
+        run: npx wrangler pages deploy --project-name singularity-forecaster . --verbose 2>&1
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE }}
