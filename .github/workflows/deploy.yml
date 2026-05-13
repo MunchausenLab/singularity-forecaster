@@ -21,10 +21,10 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install wrangler
+      - name: Install dependencies
         run: npm ci
 
-      - name: Deploy
+      - name: Deploy to Cloudflare Pages
         run: npx wrangler@3 pages deploy --project-name singularity-forecaster .
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}

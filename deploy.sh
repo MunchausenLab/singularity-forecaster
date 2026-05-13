@@ -64,10 +64,7 @@ deploy_cloudflare() {
     exit 1
   fi
 
-  # Set CF API token as env var for wrangler
-  export CF_API_AUTH_TOKEN="${CF_API_TOKEN}"
-
-  echo "Installing wrangler..."
+echo "Installing wrangler..."
   npm install --silent 2>/dev/null
 
   echo "Deploying to Cloudflare Pages..."
