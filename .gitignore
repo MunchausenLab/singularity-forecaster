@@ -1,6 +1,4 @@
 node_modules/
+__pycache__/
 .env
 *.log
-test_js_temp.js
-js_results.json
-python_results.json
