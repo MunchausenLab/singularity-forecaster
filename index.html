@@ -145,8 +145,8 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <div class="header-left">
     <div class="logo">S</div>
     <div>
-      <h1 id="hdr_title" data-i18n="hdr_title">Singularity <span style="color:var(--accent)">App</span></h1>
-      <div class="subtitle" id="hdr_sub" data-i18n="hdr_sub">Monte Carlo Dashboard v2.1</div>
+      <h1 id="hdr_title" data-i18n="hdr_title">Singularity <span style="color:var(--accent)">Forecaster</span></h1>
+      <div class="subtitle" id="hdr_sub" data-i18n="hdr_sub">v2.1 Monte Carlo Dashboard</div>
     </div>
   </div>
   <div class="header-right">
@@ -691,10 +691,11 @@ function colorProb(id, val) {
 }
 
 function yearsText(years) {
-  if (!isFinite(years) || years > 50) return '> 50 лет';
+  if (!isFinite(years) || years > 50) return LANG[window._lang || 'ru'].fY_gt;
   const d = new Date();
   d.setFullYear(d.getFullYear() + years);
-  return years.toFixed(1) + ' лет (' + d.toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' }) + ')';
+  const month = d.toLocaleDateString(window._lang === 'en' ? 'en-US' : 'ru-RU', { month: 'short', year: 'numeric' });
+  return years.toFixed(1) + LANG[window._lang || 'ru'].fY_suffix + '<br>(' + month + ')';
 }
 
 // ============================================================================
@@ -801,17 +802,17 @@ window._lang = 'ru';
 const LANG = {};
 
 LANG.ru = {
-  label_n:'N', label_hw:'HW мес', label_algo:'Algo мес', label_ceil:'Ceiling', label_dw:'DW старт',
-  run_btn:'Run',
+  label_n:'N', label_hw:'Железо (месяцев)', label_algo:'Алгоритмы (месяцев)', label_ceil:'Потолок парадигмы', label_dw:'Стена данных (год)',
+  run_btn:'Запуск',
   sb_agi:'AGI median', sb_asi:'ASI median',
   tag1:'Вероятностный анализ', tag2:'Динамика', tag3:'Кумулятивная', tag4:'Анализ чувствительности',
   chart1:'1. Распределение AGI / ASI по Monte Carlo',
-  chart2:'2. Рост capability во времени',
+  chart2:'2. Рост возможностей во времени',
   chart3:'3. Накопленная вероятность AGI / ASI',
   chart4:'4. Вклад факторов: аналитика барьеров',
   tip1:'Показывает, где группируются 3000 прогонов Монте-Карло. Чем выше столбец — тем больше сценариев привели к AGI/ASI в этом году. Хвост справа — сценарии «ещё не случилось».',
-  tip2:'Медианная траектория capability. Синяя зона (10–90%) — диапазон исходов: если зона широкая, модель говорит «может быть через 2, может через 20 лет». Пунктиры — пороги AGI (10) и ASI (1000).',
-  tip3:'P(AGI ≤ X) — шанс, что AGI появится не позднее, чем через X лет. Если кривая круто поднимается — быстрый переход от «почти нет» к «почти точно». Плоская часть — затор (data wall, регуляция, энергетика).',
+  tip2:'Медианная траектория возможностей. Синяя зона (10–90%) — диапазон исходов: если зона широкая, модель говорит «может быть через 2, может через 20 лет». Пунктиры — пороги AGI (10) и ASI (1000).',
+  tip3:'P(AGI ≤ X) — шанс, что AGI появится не позднее, чем через X лет. Если кривая круто поднимается — быстрый переход от «почти нет» к «почти точно». Плоская часть — затор (стена данных, регуляция, энергетика).',
   tip4:'Каждый параметр прогоняется с 600 симуляциями — один изменён, остальные базовые. Зелёные бары = AGI быстрее, красные = медленнее. Самый длинный бар — фактор с наибольшим влиянием.',
   about_title:'О модели',
   about_intro:'Эта симуляция представляет собой вероятностный прогноз сроков появления AGI (Общего Искусственного Интеллекта) и ASI (Сверхинтеллекта) с помощью метода Монте-Карло и учитывает ключевые факторы:',
@@ -820,22 +821,22 @@ LANG.ru = {
   f3_title:'Рекурсивное самоулучшение (RSI)', f3_text:'Способность ИИ ускорять собственный прогресс, как только он достигает определённого уровня интеллекта.',
   f4_title:'Результат: распределение вероятностей', f4_text:'Результат — распределение вероятностей, показывающее наиболее вероятные временные окна появления AGI и ASI.',
   defaults_label:'Ключевые допущения модели (параметры по умолчанию):',
-  d1_title:'Железо (удвоение compute): 8 месяцев', d1_text:'Консервативная оценка, учитывающая замедление роста из-за энергетических и логистических ограничений («Power Wall»).',
-  d2_title:'Алгоритмы (удвоение эффективности): 6 месяцев', d2_text:'Отражает исторически быстрый прогресс в архитектурах, который, однако, начинает замедляться из-за нехватки качественных данных («Data Wall»).',
+  d1_title:'Железо (удвоение вычислений): 8 месяцев', d1_text:'Консервативная оценка, учитывающая замедление роста из-за энергетических и логистических ограничений («Power Wall»).',
+  d2_title:'Алгоритмы (удвоение эффективности): 6 месяцев', d2_text:'Отражает исторически быстрый прогресс в архитектурах, который, однако, начинает замедляться из-за нехватки качественных данных («Стена данных»).',
   d3_title:'Потолок парадигмы (P. Ceiling): 8.0', d3_text:'Означает предел для текущих архитектур (при пороге AGI = 10.0). Модель предполагает, что для финального рывка потребуется случайный научный прорыв («смена парадигмы»). Уровень P. Ceiling = 1000.0 означает сингулярность на трансформерах.',
   d4_title:'Количество прогонов (N-ранов): 3000', d4_text:'Обеспечивает статистическую значимость и построение гладких кривых распределения.',
   defs_label:'Определения: что такое AGI и ASI в этой модели',
-  defs_intro:'В рамках данной математической модели мы отходим от философских споров о «сознании» и используем строгие операциональные (практические и измеримые) определения, привязанные к шкале Capability Score, где текущие передовые модели начала 2026 года приняты за базовую единицу (1.0).',
-  agi_def_title:'AGI — Artificial General Intelligence', agi_def_score:'Capability Score = 10.0',
+  defs_intro:'В рамках данной математической модели мы отходим от философских споров о «сознании» и используем строгие операциональные (практические и измеримые) определения, привязанные к шкале возможностей (Capability Score), где текущие передовые модели начала 2026 года приняты за базовую единицу (1.0).',
+  agi_def_title:'AGI — Artificial General Intelligence', agi_def_score:'Возможности (Capability Score) = 10.0',
   agi_def_text1:'Не «всезнающий бог», а автономный ИИ-исследователь уровня PhD. Демонстрирует истинное обобщение — не просто воспроизводит заученные паттерны, а решает задачи на абстрактное мышление (уровень ARC-AGI-2). Может автономно планировать эксперименты, писать продакшен-код, находить ошибки в чужих статьях и предлагать новые архитектуры.',
   agi_def_text2:'Роль в модели: триггер для включения RSI — начинает сам ускорять разработку следующего поколения алгоритмов.',
-  asi_def_title:'ASI — Artificial Superintelligence', asi_def_score:'Capability Score = 1000.0 (×100 vs AGI)',
+  asi_def_title:'ASI — Artificial Superintelligence', asi_def_score:'Возможности (Capability Score) = 1000.0 (×100 от AGI)',
   asi_def_text1:'Точка Сингулярности. Качественный разрыв: разница между ASI и AGI сопоставима с разницей между академиком и первоклассником. Может одновременно удерживать в контексте и анализировать данные целых научных дисциплин. Сжимает десятилетия R&D в месяцы или недели. Обходит нефизические барьеры за счёт создания принципиально новых технологий.',
   asi_def_text2:'Роль в модели: конец симуляции. За этой чертой прогнозы теряют смысл.',
   footer_note:'Данные оценочные', loading:'Монте-Карло…',
   ch_legend_median:'Медиана', ch_legend_agi:'AGI (10)', ch_legend_asi:'ASI (1000)',
   ch1_xlabel:'Лет от сейчас', ch1_ylabel:'Кол-во прогонов', ch1_hover_agi:'AGI: {x} лет', ch1_hover_asi:'ASI: {x} лет', ch1_hover_runs:' прогонов',
-  ch2_xlabel:'Лет от сейчас', ch2_ylabel:'Capability score',
+  ch2_xlabel:'Лет от сейчас', ch2_ylabel:'Возможности (Capability Score)',
   ch3_xlabel:'Лет от сейчас', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
   ch4_label_base:'Базовая', ch4_faster:'AGI быстрее', ch4_slower:'AGI медленнее',
   fY_suffix:' лет', fY_gt:'> 50 лет', alert_err:'Ошибка: ',
@@ -844,7 +845,7 @@ LANG.ru = {
 };
 
 LANG.en = {
-  label_n:'N', label_hw:'HW mo', label_algo:'Algo mo', label_ceil:'Ceiling', label_dw:'DW start',
+  label_n:'N', label_hw:'Hardware (months)', label_algo:'Algorithms (months)', label_ceil:'Paradigm Ceiling', label_dw:'Data Wall (year)',
   run_btn:'Run',
   sb_agi:'AGI median', sb_asi:'ASI median',
   tag1:'Probabilistic Analysis', tag2:'Dynamics', tag3:'Cumulative', tag4:'Sensitivity Analysis',
@@ -878,11 +879,11 @@ LANG.en = {
   footer_note:'Estimates only', loading:'Monte Carlo…',
   ch_legend_median:'Median', ch_legend_agi:'AGI (10)', ch_legend_asi:'ASI (1000)',
   ch1_xlabel:'Years from now', ch1_ylabel:'Run count', ch1_hover_agi:'AGI: {x} yrs', ch1_hover_asi:'ASI: {x} yrs', ch1_hover_runs:' runs',
-  ch2_xlabel:'Years from now', ch2_ylabel:'Capability score',
+  ch2_xlabel:'Years from now', ch2_ylabel:'Capability Score',
   ch3_xlabel:'Years from now', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
   ch4_label_base:'Baseline', ch4_faster:'Faster AGI', ch4_slower:'Slower AGI',
   fY_suffix:' yrs', fY_gt:'> 50 yrs', alert_err:'Error: ',
-  hdr_title:'Singularity App', hdr_sub:'Monte Carlo Dashboard v2.1',
+  hdr_title:'Singularity Forecaster', hdr_sub:'v2.1 Monte Carlo Dashboard',
   sb_pasi_2028:'P(ASI · 2028)', sb_pasi_2030:'P(ASI · 2030)', sb_pasi_2035:'P(ASI · 2035)', sb_pasi_2040:'P(ASI · 2040)', sb_pagi_2030:'P(AGI · 2030)',
 };
 
