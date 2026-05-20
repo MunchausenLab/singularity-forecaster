@@ -520,7 +520,13 @@ function runTrajectory() {
 
 function runMonteCarloAsync(nRuns, onProgress) {
   return new Promise((resolve) => {
-    const agiList = [], asiList = [], trajectories = [];
+    const agiList = [], asiList = [];
+    // Pre-allocate trajectory aggregation arrays
+    const MAX_POINTS = 50; // 40 years / ~1 year step
+    const trajYears = new Float64Array(MAX_POINTS);
+    const trajCaps = []; // array of Float64Arrays for each time point
+    for (let k = 0; k < MAX_POINTS; k++) trajCaps.push([]);
+    let trajLen = 0;
     let geoCount = 0, totalShifts = 0;
     const chunkSize = 100;
     let i = 0;
@@ -531,9 +537,15 @@ function runMonteCarloAsync(nRuns, onProgress) {
         const r = runTrajectory();
         agiList.push(r.agiYears);
         asiList.push(r.asiYears);
-        trajectories.push(r.timeline);
         if (r.geoActive) geoCount++;
         totalShifts += r.shiftsCount;
+        // Aggregate trajectory
+        const tl = r.timeline;
+        if (tl.length > trajLen) trajLen = tl.length;
+        for (let k = 0; k < tl.length; k++) {
+          trajCaps[k].push(tl[k].cap);
+          trajYears[k] = tl[k].year;
+        }
       }
       if (onProgress) onProgress(i / nRuns);
       if (i < nRuns) {
@@ -546,15 +558,14 @@ function runMonteCarloAsync(nRuns, onProgress) {
         for (const v of agiList) if (isFinite(v)) { const idx = Math.floor((v - 0.5) / binW); if (idx >= 0 && idx < hAgi.length) hAgi[idx]++; }
         for (const v of asiList) if (isFinite(v)) { const idx = Math.floor((v - 0.5) / binW); if (idx >= 0 && idx < hAsi.length) hAsi[idx]++; }
 
-        // Trajectory — use max length, filter per-step
-        const maxLen = Math.max(...trajectories.map(t => t.length));
-        const tStep = Math.max(1, Math.floor(maxLen / 150));
+        // Trajectory — use pre-aggregated data
+        const tStep = Math.max(1, Math.floor(trajLen / 150));
         const yrs = [], med = [], p10a = [], p25a = [], p75a = [], p90a = [];
-        for (let j = 0; j < maxLen; j += tStep) {
-          const vals = trajectories.filter(t => j < t.length).map(t => t[j].cap);
+        for (let j = 0; j < trajLen; j += tStep) {
+          const vals = trajCaps[j];
           if (vals.length > 0) {
             vals.sort((a, b) => a - b);
-            yrs.push(trajectories[0][j].year);
+            yrs.push(trajYears[j]);
             p10a.push(percentile(vals, 10)); p25a.push(percentile(vals, 25));
             med.push(percentile(vals, 50)); p75a.push(percentile(vals, 75)); p90a.push(percentile(vals, 90));
           }
