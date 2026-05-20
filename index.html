@@ -260,6 +260,73 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   </div>
 </div>
 
+<!-- ===== ABOUT ===== -->
+<div style="padding:0 32px;max-width:1100px;margin:0 auto;width:100%">
+  <div class="about" id="aboutSection">
+    <h2 data-i18n="about_title">О модели v2.5</h2>
+    <p data-i18n="about_intro">Модель v2.5 использует трёхмерную архитектуру интеллекта (Reasoning, Agency, Reliability) и учитывает геополитику, экономику и энергетику:</p>
+    <div class="fgrid">
+      <div class="fc">
+        <h4 data-i18n="f1_title">3 вектора интеллекта</h4>
+        <p data-i18n="f1_text">AGI определяется как min(Reasoning, Agency, Reliability). Reasoning скейлится легко, но Agency — бутылочное горлышко: потолок 4.0 без смены парадигмы.</p>
+      </div>
+      <div class="fc">
+        <h4 data-i18n="f2_title">Геополитический форсаж</h4>
+        <p data-i18n="f2_text">При Reasoning > 7.0 с вероятностью 30%/год запускается «Момент Спутника» — государства отменяют регуляции и форсируют энергетику (×1.25 к железу).</p>
+      </div>
+      <div class="fc">
+        <h4 data-i18n="f3_title">Экономическая стена</h4>
+        <p data-i18n="f3_text">Если Reasoning растёт, а Agency отстаёт (разрыв > 2.0), инвестиции падают. ROI инференса становится отрицательным без автономности.</p>
+      </div>
+      <div class="fc">
+        <h4 data-i18n="f4_title">Энергетическая стена</h4>
+        <p data-i18n="f4_text">С 2026 года дефицит трансформаторов и сетей тормозит рост compute. Геополитика смягчает этот эффект на 40%.</p>
+      </div>
+    </div>
+    <div class="sec-label" data-i18n="defaults_label">Ключевые допущения (параметры по умолчанию):</div>
+    <div class="fgrid">
+      <div class="fc">
+        <h4 data-i18n="d1_title">Железо (удвоение): 7 месяцев</h4>
+        <p data-i18n="d1_text">Ускорено из-за огромного capex 2025-2026 (xAI Colossus, GPT-Next).</p>
+      </div>
+      <div class="fc">
+        <h4 data-i18n="d2_title">Алгоритмы (удвоение): 6 месяцев</h4>
+        <p data-i18n="d2_text">Исторически быстрый прогресс, замедляется из-за нехватки данных.</p>
+      </div>
+      <div class="fc">
+        <h4 data-i18n="d3_title">Потолок агентности: 4.0</h4>
+        <p data-i18n="d3_text">Agency — главное бутылочное горлышко. AGI = 10.0 невозможен без смены парадигмы (вероятность 15%/год, ×3 к потолкам).</p>
+      </div>
+      <div class="fc">
+        <h4 data-i18n="d4_title">Прогонов (N): 3000</h4>
+        <p data-i18n="d4_text">Обеспечивает статистическую значимость и гладкие кривые.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="about" id="defsSection">
+    <div class="sec-label" data-i18n="defs_label">Определения: что такое AGI и ASI в этой модели</div>
+    <p style="font-size:.82rem;color:#9898b0;margin-bottom:14px" data-i18n="defs_intro">В модели v2.5 используются строгие операциональные определения на основе трёхмерной шкалы (Reasoning, Agency, Reliability), где текущие передовые модели начала 2026 года = 1.0.</p>
+    <div class="defs-grid">
+      <div class="def-card">
+        <h4>🤖 <span data-i18n="agi_def_title">AGI — Artificial General Intelligence</span></h4>
+        <div class="score" style="color:var(--orange)" data-i18n="agi_def_score">min(Reasoning, Agency, Reliability) = 10.0</div>
+        <p data-i18n="agi_def_text1">Автономный ИИ-исследователь уровня PhD. Демонстрирует истинное обобщение, способен к сложному планированию и надёжной работе (>99%). Может автономно проводить эксперименты, писать продакшен-код и находить ошибки в чужих статьях.</p>
+        <p data-i18n="agi_def_text2" style="color:#666680;font-size:.72rem;margin-top:6px">Роль в модели: триггер для RSI и геополитической реакции. Без достаточного уровня Agency невозможен.</p>
+      </div>
+      <div class="def-card">
+        <h4>🌌 <span data-i18n="asi_def_title">ASI — Artificial Superintelligence</span></h4>
+        <div class="score" style="color:var(--red)" data-i18n="asi_def_score">min(Reasoning, Agency) = 100.0</div>
+        <p data-i18n="asi_def_text1">Фазовый переход. ИИ автономно сжимает десятилетия научного прогресса в месяцы. Разрыв между ASI и AGI сопоставим с разницей между академиком и первоклассником.</p>
+        <p data-i18n="asi_def_text2" style="color:#666680;font-size:.72rem;margin-top:6px">Роль в модели: конец симуляции. За этой чертой прогнозы теряют смысл.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  BelikVCP | Singularity Forecaster v2.5 | <span data-i18n="footer_note">Данные оценочные</span>
+</footer>
 
 <!-- ===== OVERLAY ===== -->
 <div class="overlay" id="overlay">
@@ -479,13 +546,13 @@ function runMonteCarloAsync(nRuns, onProgress) {
         for (const v of agiList) if (isFinite(v)) { const idx = Math.floor((v - 0.5) / binW); if (idx >= 0 && idx < hAgi.length) hAgi[idx]++; }
         for (const v of asiList) if (isFinite(v)) { const idx = Math.floor((v - 0.5) / binW); if (idx >= 0 && idx < hAsi.length) hAsi[idx]++; }
 
-        // Trajectory
-        const maxLen = Math.min(...trajectories.map(t => t.length));
+        // Trajectory — use max length, filter per-step
+        const maxLen = Math.max(...trajectories.map(t => t.length));
         const tStep = Math.max(1, Math.floor(maxLen / 150));
         const yrs = [], med = [], p10a = [], p25a = [], p75a = [], p90a = [];
         for (let j = 0; j < maxLen; j += tStep) {
           const vals = trajectories.filter(t => j < t.length).map(t => t[j].cap);
-          if (vals.length) {
+          if (vals.length > 0) {
             vals.sort((a, b) => a - b);
             yrs.push(trajectories[0][j].year);
             p10a.push(percentile(vals, 10)); p25a.push(percentile(vals, 25));
