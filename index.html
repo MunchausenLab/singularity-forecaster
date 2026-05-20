@@ -145,8 +145,8 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <div class="header-left">
     <div class="logo">S</div>
     <div>
-      <h1 id="hdr_title">Singularity <span style="color:var(--accent)">Forecaster</span></h1>
-      <div class="subtitle" id="hdr_sub">Monte Carlo Probabilistic Dashboard</div>
+      <h1 id="hdr_title" data-i18n="hdr_title">Singularity <span style="color:var(--accent)">App</span></h1>
+      <div class="subtitle" id="hdr_sub" data-i18n="hdr_sub">Monte Carlo Dashboard v2.1</div>
     </div>
   </div>
   <div class="header-right">
@@ -171,23 +171,23 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   </div>
   <div class="status-item">
     <div class="status-value probability" id="v28">—</div>
-    <div class="status-label">P(ASI ≤ 2028)</div>
+    <div class="status-label" data-i18n="sb_pasi_2028">P(ASI · 2028)</div>
   </div>
   <div class="status-item">
     <div class="status-value probability" id="v30">—</div>
-    <div class="status-label">P(ASI ≤ 2030)</div>
+    <div class="status-label" data-i18n="sb_pasi_2030">P(ASI · 2030)</div>
   </div>
   <div class="status-item">
     <div class="status-value probability" id="v35">—</div>
-    <div class="status-label">P(ASI ≤ 2035)</div>
+    <div class="status-label" data-i18n="sb_pasi_2035">P(ASI · 2035)</div>
   </div>
   <div class="status-item">
     <div class="status-value probability" id="v40">—</div>
-    <div class="status-label">P(ASI ≤ 2040)</div>
+    <div class="status-label" data-i18n="sb_pasi_2040">P(ASI · 2040)</div>
   </div>
   <div class="status-item">
     <div class="status-value green" id="vPagi">—</div>
-    <div class="status-label">P(AGI ≤ 2030)</div>
+    <div class="status-label" data-i18n="sb_pagi_2030">P(AGI · 2030)</div>
   </div>
 </div>
 
@@ -215,7 +215,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     <input type="number" id="iDW" value="2026" min="2025" max="2035" step="0.5">
   </div>
   <button class="btn btn-primary" id="runBtn" onclick="runSimulation()">
-    ▶ Run Simulation
+    ▶ <span data-i18n="run_btn">Run</span>
   </button>
   <div class="controls-right">
     <div class="mode-toggle">
@@ -228,34 +228,34 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 <!-- ===== CHARTS ===== -->
 <div class="grid">
   <div class="card">
-    <span class="card-tag" data-i18n="tag1">Probabilistic Analysis</span>
+    <span class="card-tag" data-i18n="tag1">Вероятностный анализ</span>
     <div class="card-header">
-      <h3 data-i18n="chart1">1. AGI / ASI Distribution (Monte Carlo)</h3>
-      <span class="tip">?<span class="tip-text" data-i18n="tip1">Histogram of 3000 Monte Carlo runs. Taller bars = more scenarios hitting AGI/ASI in that year. Right tail = "not yet happened" scenarios.</span></span>
+      <h3 data-i18n="chart1">1. Распределение AGI / ASI по Monte Carlo</h3>
+      <span class="tip">?<span class="tip-text" data-i18n="tip1">Показывает, где группируются 3000 прогонов Монте-Карло. Чем выше столбец — тем больше сценариев привели к AGI/ASI в этом году. Хвост справа — сценарии «ещё не случилось».</span></span>
     </div>
     <div class="chart-container" id="c1"></div>
   </div>
   <div class="card">
-    <span class="card-tag" data-i18n="tag2">Dynamics</span>
+    <span class="card-tag" data-i18n="tag2">Динамика</span>
     <div class="card-header">
-      <h3 data-i18n="chart2">2. Capability Growth Over Time</h3>
-      <span class="tip">?<span class="tip-text" data-i18n="tip2">Median capability trajectory. Blue zone (10–90%) shows outcome range. Dashed lines mark AGI (10) and ASI (1000) thresholds.</span></span>
+      <h3 data-i18n="chart2">2. Рост capability во времени</h3>
+      <span class="tip">?<span class="tip-text" data-i18n="tip2">Медианная траектория capability. Синяя зона (10–90%) — диапазон исходов: если зона широкая, модель говорит «может быть через 2, может через 20 лет». Пунктиры — пороги AGI (10) и ASI (1000).</span></span>
     </div>
     <div class="chart-container" id="c2"></div>
   </div>
   <div class="card">
-    <span class="card-tag" data-i18n="tag3">Cumulative</span>
+    <span class="card-tag" data-i18n="tag3">Кумулятивная</span>
     <div class="card-header">
-      <h3 data-i18n="chart3">3. Cumulative Probability of AGI / ASI</h3>
-      <span class="tip">?<span class="tip-text" data-i18n="tip3">P(AGI ≤ X) = chance AGI appears within X years. Steep curve = rapid transition. Flat sections = bottlenecks (data wall, regulation).</span></span>
+      <h3 data-i18n="chart3">3. Накопленная вероятность AGI / ASI</h3>
+      <span class="tip">?<span class="tip-text" data-i18n="tip3">P(AGI ≤ X) — шанс, что AGI появится не позднее, чем через X лет. Если кривая круто поднимается — быстрый переход от «почти нет» к «почти точно». Плоская часть — затор (data wall, регуляция, энергетика).</span></span>
     </div>
     <div class="chart-container" id="c3"></div>
   </div>
   <div class="card">
-    <span class="card-tag" data-i18n="tag4">Sensitivity Analysis</span>
+    <span class="card-tag" data-i18n="tag4">Анализ чувствительности</span>
     <div class="card-header">
-      <h3 data-i18n="chart4">4. Barrier & Factor Analysis</h3>
-      <span class="tip">?<span class="tip-text" data-i18n="tip4">Each parameter tested with 600 runs — one changed, rest baseline. Green = AGI faster, red = slower. Longest bar = most influential factor.</span></span>
+      <h3 data-i18n="chart4">4. Вклад факторов: аналитика барьеров</h3>
+      <span class="tip">?<span class="tip-text" data-i18n="tip4">Каждый параметр прогоняется с 600 симуляциями — один изменён, остальные базовые. Зелёные бары = AGI быстрее, красные = медленнее. Самый длинный бар — фактор с наибольшим влиянием.</span></span>
     </div>
     <div class="chart-container" id="c4"></div>
   </div>
@@ -264,66 +264,69 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 <!-- ===== ABOUT ===== -->
 <div style="padding:0 32px;max-width:1100px;margin:0 auto;width:100%">
   <div class="about" id="aboutSection">
-    <h2 data-i18n="about_title">About the Model</h2>
-    <p data-i18n="about_intro">This simulation provides a probabilistic forecast of AGI and ASI timelines using Monte Carlo methods, accounting for key factors:</p>
+    <h2 data-i18n="about_title">О модели</h2>
+    <p data-i18n="about_intro">Эта симуляция представляет собой вероятностный прогноз сроков появления AGI (Общего Искусственного Интеллекта) и ASI (Сверхинтеллекта) с помощью метода Монте-Карло и учитывает ключевые факторы:</p>
     <div class="fgrid">
       <div class="fc">
-        <h4 data-i18n="f1_title">S-Curves of Growth</h4>
-        <p data-i18n="f1_text">Every technology has a limit. The model assumes the current paradigm will hit a ceiling, requiring a scientific breakthrough for further progress.</p>
+        <h4 data-i18n="f1_title">S-образные кривые роста</h4>
+        <p data-i18n="f1_text">Любая технология имеет предел. Модель предполагает, что текущая парадигма (например, трансформеры) упрётся в «потолок», и для дальнейшего прогресса потребуется научный прорыв.</p>
       </div>
       <div class="fc">
-        <h4 data-i18n="f2_title">Physical & Regulatory Barriers</h4>
-        <p data-i18n="f2_text">Includes Data Wall (data scarcity), energy constraints, and safety-related pauses (alignment moratoriums).</p>
+        <h4 data-i18n="f2_title">Физические и регуляторные барьеры</h4>
+        <p data-i18n="f2_text">Модель включает замедление от «Стены данных» (нехватка качественных текстов), энергетических ограничений и потенциальных пауз по соображениям безопасности (Alignment).</p>
       </div>
       <div class="fc">
-        <h4 data-i18n="f3_title">Recursive Self-Improvement</h4>
-        <p data-i18n="f3_text">Once AI reaches researcher-level intelligence, it begins accelerating its own development — a feedback loop leading toward rapid capability growth.</p>
+        <h4 data-i18n="f3_title">Рекурсивное самоулучшение (RSI)</h4>
+        <p data-i18n="f3_text">Способность ИИ ускорять собственный прогресс, как только он достигает определённого уровня интеллекта.</p>
       </div>
       <div class="fc">
-        <h4 data-i18n="f4_title">Probability Distribution</h4>
-        <p data-i18n="f4_text">The result is a probability distribution showing the most likely time windows for AGI and ASI emergence.</p>
+        <h4 data-i18n="f4_title">Результат: распределение вероятностей</h4>
+        <p data-i18n="f4_text">Результат — распределение вероятностей, показывающее наиболее вероятные временные окна появления AGI и ASI.</p>
       </div>
     </div>
-    <div class="sec-label" data-i18n="defaults_label">Key Model Assumptions (Default Parameters)</div>
+    <div class="sec-label" data-i18n="defaults_label">Ключевые допущения модели (параметры по умолчанию):</div>
     <div class="fgrid">
       <div class="fc">
-        <h4 data-i18n="d1_title">Compute Doubling: 8 months</h4>
-        <p data-i18n="d1_text">Conservative estimate accounting for energy and logistical constraints ("Power Wall").</p>
+        <h4 data-i18n="d1_title">Железо (удвоение compute): 8 месяцев</h4>
+        <p data-i18n="d1_text">Консервативная оценка, учитывающая замедление роста из-за энергетических и логистических ограничений («Power Wall»).</p>
       </div>
       <div class="fc">
-        <h4 data-i18n="d2_title">Algo Efficiency Doubling: 6 months</h4>
-        <p data-i18n="d2_text">Reflects rapid architectural progress, now slowing due to data scarcity ("Data Wall").</p>
+        <h4 data-i18n="d2_title">Алгоритмы (удвоение эффективности): 6 месяцев</h4>
+        <p data-i18n="d2_text">Отражает исторически быстрый прогресс в архитектурах, который, однако, начинает замедляться из-за нехватки качественных данных («Data Wall»).</p>
       </div>
       <div class="fc">
-        <h4 data-i18n="d3_title">Paradigm Ceiling: 8.0</h4>
-        <p data-i18n="d3_text">Current architecture limit (AGI threshold = 10.0). Final push requires a paradigm shift.</p>
+        <h4 data-i18n="d3_title">Потолок парадигмы (P. Ceiling): 8.0</h4>
+        <p data-i18n="d3_text">Означает предел для текущих архитектур (при пороге AGI = 10.0). Модель предполагает, что для финального рывка потребуется случайный научный прорыв («смена парадигмы»). Уровень P. Ceiling = 1000.0 означает сингулярность на трансформерах.</p>
       </div>
       <div class="fc">
-        <h4 data-i18n="d4_title">Monte Carlo Runs: 3000</h4>
-        <p data-i18n="d4_text">Ensures statistical significance and smooth distribution curves.</p>
+        <h4 data-i18n="d4_title">Количество прогонов (N-ранов): 3000</h4>
+        <p data-i18n="d4_text">Обеспечивает статистическую значимость и построение гладких кривых распределения.</p>
       </div>
     </div>
   </div>
 
   <div class="about" id="defsSection">
-    <div class="sec-label" data-i18n="defs_label">Definitions: AGI and ASI</div>
+    <div class="sec-label" data-i18n="defs_label">Определения: что такое AGI и ASI в этой модели</div>
+    <p style="font-size:.82rem;color:#9898b0;margin-bottom:14px" data-i18n="defs_intro">В рамках данной математической модели мы отходим от философских споров о «сознании» и используем строгие операциональные (практические и измеримые) определения, привязанные к шкале Capability Score, где текущие передовые модели начала 2026 года приняты за базовую единицу (1.0).</p>
     <div class="defs-grid">
       <div class="def-card">
-        <h4>🤖 AGI — Artificial General Intelligence</h4>
-        <div class="score" style="color:var(--orange)">Capability Score = 10.0</div>
-        <p data-i18n="agi_def_text1">Not an "all-knowing god" but an autonomous AI researcher at PhD level. Solves novel abstract reasoning tasks (ARC-AGI-2 level).</p>
+        <h4>🤖 <span data-i18n="agi_def_title">AGI — Artificial General Intelligence</span></h4>
+        <div class="score" style="color:var(--orange)" data-i18n="agi_def_score">Capability Score = 10.0</div>
+        <p data-i18n="agi_def_text1">Не «всезнающий бог», а автономный ИИ-исследователь уровня PhD. Демонстрирует истинное обобщение — не просто воспроизводит заученные паттерны, а решает задачи на абстрактное мышление (уровень ARC-AGI-2). Может автономно планировать эксперименты, писать продакшен-код, находить ошибки в чужих статьях и предлагать новые архитектуры.</p>
+        <p data-i18n="agi_def_text2" style="color:#666680;font-size:.72rem;margin-top:6px">Роль в модели: триггер для включения RSI — начинает сам ускорять разработку следующего поколения алгоритмов.</p>
       </div>
       <div class="def-card">
-        <h4>🌌 ASI — Artificial Superintelligence</h4>
-        <div class="score" style="color:var(--red)">Capability Score = 1000.0</div>
-        <p data-i18n="asi_def_text1">The Singularity point. Qualitative leap comparable to the gap between an academic and a first-grader. Compresses decades of R&D into months.</p>
+        <h4>🌌 <span data-i18n="asi_def_title">ASI — Artificial Superintelligence</span></h4>
+        <div class="score" style="color:var(--red)" data-i18n="asi_def_score">Capability Score = 1000.0 (×100 vs AGI)</div>
+        <p data-i18n="asi_def_text1">Точка Сингулярности. Качественный разрыв: разница между ASI и AGI сопоставима с разницей между академиком и первоклассником. Может одновременно удерживать в контексте и анализировать данные целых научных дисциплин. Сжимает десятилетия R&D в месяцы или недели. Обходит нефизические барьеры за счёт создания принципиально новых технологий.</p>
+        <p data-i18n="asi_def_text2" style="color:#666680;font-size:.72rem;margin-top:6px">Роль в модели: конец симуляции. За этой чертой прогнозы теряют смысл.</p>
       </div>
     </div>
   </div>
 </div>
 
 <footer>
-  Singularity Forecaster v2.1 — Estimates only. Model does not account for geopolitical black swans.
+  BelikVCP | Singularity App v2.1 | <span data-i18n="footer_note">Данные оценочные</span>
 </footer>
 
 <!-- ===== OVERLAY ===== -->
@@ -627,8 +630,9 @@ async function runSimulation() {
 
     currentResults = results;
     updateUI(results);
+    console.log('Simulation complete', results.summary);
   } catch (e) {
-    console.error(e);
+    console.error('Simulation error:', e);
     alert('Simulation error: ' + e.message);
   } finally {
     simulationRunning = false;
@@ -667,6 +671,7 @@ function updateUI(r) {
   plotTrajectory(r.trajectory);
   plotCumulative(r.cumulative);
   plotSensitivity(r.sensitivity);
+  window._data_summary = r.summary;
 }
 
 function setVal(id, text, className) {
@@ -708,50 +713,47 @@ const LAYOUT_BASE = {
 const PLOT_CFG = { responsive: true, displayModeBar: false };
 
 function plotHistogram(h) {
-  const t = window._lang || 'ru';
-  const labels = { ru: { agi: 'AGI', asi: 'ASI', x: 'Лет от сейчас', y: 'Кол-во прогонов' }, en: { agi: 'AGI', asi: 'ASI', x: 'Years from now', y: 'Run count' } };
+  const t = LANG[window._lang || 'ru'] || LANG.ru;
   const tr = [
-    { x: h.labels, y: h.agi, type: 'bar', name: labels[t].agi, marker: { color: '#f0883e', line: { width: 0 } }, hovertemplate: labels[t].agi + ': %{x} лет<br>%{y} прогонов<extra></extra>' },
-    { x: h.labels, y: h.asi, type: 'bar', name: labels[t].asi, marker: { color: '#ef4444', line: { width: 0 } }, hovertemplate: labels[t].asi + ': %{x} лет<br>%{y} прогонов<extra></extra>' },
+    { x: h.labels, y: h.agi, type: 'bar', name: 'AGI', marker: { color: '#f0883e', line: { width: 0 } }, hovertemplate: t.ch1_hover_agi + '<br><b>%{y}' + t.ch1_hover_runs + '</b><extra></extra>' },
+    { x: h.labels, y: h.asi, type: 'bar', name: 'ASI', marker: { color: '#ef4444', line: { width: 0 } }, hovertemplate: t.ch1_hover_asi + '<br><b>%{y}' + t.ch1_hover_runs + '</b><extra></extra>' },
   ];
-  const ly = { ...LAYOUT_BASE, barmode: 'group', xaxis: { ...LAYOUT_BASE.xaxis, title: { text: labels[t].x, font: { size: 11 } } }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: labels[t].y, font: { size: 11 } } } };
+  const ly = { ...LAYOUT_BASE, barmode: 'group', xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch1_xlabel, font: { size: 11 } } }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch1_ylabel, font: { size: 11 } } } };
   Plotly.newPlot('c1', tr, ly, PLOT_CFG);
+  window._data_hist = h;
 }
 
 function plotTrajectory(tr) {
-  const t = window._lang || 'ru';
-  const labels = { ru: { median: 'Медиана', agi: 'AGI (10)', asi: 'ASI (1000)', x: 'Лет от сейчас', y: 'Capability Score' }, en: { median: 'Median', agi: 'AGI (10)', asi: 'ASI (1000)', x: 'Years from now', y: 'Capability Score' } };
+  const t = LANG[window._lang || 'ru'] || LANG.ru;
   const tr_data = [
     { x: tr.years, y: tr.p90, type: 'scatter', mode: 'lines', line: { width: 0 }, showlegend: false, hoverinfo: 'skip' },
     { x: tr.years, y: tr.p75, type: 'scatter', mode: 'lines', line: { width: 0 }, fill: 'tonexty', fillcolor: 'rgba(88,166,255,.06)', showlegend: false, hoverinfo: 'skip' },
     { x: tr.years, y: tr.p25, type: 'scatter', mode: 'lines', line: { width: 0 }, fill: 'tonexty', fillcolor: 'rgba(88,166,255,.12)', showlegend: false, hoverinfo: 'skip' },
     { x: tr.years, y: tr.p10, type: 'scatter', mode: 'lines', line: { width: 0 }, fill: 'tonexty', fillcolor: 'rgba(88,166,255,.18)', showlegend: false, hoverinfo: 'skip' },
-    { x: tr.years, y: tr.median, type: 'scatter', mode: 'lines', name: labels[t].median, line: { color: '#58a6ff', width: 2.5 } },
-    { x: [tr.years[0], tr.years[tr.years.length - 1]], y: [tr.agiThreshold, tr.agiThreshold], type: 'scatter', mode: 'lines', name: labels[t].agi, line: { color: '#f0883e', width: 1.5, dash: 'dot' } },
-    { x: [tr.years[0], tr.years[tr.years.length - 1]], y: [tr.asiThreshold, tr.asiThreshold], type: 'scatter', mode: 'lines', name: labels[t].asi, line: { color: '#ef4444', width: 1.5, dash: 'dot' } },
+    { x: tr.years, y: tr.median, type: 'scatter', mode: 'lines', name: t.ch_legend_median, line: { color: '#58a6ff', width: 2.5 } },
+    { x: [tr.years[0], tr.years[tr.years.length - 1]], y: [tr.agiThreshold, tr.agiThreshold], type: 'scatter', mode: 'lines', name: t.ch_legend_agi, line: { color: '#f0883e', width: 1.5, dash: 'dot' } },
+    { x: [tr.years[0], tr.years[tr.years.length - 1]], y: [tr.asiThreshold, tr.asiThreshold], type: 'scatter', mode: 'lines', name: t.ch_legend_asi, line: { color: '#ef4444', width: 1.5, dash: 'dot' } },
   ];
-  const ly = { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: labels[t].x, font: { size: 11 } }, range: [2026, 2076] }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: labels[t].y, font: { size: 11 } }, type: 'log', range: [0, 3.1] } };
+  const ly = { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel, font: { size: 11 } }, range: [2026, 2076] }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch2_ylabel, font: { size: 11 } }, type: 'log', range: [0, 3.1] } };
   Plotly.newPlot('c2', tr_data, ly, PLOT_CFG);
+  window._data_traj = tr;
 }
 
 function plotCumulative(c) {
-  const t = window._lang || 'ru';
-  const labels = { ru: { agi: 'P(AGI)', asi: 'P(ASI)', x: 'Лет от сейчас', y: 'P(%)' }, en: { agi: 'P(AGI)', asi: 'P(ASI)', x: 'Years from now', y: 'P(%)' } };
+  const t = LANG[window._lang || 'ru'] || LANG.ru;
   const tr = [
-    { x: c.x, y: c.agi, type: 'scatter', mode: 'lines+markers', name: labels[t].agi, line: { color: '#f0883e', width: 2.5 }, marker: { size: 3, color: '#f0883e' }, fill: 'tozeroy', fillcolor: 'rgba(240,136,62,.08)' },
-    { x: c.x, y: c.asi, type: 'scatter', mode: 'lines+markers', name: labels[t].asi, line: { color: '#ef4444', width: 2.5 }, marker: { size: 3, color: '#ef4444' }, fill: 'tozeroy', fillcolor: 'rgba(239,68,68,.05)' },
+    { x: c.x, y: c.agi, type: 'scatter', mode: 'lines+markers', name: t.ch3_pagi, line: { color: '#f0883e', width: 2.5 }, marker: { size: 3, color: '#f0883e' }, fill: 'tozeroy', fillcolor: 'rgba(240,136,62,.08)' },
+    { x: c.x, y: c.asi, type: 'scatter', mode: 'lines+markers', name: t.ch3_pasi, line: { color: '#ef4444', width: 2.5 }, marker: { size: 3, color: '#ef4444' }, fill: 'tozeroy', fillcolor: 'rgba(239,68,68,.05)' },
   ];
-  const ly = { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: labels[t].x, font: { size: 11 } } }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: labels[t].y, font: { size: 11 } }, range: [0, 105] } };
+  const ly = { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch3_xlabel, font: { size: 11 } } }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch3_ylabel, font: { size: 11 } }, range: [0, 105] } };
   Plotly.newPlot('c3', tr, ly, PLOT_CFG);
+  window._data_cum = c;
 }
 
 function plotSensitivity(s) {
-  const t = window._lang || 'ru';
-  const ruLabels = { 'HW faster': 'HW быстрее', 'HW slower': 'HW медленнее', 'Algo faster': 'Algo быстрее', 'Algo slower': 'Algo медленнее', 'Ceiling up': 'Ceiling выше', 'Ceiling down': 'Ceiling ниже', 'DW earlier': 'DW раньше', 'DW later': 'DW позже' };
-  const enLabels = { 'HW faster': 'HW Faster', 'HW slower': 'HW Slower', 'Algo faster': 'Algo Faster', 'Algo slower': 'Algo Slower', 'Ceiling up': 'Ceiling Up', 'Ceiling down': 'Ceiling Down', 'DW earlier': 'DW Earlier', 'DW later': 'DW Later' };
-
+  const t = LANG[window._lang || 'ru'] || LANG.ru;
   const arr = Object.entries(s.variations).map(([k, v]) => ({
-    label: t === 'ru' && ruLabels[v.label] ? ruLabels[v.label] : v.label,
+    label: v.label,
     med: v.agiMedian,
     delta: v.agiMedian - s.base,
   }));
@@ -779,65 +781,109 @@ function plotSensitivity(s) {
   const box = document.getElementById('c4');
   box.innerHTML = `<div style="padding:8px 0">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #2a2a3a">
-      <div style="width:110px;text-align:right;color:#58a6ff;font-size:.74rem;font-weight:600">${t === 'ru' ? 'Базовая' : 'Baseline'}</div>
+      <div style="width:110px;text-align:right;color:#58a6ff;font-size:.74rem;font-weight:600">${t.ch4_label_base}</div>
       <div style="flex:1;height:6px;background:#0e0e18;border-radius:3px;position:relative"><div style="position:absolute;left:50%;width:2px;height:100%;background:#58a6ff;border-radius:1px"></div></div>
       <div style="width:60px;text-align:right;color:#ccc;font-family:JetBrains Mono;font-size:.74rem">${yearsText(s.base)}</div>
     </div>
     ${html}
     <div style="margin-top:12px;display:flex;gap:16px;font-size:.68rem;color:#666;padding-top:8px;border-top:1px solid #2a2a3a">
-      <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:8px;height:8px;background:#22c55e;border-radius:2px"></span> ${t === 'ru' ? 'AGI быстрее' : 'Faster AGI'}</span>
-      <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:8px;height:8px;background:#ef4444;border-radius:2px"></span> ${t === 'ru' ? 'AGI медленнее' : 'Slower AGI'}</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:8px;height:8px;background:#22c55e;border-radius:2px"></span> ${t.ch4_faster}</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:8px;height:8px;background:#ef4444;border-radius:2px"></span> ${t.ch4_slower}</span>
     </div>
   </div>`;
+  window._data_sens = s;
 }
 
 // ============================================================================
 // i18n
 // ============================================================================
 window._lang = 'ru';
-const LANG = {
-  ru: {
-    label_n: 'N', label_hw: 'HW мес', label_algo: 'Algo мес', label_ceil: 'Ceiling', label_dw: 'DW старт',
-    run_btn: 'Рассчитать', sb_agi: 'AGI медиана', sb_asi: 'ASI медиана',
-    tag1: 'Вероятностный анализ', tag2: 'Динамика', tag3: 'Кумулятивная', tag4: 'Анализ чувствительности',
-    tip1: '3000 прогонов Монте-Карло. Чем выше столбец — тем больше сценариев попали в этот год.',
-    tip2: 'Медианная траектория. Синяя зона (10–90%) — диапазон исходов. Пунктиры — пороги AGI/ASI.',
-    tip3: 'P(AGI ≤ X) — шанс, что AGI появится не позднее X лет. Плоская часть — затор.',
-    tip4: 'Один параметр изменён, остальные базовые. Зелёные бары = AGI быстрее.',
-    about_title: 'О модели', about_intro: 'Вероятностный прогноз AGI/ASI с методом Монте-Карло.',
-    defaults_label: 'Параметры по умолчанию',
-    d1_title: 'Железо: 8 мес', d1_text: 'Консервативная оценка с учётом энергетических ограничений.',
-    d2_title: 'Алгоритмы: 6 мес', d2_text: 'Исторически быстрый прогресс, замедляется из-за Data Wall.',
-    d3_title: 'Ceiling: 8.0', d3_text: 'Потолок текущей парадигмы. Для прорыва нужна смена парадигмы.',
-    d4_title: 'Прогоны: 3000', d4_text: 'Статистическая значимость для гладких распределений.',
-    defs_label: 'AGI и ASI — определения',
-    agi_def_title: 'AGI', agi_def_score: 'Capability = 10.0',
-    agi_def_text1: 'Автономный ИИ-исследователь уровня PhD. Решает задачи ARC-AGI-2 уровня.',
-    asi_def_title: 'ASI', asi_def_score: 'Capability = 1000.0',
-    asi_def_text1: 'Точка сингулярности. Сжимает десятилетия R&D в месяцы.',
-    footer_note: 'Данные оценочные', loading: 'Монте-Карло…',
-  },
-  en: {
-    label_n: 'N', label_hw: 'HW mo', label_algo: 'Algo mo', label_ceil: 'Ceiling', label_dw: 'DW start',
-    run_btn: 'Run', sb_agi: 'AGI median', sb_asi: 'ASI median',
-    tag1: 'Probabilistic Analysis', tag2: 'Dynamics', tag3: 'Cumulative', tag4: 'Sensitivity Analysis',
-    tip1: '3000 Monte Carlo runs. Taller bars = more scenarios hitting that year.',
-    tip2: 'Median trajectory. Blue zone (10–90%) shows outcome range. Dashed lines = AGI/ASI thresholds.',
-    tip3: 'P(AGI ≤ X) — chance AGI appears within X years. Flat sections = bottlenecks.',
-    tip4: 'One parameter changed, rest baseline. Green = faster AGI, red = slower.',
-    about_title: 'About the Model', about_intro: 'A probabilistic forecast of AGI and ASI timelines using Monte Carlo.',
-    defaults_label: 'Default Parameters',
-    d1_title: 'Hardware: 8 mo', d1_text: 'Conservative estimate with energy constraints.',
-    d2_title: 'Algorithms: 6 mo', d2_text: 'Rapid progress, slowing due to Data Wall.',
-    d3_title: 'Ceiling: 8.0', d3_text: 'Current paradigm limit. Paradigm shift needed for breakthrough.',
-    d4_title: 'Runs: 3000', d4_text: 'Statistical significance for smooth distributions.',
-    defs_label: 'AGI and ASI Definitions',
-    agi_def_title: 'AGI', agi_def_score: 'Capability = 10.0',
-    agi_def_text1: 'Autonomous AI researcher at PhD level. Solves ARC-AGI-2 tasks.',
-    asi_def_title: 'ASI', asi_def_score: 'Capability = 1000.0',
-    asi_def_text1: 'Singularity point. Compresses decades of R&D into months.',
-    footer_note: 'Estimates only', loading: 'Running Monte Carlo…',
-  },
+const LANG = {};
+
+LANG.ru = {
+  label_n:'N', label_hw:'HW мес', label_algo:'Algo мес', label_ceil:'Ceiling', label_dw:'DW старт',
+  run_btn:'Run',
+  sb_agi:'AGI median', sb_asi:'ASI median',
+  tag1:'Вероятностный анализ', tag2:'Динамика', tag3:'Кумулятивная', tag4:'Анализ чувствительности',
+  chart1:'1. Распределение AGI / ASI по Monte Carlo',
+  chart2:'2. Рост capability во времени',
+  chart3:'3. Накопленная вероятность AGI / ASI',
+  chart4:'4. Вклад факторов: аналитика барьеров',
+  tip1:'Показывает, где группируются 3000 прогонов Монте-Карло. Чем выше столбец — тем больше сценариев привели к AGI/ASI в этом году. Хвост справа — сценарии «ещё не случилось».',
+  tip2:'Медианная траектория capability. Синяя зона (10–90%) — диапазон исходов: если зона широкая, модель говорит «может быть через 2, может через 20 лет». Пунктиры — пороги AGI (10) и ASI (1000).',
+  tip3:'P(AGI ≤ X) — шанс, что AGI появится не позднее, чем через X лет. Если кривая круто поднимается — быстрый переход от «почти нет» к «почти точно». Плоская часть — затор (data wall, регуляция, энергетика).',
+  tip4:'Каждый параметр прогоняется с 600 симуляциями — один изменён, остальные базовые. Зелёные бары = AGI быстрее, красные = медленнее. Самый длинный бар — фактор с наибольшим влиянием.',
+  about_title:'О модели',
+  about_intro:'Эта симуляция представляет собой вероятностный прогноз сроков появления AGI (Общего Искусственного Интеллекта) и ASI (Сверхинтеллекта) с помощью метода Монте-Карло и учитывает ключевые факторы:',
+  f1_title:'S-образные кривые роста', f1_text:'Любая технология имеет предел. Модель предполагает, что текущая парадигма (например, трансформеры) упрётся в «потолок», и для дальнейшего прогресса потребуется научный прорыв.',
+  f2_title:'Физические и регуляторные барьеры', f2_text:'Модель включает замедление от «Стены данных» (нехватка качественных текстов), энергетических ограничений и потенциальных пауз по соображениям безопасности (Alignment).',
+  f3_title:'Рекурсивное самоулучшение (RSI)', f3_text:'Способность ИИ ускорять собственный прогресс, как только он достигает определённого уровня интеллекта.',
+  f4_title:'Результат: распределение вероятностей', f4_text:'Результат — распределение вероятностей, показывающее наиболее вероятные временные окна появления AGI и ASI.',
+  defaults_label:'Ключевые допущения модели (параметры по умолчанию):',
+  d1_title:'Железо (удвоение compute): 8 месяцев', d1_text:'Консервативная оценка, учитывающая замедление роста из-за энергетических и логистических ограничений («Power Wall»).',
+  d2_title:'Алгоритмы (удвоение эффективности): 6 месяцев', d2_text:'Отражает исторически быстрый прогресс в архитектурах, который, однако, начинает замедляться из-за нехватки качественных данных («Data Wall»).',
+  d3_title:'Потолок парадигмы (P. Ceiling): 8.0', d3_text:'Означает предел для текущих архитектур (при пороге AGI = 10.0). Модель предполагает, что для финального рывка потребуется случайный научный прорыв («смена парадигмы»). Уровень P. Ceiling = 1000.0 означает сингулярность на трансформерах.',
+  d4_title:'Количество прогонов (N-ранов): 3000', d4_text:'Обеспечивает статистическую значимость и построение гладких кривых распределения.',
+  defs_label:'Определения: что такое AGI и ASI в этой модели',
+  defs_intro:'В рамках данной математической модели мы отходим от философских споров о «сознании» и используем строгие операциональные (практические и измеримые) определения, привязанные к шкале Capability Score, где текущие передовые модели начала 2026 года приняты за базовую единицу (1.0).',
+  agi_def_title:'AGI — Artificial General Intelligence', agi_def_score:'Capability Score = 10.0',
+  agi_def_text1:'Не «всезнающий бог», а автономный ИИ-исследователь уровня PhD. Демонстрирует истинное обобщение — не просто воспроизводит заученные паттерны, а решает задачи на абстрактное мышление (уровень ARC-AGI-2). Может автономно планировать эксперименты, писать продакшен-код, находить ошибки в чужих статьях и предлагать новые архитектуры.',
+  agi_def_text2:'Роль в модели: триггер для включения RSI — начинает сам ускорять разработку следующего поколения алгоритмов.',
+  asi_def_title:'ASI — Artificial Superintelligence', asi_def_score:'Capability Score = 1000.0 (×100 vs AGI)',
+  asi_def_text1:'Точка Сингулярности. Качественный разрыв: разница между ASI и AGI сопоставима с разницей между академиком и первоклассником. Может одновременно удерживать в контексте и анализировать данные целых научных дисциплин. Сжимает десятилетия R&D в месяцы или недели. Обходит нефизические барьеры за счёт создания принципиально новых технологий.',
+  asi_def_text2:'Роль в модели: конец симуляции. За этой чертой прогнозы теряют смысл.',
+  footer_note:'Данные оценочные', loading:'Монте-Карло…',
+  ch_legend_median:'Медиана', ch_legend_agi:'AGI (10)', ch_legend_asi:'ASI (1000)',
+  ch1_xlabel:'Лет от сейчас', ch1_ylabel:'Кол-во прогонов', ch1_hover_agi:'AGI: {x} лет', ch1_hover_asi:'ASI: {x} лет', ch1_hover_runs:' прогонов',
+  ch2_xlabel:'Лет от сейчас', ch2_ylabel:'Capability score',
+  ch3_xlabel:'Лет от сейчас', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
+  ch4_label_base:'Базовая', ch4_faster:'AGI быстрее', ch4_slower:'AGI медленнее',
+  fY_suffix:' лет', fY_gt:'> 50 лет', alert_err:'Ошибка: ',
+  hdr_title:'Singularity App', hdr_sub:'Monte Carlo Dashboard v2.1',
+  sb_pasi_2028:'P(ASI · 2028)', sb_pasi_2030:'P(ASI · 2030)', sb_pasi_2035:'P(ASI · 2035)', sb_pasi_2040:'P(ASI · 2040)', sb_pagi_2030:'P(AGI · 2030)',
+};
+
+LANG.en = {
+  label_n:'N', label_hw:'HW mo', label_algo:'Algo mo', label_ceil:'Ceiling', label_dw:'DW start',
+  run_btn:'Run',
+  sb_agi:'AGI median', sb_asi:'ASI median',
+  tag1:'Probabilistic Analysis', tag2:'Dynamics', tag3:'Cumulative', tag4:'Sensitivity Analysis',
+  chart1:'1. AGI / ASI Distribution by Monte Carlo',
+  chart2:'2. Capability Growth over Time',
+  chart3:'3. Cumulative Probability of AGI / ASI',
+  chart4:'4. Factor Contribution: Barrier Analytics',
+  tip1:'Shows where 3,000 Monte Carlo runs cluster. Higher bars = more scenarios hitting AGI/ASI in that year. Right tail = "not yet happened" scenarios.',
+  tip2:'Median capability trajectory. Blue zone (10–90%) = outcome range: if the zone is wide, the model says "maybe 2 or maybe 20 years". Dashed lines = AGI (10) and ASI (1000) thresholds.',
+  tip3:'P(AGI ≤ X) — chance that AGI appears within X years. A steep curve = rapid transition from "almost none" to "almost certain". Flat sections = bottlenecks (data wall, regulation, energy).',
+  tip4:'Each parameter is run with 600 simulations — one changed, rest baseline. Green bars = faster AGI, red = slower. Longest bar = most influential factor.',
+  about_title:'About the Model',
+  about_intro:'This simulation is a probabilistic forecast of AGI (Artificial General Intelligence) and ASI (Artificial Superintelligence) timelines using Monte Carlo methods. It accounts for key factors:',
+  f1_title:'S-curves of Growth', f1_text:'Every technology has a limit. The model assumes the current paradigm (e.g., transformers) will hit a "ceiling," and further progress will require a scientific breakthrough.',
+  f2_title:'Physical & Regulatory Barriers', f2_text:'The model incorporates slowdowns from the "Data Wall" (lack of quality data), energy constraints, and potential safety-related pauses (Alignment).',
+  f3_title:'Recursive Self-Improvement (RSI)', f3_text:'The ability of AI to accelerate its own progress once it reaches a certain level of intelligence.',
+  f4_title:'Result: Probability Distribution', f4_text:'The output is a probability distribution showing the most likely time windows for AGI and ASI emergence.',
+  defaults_label:'Key Model Assumptions (Default Parameters):',
+  d1_title:'Hardware (Compute Doubling): 8 months', d1_text:'A conservative estimate accounting for slowdown due to energy and logistical constraints ("Power Wall").',
+  d2_title:'Algorithms (Efficiency Doubling): 6 months', d2_text:'Reflects historically rapid architectural progress, which is now beginning to slow due to lack of quality data ("Data Wall").',
+  d3_title:'Paradigm Ceiling (P. Ceiling): 8.0', d3_text:'The limit for current architectures (at AGI threshold = 10.0). The model assumes the final push will require a random scientific breakthrough ("paradigm shift"). P. Ceiling = 1000.0 means singularity on transformers.',
+  d4_title:'Number of Runs (N-runs): 3000', d4_text:'Ensures statistical significance and smooth distribution curves.',
+  defs_label:'Definitions: AGI and ASI in This Model',
+  defs_intro:'In this mathematical model, we move away from philosophical debates about "consciousness" and use strict operational (practical, measurable) definitions tied to a Capability Score, where current frontier models of early 2026 are set as the baseline unit (1.0).',
+  agi_def_title:'AGI — Artificial General Intelligence', agi_def_score:'Capability Score = 10.0',
+  agi_def_text1:'Not an "all-knowing god," but an autonomous AI researcher at the PhD level. It demonstrates true generalization — not just reproducing learned patterns, but solving novel abstract reasoning tasks (ARC-AGI-2 level). Can autonomously plan experiments, write production code, find errors in other people\'s papers, and propose new architectures.',
+  agi_def_text2:'Role in the model: RSI trigger — once reached, AGI begins accelerating the development of the next generation of algorithms.',
+  asi_def_title:'ASI — Artificial Superintelligence', asi_def_score:'Capability Score = 1000.0 (×100 vs AGI)',
+  asi_def_text1:'The Singularity point. Qualitative leap: the difference between ASI and AGI is comparable to the gap between an academic and a first-grader. Can simultaneously hold and analyze data from entire scientific disciplines in context. Compresses decades of R&D into months or weeks. Overcomes non-physical barriers by inventing fundamentally new technologies.',
+  asi_def_text2:'Role in the model: end of simulation. Beyond this point, forecasts lose meaning.',
+  footer_note:'Estimates only', loading:'Monte Carlo…',
+  ch_legend_median:'Median', ch_legend_agi:'AGI (10)', ch_legend_asi:'ASI (1000)',
+  ch1_xlabel:'Years from now', ch1_ylabel:'Run count', ch1_hover_agi:'AGI: {x} yrs', ch1_hover_asi:'ASI: {x} yrs', ch1_hover_runs:' runs',
+  ch2_xlabel:'Years from now', ch2_ylabel:'Capability score',
+  ch3_xlabel:'Years from now', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
+  ch4_label_base:'Baseline', ch4_faster:'Faster AGI', ch4_slower:'Slower AGI',
+  fY_suffix:' yrs', fY_gt:'> 50 yrs', alert_err:'Error: ',
+  hdr_title:'Singularity App', hdr_sub:'Monte Carlo Dashboard v2.1',
+  sb_pasi_2028:'P(ASI · 2028)', sb_pasi_2030:'P(ASI · 2030)', sb_pasi_2035:'P(ASI · 2035)', sb_pasi_2040:'P(ASI · 2040)', sb_pagi_2030:'P(AGI · 2030)',
 };
 
 function setLang(lang) {
@@ -850,6 +896,11 @@ function setLang(lang) {
     const k = el.getAttribute('data-i18n');
     if (t[k]) el.textContent = t[k];
   });
+  // Redraw plots and summary if data exists
+  if (window._data_hist) plotHistogram(window._data_hist);
+  if (window._data_traj) plotTrajectory(window._data_traj);
+  if (window._data_cum) plotCumulative(window._data_cum);
+  if (window._data_sens) plotSensitivity(window._data_sens);
   if (currentResults) updateUI(currentResults);
 }
 
