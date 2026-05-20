@@ -149,9 +149,8 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
       <div class="subtitle" id="hdr_sub" data-i18n="hdr_sub">v2.1 Monte Carlo Dashboard</div>
     </div>
   </div>
-  <div class="header-right">
-    <button class="btn btn-secondary btn-sm" id="btn_export" title="Export results as JSON" onclick="exportResults()">↓ Export</button>
-    <div class="version" id="version">v2.1</div>
+    <div class="header-right">
+      <div class="version" id="version">v2.1</div>
     <div class="lang-toggle">
       <button class="lang-btn active" id="lang_ru" onclick="setLang('ru')">RU</button>
       <button class="lang-btn" id="lang_en" onclick="setLang('en')">EN</button>
@@ -695,7 +694,7 @@ function yearsText(years) {
   const d = new Date();
   d.setFullYear(d.getFullYear() + years);
   const month = d.toLocaleDateString(window._lang === 'en' ? 'en-US' : 'ru-RU', { month: 'short', year: 'numeric' });
-  return years.toFixed(1) + LANG[window._lang || 'ru'].fY_suffix + '<br>(' + month + ')';
+  return years.toFixed(1) + LANG[window._lang || 'ru'].fY_suffix + ' (' + month + ')';
 }
 
 // ============================================================================
@@ -735,7 +734,7 @@ function plotTrajectory(tr) {
     { x: [tr.years[0], tr.years[tr.years.length - 1]], y: [tr.agiThreshold, tr.agiThreshold], type: 'scatter', mode: 'lines', name: t.ch_legend_agi, line: { color: '#f0883e', width: 1.5, dash: 'dot' } },
     { x: [tr.years[0], tr.years[tr.years.length - 1]], y: [tr.asiThreshold, tr.asiThreshold], type: 'scatter', mode: 'lines', name: t.ch_legend_asi, line: { color: '#ef4444', width: 1.5, dash: 'dot' } },
   ];
-  const ly = { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel, font: { size: 11 } }, range: [2026, 2076] }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch2_ylabel, font: { size: 11 } }, type: 'log', range: [0, 3.1] } };
+  const ly = { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel, font: { size: 11 } }, range: [2026, 2076] }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch2_ylabel, font: { size: 11 } }, type: 'log', range: [0, 3.3] } };
   Plotly.newPlot('c2', tr_data, ly, PLOT_CFG);
   window._data_traj = tr;
 }
@@ -802,7 +801,7 @@ window._lang = 'ru';
 const LANG = {};
 
 LANG.ru = {
-  label_n:'N', label_hw:'Железо (месяцев)', label_algo:'Алгоритмы (месяцев)', label_ceil:'Потолок парадигмы', label_dw:'Стена данных (год)',
+  label_n:'N', label_hw:'x2 Железо (месяцев)', label_algo:'x2 Алгоритмы (месяцев)', label_ceil:'Потолок парадигмы', label_dw:'Стена данных (год)',
   run_btn:'Запуск',
   sb_agi:'AGI median', sb_asi:'ASI median',
   tag1:'Вероятностный анализ', tag2:'Динамика', tag3:'Кумулятивная', tag4:'Анализ чувствительности',
@@ -836,7 +835,7 @@ LANG.ru = {
   footer_note:'Данные оценочные', loading:'Монте-Карло…',
   ch_legend_median:'Медиана', ch_legend_agi:'AGI (10)', ch_legend_asi:'ASI (1000)',
   ch1_xlabel:'Лет от сейчас', ch1_ylabel:'Кол-во прогонов', ch1_hover_agi:'AGI: {x} лет', ch1_hover_asi:'ASI: {x} лет', ch1_hover_runs:' прогонов',
-  ch2_xlabel:'Лет от сейчас', ch2_ylabel:'Возможности (Capability Score)',
+  ch2_xlabel:'Лет от сейчас', ch2_ylabel:'Вероятность (Capability Score)',
   ch3_xlabel:'Лет от сейчас', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
   ch4_label_base:'Базовая', ch4_faster:'AGI быстрее', ch4_slower:'AGI медленнее',
   fY_suffix:' лет', fY_gt:'> 50 лет', alert_err:'Ошибка: ',
@@ -845,7 +844,7 @@ LANG.ru = {
 };
 
 LANG.en = {
-  label_n:'N', label_hw:'Hardware (months)', label_algo:'Algorithms (months)', label_ceil:'Paradigm Ceiling', label_dw:'Data Wall (year)',
+  label_n:'N', label_hw:'x2 Hardware (months)', label_algo:'x2 Algorithms (months)', label_ceil:'Paradigm Ceiling', label_dw:'Data Wall (year)',
   run_btn:'Run',
   sb_agi:'AGI median', sb_asi:'ASI median',
   tag1:'Probabilistic Analysis', tag2:'Dynamics', tag3:'Cumulative', tag4:'Sensitivity Analysis',
