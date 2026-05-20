@@ -237,7 +237,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <div class="card">
     <span class="card-tag" data-i18n="tag2">Динамика</span>
     <div class="card-header">
-      <h3 data-i18n="chart2">2. Рост capability во времени</h3>
+      <h3 data-i18n="chart2">2. Рост вероятности во времени</h3>
       <span class="tip">?<span class="tip-text" data-i18n="tip2">Медианная траектория capability. Синяя зона (10–90%) — диапазон исходов: если зона широкая, модель говорит «может быть через 2, может через 20 лет». Пунктиры — пороги AGI (10) и ASI (1000).</span></span>
     </div>
     <div class="chart-container" id="c2"></div>
@@ -310,13 +310,13 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     <div class="defs-grid">
       <div class="def-card">
         <h4>🤖 <span data-i18n="agi_def_title">AGI — Artificial General Intelligence</span></h4>
-        <div class="score" style="color:var(--orange)" data-i18n="agi_def_score">Capability Score = 10.0</div>
+        <div class="score" style="color:var(--orange)" data-i18n="agi_def_score">Вероятность (Capability Score) = 10.0</div>
         <p data-i18n="agi_def_text1">Не «всезнающий бог», а автономный ИИ-исследователь уровня PhD. Демонстрирует истинное обобщение — не просто воспроизводит заученные паттерны, а решает задачи на абстрактное мышление (уровень ARC-AGI-2). Может автономно планировать эксперименты, писать продакшен-код, находить ошибки в чужих статьях и предлагать новые архитектуры.</p>
         <p data-i18n="agi_def_text2" style="color:#666680;font-size:.72rem;margin-top:6px">Роль в модели: триггер для включения RSI — начинает сам ускорять разработку следующего поколения алгоритмов.</p>
       </div>
       <div class="def-card">
         <h4>🌌 <span data-i18n="asi_def_title">ASI — Artificial Superintelligence</span></h4>
-        <div class="score" style="color:var(--red)" data-i18n="asi_def_score">Capability Score = 1000.0 (×100 vs AGI)</div>
+        <div class="score" style="color:var(--red)" data-i18n="asi_def_score">Вероятность (Capability Score) = 1000.0 (×100 от AGI)</div>
         <p data-i18n="asi_def_text1">Точка Сингулярности. Качественный разрыв: разница между ASI и AGI сопоставима с разницей между академиком и первоклассником. Может одновременно удерживать в контексте и анализировать данные целых научных дисциплин. Сжимает десятилетия R&D в месяцы или недели. Обходит нефизические барьеры за счёт создания принципиально новых технологий.</p>
         <p data-i18n="asi_def_text2" style="color:#666680;font-size:.72rem;margin-top:6px">Роль в модели: конец симуляции. За этой чертой прогнозы теряют смысл.</p>
       </div>
@@ -675,7 +675,7 @@ function updateUI(r) {
 
 function setVal(id, text, className) {
   const el = document.getElementById(id);
-  el.textContent = text;
+  el.innerHTML = text;
   el.className = 'status-value';
   if (className === 'agiyears') { /* default is accent */ }
   else if (className === 'asiyears') el.classList.add('orange');
@@ -694,7 +694,7 @@ function yearsText(years) {
   const d = new Date();
   d.setFullYear(d.getFullYear() + years);
   const month = d.toLocaleDateString(window._lang === 'en' ? 'en-US' : 'ru-RU', { month: 'short', year: 'numeric' });
-  return years.toFixed(1) + LANG[window._lang || 'ru'].fY_suffix + ' (' + month + ')';
+  return years.toFixed(1) + LANG[window._lang || 'ru'].fY_suffix + '<br>(' + month + ')';
 }
 
 // ============================================================================
@@ -734,7 +734,7 @@ function plotTrajectory(tr) {
     { x: [tr.years[0], tr.years[tr.years.length - 1]], y: [tr.agiThreshold, tr.agiThreshold], type: 'scatter', mode: 'lines', name: t.ch_legend_agi, line: { color: '#f0883e', width: 1.5, dash: 'dot' } },
     { x: [tr.years[0], tr.years[tr.years.length - 1]], y: [tr.asiThreshold, tr.asiThreshold], type: 'scatter', mode: 'lines', name: t.ch_legend_asi, line: { color: '#ef4444', width: 1.5, dash: 'dot' } },
   ];
-  const ly = { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel, font: { size: 11 } }, range: [2026, 2076] }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch2_ylabel, font: { size: 11 } }, type: 'log', range: [0, 3.3] } };
+  const ly = { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel, font: { size: 11 } }, range: [2026, 2050] }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch2_ylabel, font: { size: 11 } }, type: 'log', range: [0, 3.3] } };
   Plotly.newPlot('c2', tr_data, ly, PLOT_CFG);
   window._data_traj = tr;
 }
@@ -806,11 +806,11 @@ LANG.ru = {
   sb_agi:'AGI median', sb_asi:'ASI median',
   tag1:'Вероятностный анализ', tag2:'Динамика', tag3:'Кумулятивная', tag4:'Анализ чувствительности',
   chart1:'1. Распределение AGI / ASI по Monte Carlo',
-  chart2:'2. Рост возможностей во времени',
+  chart2:'2. Рост вероятности во времени',
   chart3:'3. Накопленная вероятность AGI / ASI',
   chart4:'4. Вклад факторов: аналитика барьеров',
   tip1:'Показывает, где группируются 3000 прогонов Монте-Карло. Чем выше столбец — тем больше сценариев привели к AGI/ASI в этом году. Хвост справа — сценарии «ещё не случилось».',
-  tip2:'Медианная траектория возможностей. Синяя зона (10–90%) — диапазон исходов: если зона широкая, модель говорит «может быть через 2, может через 20 лет». Пунктиры — пороги AGI (10) и ASI (1000).',
+  tip2:'Медианная траектория вероятности. Синяя зона (10–90%) — диапазон исходов: если зона широкая, модель говорит «может быть через 2, может через 20 лет». Пунктиры — пороги AGI (10) и ASI (1000).',
   tip3:'P(AGI ≤ X) — шанс, что AGI появится не позднее, чем через X лет. Если кривая круто поднимается — быстрый переход от «почти нет» к «почти точно». Плоская часть — затор (стена данных, регуляция, энергетика).',
   tip4:'Каждый параметр прогоняется с 600 симуляциями — один изменён, остальные базовые. Зелёные бары = AGI быстрее, красные = медленнее. Самый длинный бар — фактор с наибольшим влиянием.',
   about_title:'О модели',
@@ -825,11 +825,11 @@ LANG.ru = {
   d3_title:'Потолок парадигмы (P. Ceiling): 8.0', d3_text:'Означает предел для текущих архитектур (при пороге AGI = 10.0). Модель предполагает, что для финального рывка потребуется случайный научный прорыв («смена парадигмы»). Уровень P. Ceiling = 1000.0 означает сингулярность на трансформерах.',
   d4_title:'Количество прогонов (N-ранов): 3000', d4_text:'Обеспечивает статистическую значимость и построение гладких кривых распределения.',
   defs_label:'Определения: что такое AGI и ASI в этой модели',
-  defs_intro:'В рамках данной математической модели мы отходим от философских споров о «сознании» и используем строгие операциональные (практические и измеримые) определения, привязанные к шкале возможностей (Capability Score), где текущие передовые модели начала 2026 года приняты за базовую единицу (1.0).',
-  agi_def_title:'AGI — Artificial General Intelligence', agi_def_score:'Возможности (Capability Score) = 10.0',
+  defs_intro:'В рамках данной математической модели мы отходим от философских споров о «сознании» и используем строгие операциональные (практические и измеримые) определения, привязанные к шкале вероятности (Capability Score), где текущие передовые модели начала 2026 года приняты за базовую единицу (1.0).',
+  agi_def_title:'AGI — Artificial General Intelligence', agi_def_score:'Вероятность (Capability Score) = 10.0',
   agi_def_text1:'Не «всезнающий бог», а автономный ИИ-исследователь уровня PhD. Демонстрирует истинное обобщение — не просто воспроизводит заученные паттерны, а решает задачи на абстрактное мышление (уровень ARC-AGI-2). Может автономно планировать эксперименты, писать продакшен-код, находить ошибки в чужих статьях и предлагать новые архитектуры.',
   agi_def_text2:'Роль в модели: триггер для включения RSI — начинает сам ускорять разработку следующего поколения алгоритмов.',
-  asi_def_title:'ASI — Artificial Superintelligence', asi_def_score:'Возможности (Capability Score) = 1000.0 (×100 от AGI)',
+  asi_def_title:'ASI — Artificial Superintelligence', asi_def_score:'Вероятность (Capability Score) = 1000.0 (×100 от AGI)',
   asi_def_text1:'Точка Сингулярности. Качественный разрыв: разница между ASI и AGI сопоставима с разницей между академиком и первоклассником. Может одновременно удерживать в контексте и анализировать данные целых научных дисциплин. Сжимает десятилетия R&D в месяцы или недели. Обходит нефизические барьеры за счёт создания принципиально новых технологий.',
   asi_def_text2:'Роль в модели: конец симуляции. За этой чертой прогнозы теряют смысл.',
   footer_note:'Данные оценочные', loading:'Монте-Карло…',
