@@ -260,73 +260,6 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   </div>
 </div>
 
-<!-- ===== ABOUT ===== -->
-<div style="padding:0 32px;max-width:1100px;margin:0 auto;width:100%">
-  <div class="about" id="aboutSection">
-    <h2 data-i18n="about_title">О модели</h2>
-    <p data-i18n="about_intro">Эта симуляция представляет собой вероятностный прогноз сроков появления AGI (Общего Искусственного Интеллекта) и ASI (Сверхинтеллекта) с помощью метода Монте-Карло и учитывает ключевые факторы:</p>
-    <div class="fgrid">
-      <div class="fc">
-        <h4 data-i18n="f1_title">S-образные кривые роста</h4>
-        <p data-i18n="f1_text">Любая технология имеет предел. Модель предполагает, что текущая парадигма (например, трансформеры) упрётся в «потолок», и для дальнейшего прогресса потребуется научный прорыв.</p>
-      </div>
-      <div class="fc">
-        <h4 data-i18n="f2_title">Физические и регуляторные барьеры</h4>
-        <p data-i18n="f2_text">Модель включает замедление от «Стены данных» (нехватка качественных текстов), энергетических ограничений и потенциальных пауз по соображениям безопасности (Alignment).</p>
-      </div>
-      <div class="fc">
-        <h4 data-i18n="f3_title">Рекурсивное самоулучшение (RSI)</h4>
-        <p data-i18n="f3_text">Способность ИИ ускорять собственный прогресс, как только он достигает определённого уровня интеллекта.</p>
-      </div>
-      <div class="fc">
-        <h4 data-i18n="f4_title">Результат: распределение вероятностей</h4>
-        <p data-i18n="f4_text">Результат — распределение вероятностей, показывающее наиболее вероятные временные окна появления AGI и ASI.</p>
-      </div>
-    </div>
-    <div class="sec-label" data-i18n="defaults_label">Ключевые допущения модели (параметры по умолчанию):</div>
-    <div class="fgrid">
-      <div class="fc">
-        <h4 data-i18n="d1_title">Железо (удвоение compute): 8 месяцев</h4>
-        <p data-i18n="d1_text">Консервативная оценка, учитывающая замедление роста из-за энергетических и логистических ограничений («Power Wall»).</p>
-      </div>
-      <div class="fc">
-        <h4 data-i18n="d2_title">Алгоритмы (удвоение эффективности): 6 месяцев</h4>
-        <p data-i18n="d2_text">Отражает исторически быстрый прогресс в архитектурах, который, однако, начинает замедляться из-за нехватки качественных данных («Data Wall»).</p>
-      </div>
-      <div class="fc">
-        <h4 data-i18n="d3_title">Потолок парадигмы (P. Ceiling): 8.0</h4>
-        <p data-i18n="d3_text">Означает предел для текущих архитектур (при пороге AGI = 10.0). Модель предполагает, что для финального рывка потребуется случайный научный прорыв («смена парадигмы»). Уровень P. Ceiling = 1000.0 означает сингулярность на трансформерах.</p>
-      </div>
-      <div class="fc">
-        <h4 data-i18n="d4_title">Количество прогонов (N-ранов): 3000</h4>
-        <p data-i18n="d4_text">Обеспечивает статистическую значимость и построение гладких кривых распределения.</p>
-      </div>
-    </div>
-  </div>
-
-  <div class="about" id="defsSection">
-    <div class="sec-label" data-i18n="defs_label">Определения: что такое AGI и ASI в этой модели</div>
-    <p style="font-size:.82rem;color:#9898b0;margin-bottom:14px" data-i18n="defs_intro">В рамках данной математической модели мы отходим от философских споров о «сознании» и используем строгие операциональные (практические и измеримые) определения, привязанные к шкале Capability Score, где текущие передовые модели начала 2026 года приняты за базовую единицу (1.0).</p>
-    <div class="defs-grid">
-      <div class="def-card">
-        <h4>🤖 <span data-i18n="agi_def_title">AGI — Artificial General Intelligence</span></h4>
-        <div class="score" style="color:var(--orange)" data-i18n="agi_def_score">Вероятность (Capability Score) = 10.0</div>
-        <p data-i18n="agi_def_text1">Не «всезнающий бог», а автономный ИИ-исследователь уровня PhD. Демонстрирует истинное обобщение — не просто воспроизводит заученные паттерны, а решает задачи на абстрактное мышление (уровень ARC-AGI-2). Может автономно планировать эксперименты, писать продакшен-код, находить ошибки в чужих статьях и предлагать новые архитектуры.</p>
-        <p data-i18n="agi_def_text2" style="color:#666680;font-size:.72rem;margin-top:6px">Роль в модели: триггер для включения RSI — начинает сам ускорять разработку следующего поколения алгоритмов.</p>
-      </div>
-      <div class="def-card">
-        <h4>🌌 <span data-i18n="asi_def_title">ASI — Artificial Superintelligence</span></h4>
-        <div class="score" style="color:var(--red)" data-i18n="asi_def_score">Вероятность (Capability Score) = 1000.0 (×100 от AGI)</div>
-        <p data-i18n="asi_def_text1">Точка Сингулярности. Качественный разрыв: разница между ASI и AGI сопоставима с разницей между академиком и первоклассником. Может одновременно удерживать в контексте и анализировать данные целых научных дисциплин. Сжимает десятилетия R&D в месяцы или недели. Обходит нефизические барьеры за счёт создания принципиально новых технологий.</p>
-        <p data-i18n="asi_def_text2" style="color:#666680;font-size:.72rem;margin-top:6px">Роль в модели: конец симуляции. За этой чертой прогнозы теряют смысл.</p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<footer>
-  BelikVCP | Singularity Forecaster v2.5 | <span data-i18n="footer_note">Данные оценочные</span>
-</footer>
 
 <!-- ===== OVERLAY ===== -->
 <div class="overlay" id="overlay">
@@ -1275,7 +1208,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 </div>
 
 <footer>
-  BelikVCP | Singularity App v2.1 | <span data-i18n="footer_note">Данные оценочные</span>
+  BelikVCP | Singularity Forecaster v2.5 | <span data-i18n="footer_note">Данные оценочные</span>
 </footer>
 
 <!-- ===== OVERLAY ===== -->
