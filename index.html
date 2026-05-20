@@ -398,7 +398,7 @@ function runTrajectory(fixedParams) {
 
   let flopsLog = CONFIG.FRONTIER.training_flops_log10;
   let algoLog = 0;
-  const baseLog = flopsLog;
+  let baseLog = flopsLog;
   let ceiling = CONFIG.SCALING_LAW.paradigm_ceiling;
 
   let agiY = null, asiY = null, agiAchieved = false, pauseRem = 0;
@@ -418,7 +418,12 @@ function runTrajectory(fixedParams) {
       const ld = flopsLog + algoLog - baseLog;
       const cap = computeCapability(ld, CONFIG, ceiling) * inferenceScale(computeCapability(ld, CONFIG, ceiling), CONFIG);
       if (cap >= CONFIG.THRESHOLDS.agi) { agiY = yr; agiAchieved = true; }
-      if (asiY === null && cap >= CONFIG.THRESHOLDS.asi && pauseRem <= 0) { asiY = yr; }
+    }
+    // ASI check is independent of AGI — can happen in same year or later
+    if (asiY === null && pauseRem <= 0) {
+      const ld = flopsLog + algoLog - baseLog;
+      const cap = computeCapability(ld, CONFIG, ceiling) * inferenceScale(computeCapability(ld, CONFIG, ceiling), CONFIG);
+      if (cap >= CONFIG.THRESHOLDS.asi) { asiY = yr; }
     }
 
     // Alignment pause
@@ -464,89 +469,104 @@ function runTrajectory(fixedParams) {
 }
 
 /**
- * Run full Monte Carlo simulation. Calls onProgress(norm, resultsSoFar) during execution.
+ * Run full Monte Carlo simulation with chunking to avoid blocking UI.
+ * Calls onProgress(frac) after each chunk.
+ * Returns a Promise that resolves with the full results.
  */
-function runMonteCarlo(nRuns, onProgress) {
-  const agiList = [], asiList = [], trajectories = [];
+function runMonteCarloAsync(nRuns, onProgress) {
+  return new Promise((resolve) => {
+    const agiList = [], asiList = [], trajectories = [];
+    const chunkSize = 100;
+    let i = 0;
 
-  for (let i = 0; i < nRuns; i++) {
-    const hw = clamp(8 + 2 * randn(), 1, 40);
-    const algo = clamp(6 + 2.5 * randn(), 1, 30);
-    const rsi = clamp(0.12 + 0.05 * randn(), 0, 1);
-    const reg = clamp(0.07 + 0.05 * randn(), 0, 1);
+    function processChunk() {
+      const end = Math.min(i + chunkSize, nRuns);
+      for (; i < end; i++) {
+        const hw = clamp(8 + 2 * randn(), 1, 40);
+        const algo = clamp(6 + 2.5 * randn(), 1, 30);
+        const rsi = clamp(0.12 + 0.05 * randn(), 0, 1);
+        const reg = clamp(0.07 + 0.05 * randn(), 0, 1);
 
-    const r = runTrajectory({ hw, algo, rsi, reg });
-    agiList.push(r.agiYears);
-    asiList.push(r.asiYears);
-    trajectories.push(r.timeline);
+        const r = runTrajectory({ hw, algo, rsi, reg });
+        agiList.push(r.agiYears);
+        asiList.push(r.asiYears);
+        trajectories.push(r.timeline);
+      }
 
-    if (onProgress && i % 50 === 0) onProgress(i / nRuns, { agi: percentile(agiList.filter(isFinite), 50), asi: percentile(asiList.filter(isFinite), 50) });
-  }
+      if (onProgress) onProgress(i / nRuns);
 
-  // --- Histogram ---
-  const bins = [], binW = 0.5;
-  for (let x = 0.5; x < 16.5; x += binW) bins.push(x);
-  const hAgi = new Array(bins.length - 1).fill(0), hAsi = new Array(bins.length - 1).fill(0);
-  for (const v of agiList) if (isFinite(v)) { const idx = Math.floor((v - 0.5) / binW); if (idx >= 0 && idx < hAgi.length) hAgi[idx]++; }
-  for (const v of asiList) if (isFinite(v)) { const idx = Math.floor((v - 0.5) / binW); if (idx >= 0 && idx < hAsi.length) hAsi[idx]++; }
+      if (i < nRuns) {
+        setTimeout(processChunk, 0);
+      } else {
+        // --- Histogram ---
+        const bins = [], binW = 0.5;
+        for (let x = 0.5; x < 16.5; x += binW) bins.push(x);
+        const hAgi = new Array(bins.length - 1).fill(0), hAsi = new Array(bins.length - 1).fill(0);
+        for (const v of agiList) if (isFinite(v)) { const idx = Math.floor((v - 0.5) / binW); if (idx >= 0 && idx < hAgi.length) hAgi[idx]++; }
+        for (const v of asiList) if (isFinite(v)) { const idx = Math.floor((v - 0.5) / binW); if (idx >= 0 && idx < hAsi.length) hAsi[idx]++; }
 
-  // --- Trajectory ---
-  const maxLen = Math.min(...trajectories.map(t => t.length));
-  const tStep = Math.max(1, Math.floor(maxLen / 150));
-  const yrs = [], med = [], p10a = [], p25a = [], p50a = [], p75a = [], p90a = [];
-  for (let i = 0; i < maxLen; i += tStep) {
-    const vals = trajectories.filter(t => i < t.length).map(t => t[i].cap);
-    if (vals.length) {
-      vals.sort((a, b) => a - b);
-      yrs.push(trajectories[0][i].year);
-      p10a.push(percentile(vals, 10)); p25a.push(percentile(vals, 25));
-      med.push(percentile(vals, 50)); p75a.push(percentile(vals, 75)); p90a.push(percentile(vals, 90));
+        // --- Trajectory ---
+        const maxLen = Math.min(...trajectories.map(t => t.length));
+        const tStep = Math.max(1, Math.floor(maxLen / 150));
+        const yrs = [], med = [], p10a = [], p25a = [], p50a = [], p75a = [], p90a = [];
+        for (let j = 0; j < maxLen; j += tStep) {
+          const vals = trajectories.filter(t => j < t.length).map(t => t[j].cap);
+          if (vals.length) {
+            vals.sort((a, b) => a - b);
+            yrs.push(trajectories[0][j].year);
+            p10a.push(percentile(vals, 10)); p25a.push(percentile(vals, 25));
+            med.push(percentile(vals, 50)); p75a.push(percentile(vals, 75)); p90a.push(percentile(vals, 90));
+          }
+        }
+
+        // --- Cumulative ---
+        const yq = [];
+        for (let y = 0.25; y <= 10; y += 0.25) yq.push(+y.toFixed(4));
+        for (let y = 11; y <= 50; y++) yq.push(y);
+
+        // --- Sensitivity ---
+        const mn = Math.min(600, Math.max(300, nRuns));
+        const variations = {};
+        const tests = [
+          { k: 'hw_fast', l: 'HW быстрее', s: 'HARDWARE', p: 'doubling_time_months', v: 4 },
+          { k: 'hw_slow', l: 'HW медленнее', s: 'HARDWARE', p: 'doubling_time_months', v: 12 },
+          { k: 'algo_fast', l: 'Algo быстрее', s: 'ALGORITHMS', p: 'doubling_time_months', v: 3 },
+          { k: 'algo_slow', l: 'Algo медленнее', s: 'ALGORITHMS', p: 'doubling_time_months', v: 9 },
+          { k: 'ceil_up', l: 'Ceiling выше', s: 'SCALING_LAW', p: 'paradigm_ceiling', v: 12 },
+          { k: 'ceil_down', l: 'Ceiling ниже', s: 'SCALING_LAW', p: 'paradigm_ceiling', v: 6 },
+        ];
+        for (const t of tests) {
+          const agis = [];
+          for (let j = 0; j < mn; j++) {
+            const hw2 = t.s === 'HARDWARE' && t.p === 'doubling_time_months' ? t.v : clamp(8 + 2 * randn(), 1, 40);
+            const al2 = t.s === 'ALGORITHMS' && t.p === 'doubling_time_months' ? t.v : clamp(6 + 2.5 * randn(), 1, 30);
+            const r2 = runTrajectory({ hw: hw2, algo: al2, rsi: clamp(0.12 + 0.05 * randn(), 0, 1), reg: clamp(0.07 + 0.05 * randn(), 0, 1) });
+            agis.push(r2.agiYears);
+          }
+          variations[t.k] = { label: t.l, agiMedian: percentile(agis.filter(isFinite), 50) };
+        }
+
+        const baseMed = percentile(agiList.filter(isFinite), 50);
+
+        resolve({
+          histogram: { labels: bins.slice(0, -1).map((_, i) => ((bins[i] + bins[i + 1]) / 2).toFixed(1)), agi: hAgi, asi: hAsi },
+          trajectory: { years: yrs, median: med, p10: p10a, p25: p25a, p50: p50a, p75: p75a, p90: p90a, agiThreshold: 10, asiThreshold: 1000 },
+          cumulative: { x: yq, agi: yq.map(y => cdf(agiList, y)), asi: yq.map(y => cdf(asiList, y)) },
+          sensitivity: { base: baseMed, variations },
+          summary: {
+            agiMedian: percentile(agiList.filter(isFinite), 50),
+            asiMedian: percentile(asiList.filter(isFinite), 50),
+            pAsi2028: cdf(asiList, 2), pAsi2030: cdf(asiList, 4),
+            pAsi2035: cdf(asiList, 9), pAsi2040: cdf(asiList, 14),
+            pAgi2030: cdf(agiList, 4),
+            nRuns,
+          },
+        });
+      }
     }
-  }
 
-  // --- Cumulative ---
-  const yq = [];
-  for (let y = 0.25; y <= 10; y += 0.25) yq.push(+y.toFixed(4));
-  for (let y = 11; y <= 50; y++) yq.push(y);
-
-  // --- Sensitivity ---
-  const mn = Math.min(600, Math.max(300, nRuns));
-  const variations = {};
-  const tests = [
-    { k: 'hw_fast', l: 'HW быстрее', s: 'HARDWARE', p: 'doubling_time_months', v: 4 },
-    { k: 'hw_slow', l: 'HW медленнее', s: 'HARDWARE', p: 'doubling_time_months', v: 12 },
-    { k: 'algo_fast', l: 'Algo быстрее', s: 'ALGORITHMS', p: 'doubling_time_months', v: 3 },
-    { k: 'algo_slow', l: 'Algo медленнее', s: 'ALGORITHMS', p: 'doubling_time_months', v: 9 },
-    { k: 'ceil_up', l: 'Ceiling выше', s: 'SCALING_LAW', p: 'paradigm_ceiling', v: 12 },
-    { k: 'ceil_down', l: 'Ceiling ниже', s: 'SCALING_LAW', p: 'paradigm_ceiling', v: 6 },
-  ];
-  for (const t of tests) {
-    const agis = [];
-    for (let i = 0; i < mn; i++) {
-      const hw2 = t.s === 'HARDWARE' && t.p === 'doubling_time_months' ? t.v : clamp(8 + 2 * randn(), 1, 40);
-      const al2 = t.s === 'ALGORITHMS' && t.p === 'doubling_time_months' ? t.v : clamp(6 + 2.5 * randn(), 1, 30);
-      const r2 = runTrajectory({ hw: hw2, algo: al2, rsi: clamp(0.12 + 0.05 * randn(), 0, 1), reg: clamp(0.07 + 0.05 * randn(), 0, 1) });
-      agis.push(r2.agiYears);
-    }
-    variations[t.k] = { label: t.l, agiMedian: percentile(agis.filter(isFinite), 50) };
-  }
-
-  const baseMed = percentile(agiList.filter(isFinite), 50);
-
-  return {
-    histogram: { labels: bins.slice(0, -1).map((_, i) => ((bins[i] + bins[i + 1]) / 2).toFixed(1)), agi: hAgi, asi: hAsi },
-    trajectory: { years: yrs, median: med, p10: p10a, p25: p25a, p50: p50a, p75: p75a, p90: p90a, agiThreshold: 10, asiThreshold: 1000 },
-    cumulative: { x: yq, agi: yq.map(y => cdf(agiList, y)), asi: yq.map(y => cdf(asiList, y)) },
-    sensitivity: { base: baseMed, variations },
-    summary: {
-      agiMedian: percentile(agiList.filter(isFinite), 50),
-      asiMedian: percentile(asiList.filter(isFinite), 50),
-      pAsi2028: cdf(asiList, 2), pAsi2030: cdf(asiList, 4),
-      pAsi2035: cdf(asiList, 9), pAsi2040: cdf(asiList, 14),
-      pAgi2030: cdf(agiList, 4),
-      nRuns,
-    },
-  };
+    setTimeout(processChunk, 0);
+  });
 }
 
 // ============================================================================
@@ -598,17 +618,11 @@ async function runSimulation() {
   const progressText = document.getElementById('overlayText');
   const startTime = performance.now();
 
-  // Use setTimeout to allow UI to update before heavy computation
-  await new Promise(r => setTimeout(r, 50));
-
   try {
-    const results = await new Promise((resolve) => {
-      // Run in chunks to keep UI responsive for large N
-      requestAnimationFrame(() => resolve(runMonteCarlo(n, (frac, partial) => {
-        progressFill.style.width = (frac * 100) + '%';
-        const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
-        progressText.textContent = `Processing… ${Math.floor(frac * 100)}% (${elapsed}s)`;
-      })));
+    const results = await runMonteCarloAsync(n, (frac) => {
+      progressFill.style.width = (frac * 100) + '%';
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+      progressText.textContent = `Processing… ${Math.floor(frac * 100)}% (${elapsed}s)`;
     });
 
     currentResults = results;
@@ -856,8 +870,7 @@ function exportResults() {
 // AUTO-RUN ON LOAD
 // ============================================================================
 window.addEventListener('load', () => {
-  // Auto-run with defaults
-  setTimeout(runSimulation, 300);
+  // Simulation starts only on user click — no auto-run
 });
 </script>
 </body>
