@@ -840,7 +840,7 @@ LANG.ru = {
   ch3_xlabel:'Лет от сейчас', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
   ch4_label_base:'Базовая', ch4_faster:'AGI быстрее', ch4_slower:'AGI медленнее',
   fY_suffix:' лет', fY_gt:'> 50 лет', alert_err:'Ошибка: ',
-  hdr_title:'Singularity App', hdr_sub:'Monte Carlo Dashboard v2.1',
+  hdr_title:'Singularity <span style="color:var(--accent)">Forecaster</span>', hdr_sub:'v2.1 Monte Carlo Dashboard',
   sb_pasi_2028:'P(ASI · 2028)', sb_pasi_2030:'P(ASI · 2030)', sb_pasi_2035:'P(ASI · 2035)', sb_pasi_2040:'P(ASI · 2040)', sb_pagi_2030:'P(AGI · 2030)',
 };
 
@@ -895,7 +895,13 @@ function setLang(lang) {
   const t = LANG[lang];
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const k = el.getAttribute('data-i18n');
-    if (t[k]) el.textContent = t[k];
+    if (t[k]) {
+      if (t[k].includes('<')) {
+        el.innerHTML = t[k];
+      } else {
+        el.textContent = t[k];
+      }
+    }
   });
   // Redraw plots and summary if data exists
   if (window._data_hist) plotHistogram(window._data_hist);
