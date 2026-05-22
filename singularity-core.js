@@ -512,3 +512,229 @@ if (typeof module !== 'undefined' && module.exports) {
 if (typeof window !== 'undefined') {
   window.SingularityCore = { CONFIG, runMonteCarlo, runTrajectory, runSinglePreview, percentile, cdf };
 }
+
+// ============================================================================
+// v3.0 — BAYESIAN PARTICLE FILTER (Artificial Analysis Tracker)
+// ============================================================================
+
+/**
+ * Particle Filter с 2 параметрами:
+ *   hw_months      — темп роста железа (месяцы на удвоение)
+ *   agency_ceiling — потолок агентности текущей архитектуры
+ *
+ * При поступлении данных AA (Intelligence Index, Agentic Index)
+ * маловероятные гипотезы отсеиваются через SIR.
+ */
+const V3_DEFAULT_PARTICLES = 1000;
+
+function createV3Config() {
+  return {
+    BASE_YEAR: 2026.0,
+    FRONTIER_LOG_FLOPS: 27.5,
+    THRESHOLDS: { agi: 10.0 },
+    DIMENSIONS: {
+      reasoning: { slope: 0.55, ceiling: 15.0 },
+      agency:    { slope: 0.30 },
+    },
+    SCALING_LAW: {
+      paradigm_shift_prob: 0.15,
+      shift_multiplier: 3.0,
+    },
+    BOTTLENECKS: {
+      energy_wall_start: 2026.0,
+      energy_damping: 0.10,
+      econ_wall_start: 2026.5,
+      econ_damping: 0.15,
+    },
+  };
+}
+
+function v3SimulateToYear(particle, targetYear, cfg) {
+  const dt = 1.0 / 12.0;
+  const steps = Math.max(1, Math.floor((targetYear - cfg.BASE_YEAR) * 12));
+  let flopsLog = cfg.FRONTIER_LOG_FLOPS;
+  const baseLog = flopsLog;
+  const hwK = Math.log(2) / Math.max(1.0, particle.hw_months / 12.0);
+
+  for (let step = 0; step < steps; step++) {
+    const currentYear = cfg.BASE_YEAR + step * dt;
+    const logDiff = flopsLog - baseLog;
+    const reasoning = computeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cfg.DIMENSIONS.reasoning.ceiling);
+    const agency = computeDim(logDiff, cfg.DIMENSIONS.agency.slope, particle.agency_ceiling);
+
+    let damping = 1.0;
+    if (currentYear > cfg.BOTTLENECKS.econ_wall_start) {
+      const gap = reasoning - agency;
+      if (gap > 2.0) {
+        damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (gap - 2.0));
+      }
+    }
+    flopsLog += hwK * damping * dt;
+  }
+
+  const logDiff = flopsLog - baseLog;
+  return {
+    reasoning: computeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cfg.DIMENSIONS.reasoning.ceiling),
+    agency:    computeDim(logDiff, cfg.DIMENSIONS.agency.slope, particle.agency_ceiling),
+  };
+}
+
+function computeDim(logDiff, slope, ceiling) {
+  const S_HALF = 0.5;
+  const raw = ceiling * (sigmoid(slope * logDiff) - S_HALF) + 1.0;
+  return Math.max(raw, 0.01);
+}
+
+class BayesianTracker {
+  constructor(nParticles = V3_DEFAULT_PARTICLES) {
+    this.n = nParticles;
+    this.cfg = createV3Config();
+    this.particles = [];
+    this.weights = new Float64Array(nParticles);
+    for (let i = 0; i < nParticles; i++) this.weights[i] = 1.0 / nParticles;
+    this.observationLog = [];
+    this._initializeParticles();
+  }
+
+  _initializeParticles() {
+    for (let i = 0; i < this.n; i++) {
+      this.particles.push({
+        hw_months: Math.max(3.0, randnRange(7.5, 1.5)),
+        agency_ceiling: Math.max(1.5, randnRange(4.0, 1.0)),
+      });
+    }
+  }
+
+  observeAAData(year, aaIntelligence, aaAgentic, sigma = 0.5) {
+    const targetReasoning = aaIntelligence / 10.0;
+    const targetAgency = aaAgentic / 10.0;
+
+    for (let i = 0; i < this.n; i++) {
+      const p = this.particles[i];
+      if (p.hw_months < 1.0 || p.agency_ceiling < 1.0) {
+        this.weights[i] = 0;
+        continue;
+      }
+      const pred = v3SimulateToYear(p, year, this.cfg);
+      const errR = ((targetReasoning - pred.reasoning) / sigma) ** 2;
+      const errA = ((targetAgency - pred.agency) / sigma) ** 2;
+      const logLik = -0.5 * (errR + errA);
+      this.weights[i] *= Math.exp(Math.max(-50, logLik));
+    }
+
+    this._normalizeAndResample();
+    this.observationLog.push({ year, aaIntelligence, aaAgentic, ess: this.effectiveSampleSize() });
+  }
+
+  _normalizeAndResample() {
+    let sum = 0;
+    for (let i = 0; i < this.n; i++) sum += this.weights[i];
+    if (sum === 0) {
+      for (let i = 0; i < this.n; i++) this.weights[i] = 1.0 / this.n;
+      return;
+    }
+    for (let i = 0; i < this.n; i++) this.weights[i] /= sum;
+
+    const ess = this.effectiveSampleSize();
+    if (ess < this.n * 0.5) {
+      this._systematicResample();
+    }
+  }
+
+  _systematicResample() {
+    const newParticles = [];
+    const cumsum = new Float64Array(this.n);
+    cumsum[0] = this.weights[0];
+    for (let i = 1; i < this.n; i++) cumsum[i] = cumsum[i - 1] + this.weights[i];
+
+    const u0 = Math.random() / this.n;
+    let j = 0;
+    for (let i = 0; i < this.n; i++) {
+      const u = u0 + i / this.n;
+      while (j < this.n - 1 && cumsum[j] < u) j++;
+      const p = this.particles[j];
+      newParticles.push({
+        hw_months: Math.max(3.0, p.hw_months + randnRange(0, 0.2)),
+        agency_ceiling: Math.max(1.5, p.agency_ceiling + randnRange(0, 0.1)),
+      });
+    }
+    this.particles = newParticles;
+    for (let i = 0; i < this.n; i++) this.weights[i] = 1.0 / this.n;
+  }
+
+  effectiveSampleSize() {
+    let sumSq = 0;
+    for (let i = 0; i < this.n; i++) sumSq += this.weights[i] ** 2;
+    return 1.0 / sumSq;
+  }
+
+  getSummary() {
+    let hwMean = 0, agnMean = 0;
+    for (let i = 0; i < this.n; i++) {
+      hwMean += this.particles[i].hw_months * this.weights[i];
+      agnMean += this.particles[i].agency_ceiling * this.weights[i];
+    }
+    return { hwMonths: hwMean, agencyCeiling: agnMean };
+  }
+
+  runMonteCarloForecast(nRuns = 2000) {
+    const agiYears = [];
+    const cfg = this.cfg;
+    const dt = 1.0 / 12.0;
+    const maxSteps = 12 * 40;
+
+    // Build cumulative weights for sampling
+    const cumw = new Float64Array(this.n);
+    cumw[0] = this.weights[0];
+    for (let i = 1; i < this.n; i++) cumw[i] = cumw[i - 1] + this.weights[i];
+
+    for (let run = 0; run < nRuns; run++) {
+      // Sample particle
+      const u = Math.random();
+      let idx = 0;
+      while (idx < this.n - 1 && cumw[idx] < u) idx++;
+      const p = this.particles[idx];
+
+      let flopsLog = cfg.FRONTIER_LOG_FLOPS;
+      const baseLog = flopsLog;
+      const hwK = Math.log(2) / Math.max(1.0, p.hw_months / 12.0);
+      let ceilingAgency = p.agency_ceiling;
+      let agiAchieved = false;
+
+      for (let step = 0; step < maxSteps; step++) {
+        const currentYear = cfg.BASE_YEAR + step * dt;
+
+        // Paradigm shift
+        if (Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
+          ceilingAgency *= cfg.SCALING_LAW.shift_multiplier;
+          baseLog -= 0.5;
+        }
+
+        const logDiff = flopsLog - baseLog;
+        const reasoning = computeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cfg.DIMENSIONS.reasoning.ceiling);
+        const agency = computeDim(logDiff, cfg.DIMENSIONS.agency.slope, ceilingAgency);
+
+        if (reasoning >= cfg.THRESHOLDS.agi && agency >= cfg.THRESHOLDS.agi) {
+          agiYears.push(currentYear);
+          agiAchieved = true;
+          break;
+        }
+
+        let damping = 1.0;
+        if (currentYear > cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
+          damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
+        }
+        flopsLog += hwK * damping * dt;
+      }
+
+      if (!agiAchieved) agiYears.push(Infinity);
+    }
+
+    return agiYears;
+  }
+}
+
+// Export v3
+if (typeof window !== 'undefined') {
+  window.SingularityV3 = { BayesianTracker, createV3Config, v3SimulateToYear };
+}
