@@ -229,24 +229,25 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 <!-- ===== v3 BAYESIAN PANEL ===== -->
 <div id="v3Panel" style="display:none;background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:16px 32px">
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-    <span style="font-size:.75rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:.5px">v3 Bayesian — данные Artificial Analysis</span>
-    <span style="font-size:.65rem;color:var(--text-muted)">Загрузите бенчмарки для корректировки прогноза</span>
+    <span style="font-size:.75rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:.5px">v3 Bayesian — Artificial Analysis Tracker</span>
+    <span style="font-size:.65rem;color:var(--text-muted)">Данные AA загружены автоматически. Добавьте свои наблюдения для уточнения.</span>
   </div>
   <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end">
     <div class="control-group">
       <label>Год наблюдения</label>
-      <input type="number" id="v3Year" value="2026" min="2025" max="2050" step="0.1" style="width:80px">
+      <input type="number" id="v3Year" value="2026.5" min="2022" max="2030" step="0.1" style="width:80px">
     </div>
     <div class="control-group">
-      <label>Intelligence Index</label>
-      <input type="number" id="v3Intel" value="65" min="0" max="200" step="1" style="width:80px">
+      <label>Intelligence Index (AA)</label>
+      <input type="number" id="v3Intel" value="60" min="0" max="100" step="1" style="width:80px">
     </div>
     <div class="control-group">
-      <label>Agentic Index</label>
-      <input type="number" id="v3Agentic" value="47" min="0" max="200" step="1" style="width:80px">
+      <label>Agentic Index (tau2 x 10)</label>
+      <input type="number" id="v3Agentic" value="9.4" min="0" max="20" step="0.1" style="width:80px">
     </div>
-    <button class="btn btn-secondary btn-sm" onclick="v3AddObservation()">+ Добавить наблюдение</button>
+    <button class="btn btn-secondary btn-sm" onclick="v3AddObservation()">+ Добавить</button>
     <button class="btn btn-primary btn-sm" onclick="v3RunForecast()">Запустить прогноз</button>
+    <button class="btn btn-secondary btn-sm" onclick="v3ResetTracker()">Сбросить</button>
   </div>
   <div id="v3Observations" style="margin-top:10px;font-size:.72rem;color:var(--text-secondary)"></div>
   <div id="v3Params" style="margin-top:6px;font-size:.72rem;color:var(--text-muted)"></div>
@@ -815,9 +816,31 @@ function colorProb(id, val) {
 let v3Tracker = null;
 let v3Observations = [];
 
+// Pre-loaded AA frontier data (Intelligence Index + tau2 agentic proxy)
+const AA_FRONTIER_DATA = [
+  { date: "2022-11", intel: 9.0, tau2: 0.05 },
+  { date: "2023-03", intel: 12.8, tau2: 0.08 },
+  { date: "2023-11", intel: 13.7, tau2: 0.10 },
+  { date: "2024-03", intel: 18.0, tau2: 0.15 },
+  { date: "2024-09", intel: 23.7, tau2: 0.30 },
+  { date: "2024-12", intel: 30.7, tau2: 0.63 },
+  { date: "2025-02", intel: 34.7, tau2: 0.55 },
+  { date: "2025-04", intel: 38.4, tau2: 0.81 },
+  { date: "2025-08", intel: 44.6, tau2: 0.85 },
+  { date: "2025-11", intel: 49.7, tau2: 0.90 },
+  { date: "2025-12", intel: 51.3, tau2: 0.85 },
+  { date: "2026-02", intel: 57.2, tau2: 0.96 },
+  { date: "2026-04", intel: 60.2, tau2: 0.94 },
+];
+
 function v3GetTracker() {
   if (!v3Tracker) {
     v3Tracker = new BayesianTracker(1000);
+    // Auto-load AA frontier data
+    AA_FRONTIER_DATA.forEach(d => {
+      const year = parseFloat(d.date.substring(0, 4)) + (parseInt(d.date.substring(5, 7)) - 1) / 12;
+      v3Tracker.observeAAData(year, d.intel, d.tau2 * 10, 1.0);
+    });
   }
   return v3Tracker;
 }
@@ -828,16 +851,34 @@ function v3AddObservation() {
   const agentic = +document.getElementById('v3Agentic').value;
 
   const tracker = v3GetTracker();
-  tracker.observeAAData(year, intel, agentic);
+  tracker.observeAAData(year, intel, agentic, 1.0);
   v3Observations.push({ year, intel, agentic });
 
-  // Update observations list
+  v3UpdateUI(tracker);
+}
+
+function v3ResetTracker() {
+  v3Tracker = null;
+  v3Observations = [];
+  document.getElementById('v3Observations').innerHTML = '';
+  document.getElementById('v3Params').textContent = '';
+}
+
+function v3UpdateUI(tracker) {
+  // Show observations
   const obsDiv = document.getElementById('v3Observations');
-  obsDiv.innerHTML = v3Observations.map(o =>
-    `<span style="margin-right:12px">${o.year}: I=${o.intel}, A=${o.agentic}</span>`
+  const allObs = AA_FRONTIER_DATA.map(d => ({
+    year: parseFloat(d.date.substring(0, 4)) + (parseInt(d.date.substring(5, 7)) - 1) / 12,
+    intel: d.intel,
+    agentic: d.tau2 * 10,
+    source: 'AA'
+  })).concat(v3Observations.map(o => ({ ...o, source: 'user' })));
+
+  obsDiv.innerHTML = allObs.map(o =>
+    `<span style="margin-right:12px;${o.source === 'user' ? 'color:var(--accent)' : ''}">${o.year.toFixed(1)}: I=${o.intel.toFixed(1)}, A=${o.agentic.toFixed(1)}${o.source === 'user' ? ' *' : ''}</span>`
   ).join('');
 
-  // Update params summary
+  // Show params
   const summary = tracker.getSummary();
   document.getElementById('v3Params').textContent =
     `Апостериор: hw_months=${summary.hwMonths.toFixed(1)}, agency_ceiling=${summary.agencyCeiling.toFixed(2)} | ESS=${tracker.effectiveSampleSize().toFixed(0)}/1000`;
@@ -892,10 +933,7 @@ async function v3RunForecast() {
     currentResults = results;
     updateUI(results);
 
-    // Show v3-specific info
-    const summary = tracker.getSummary();
-    document.getElementById('v3Params').textContent =
-      `Апостериор: hw_months=${summary.hwMonths.toFixed(1)}, agency_ceiling=${summary.agencyCeiling.toFixed(2)} | ESS=${tracker.effectiveSampleSize().toFixed(0)}/1000 | Не достигли AGI: ${(infCount / agiYears.length * 100).toFixed(1)}%`;
+    v3UpdateUI(tracker);
 
   } catch (e) {
     console.error('v3 error:', e);
