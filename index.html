@@ -242,8 +242,8 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
       <input type="number" id="v3Intel" value="60" min="0" max="100" step="1" style="width:80px">
     </div>
     <div class="control-group">
-      <label>Agentic Index (tau2 x 10)</label>
-      <input type="number" id="v3Agentic" value="9.4" min="0" max="20" step="0.1" style="width:80px">
+      <label>Agentic Index (0-100)</label>
+      <input type="number" id="v3Agentic" value="47" min="0" max="100" step="0.1" style="width:80px">
     </div>
     <button class="btn btn-secondary btn-sm" onclick="v3AddObservation()">+ Добавить</button>
     <button class="btn btn-primary btn-sm" onclick="v3RunForecast()">Запустить прогноз</button>
@@ -816,30 +816,24 @@ function colorProb(id, val) {
 let v3Tracker = null;
 let v3Observations = [];
 
-// Pre-loaded AA frontier data (Intelligence Index + tau2 agentic proxy)
+// Pre-loaded historical frontier data (Intelligence Index + Agentic Index)
+// Source: user-provided data.txt with normalized values from AA
 const AA_FRONTIER_DATA = [
-  { date: "2022-11", intel: 9.0, tau2: 0.05 },
-  { date: "2023-03", intel: 12.8, tau2: 0.08 },
-  { date: "2023-11", intel: 13.7, tau2: 0.10 },
-  { date: "2024-03", intel: 18.0, tau2: 0.15 },
-  { date: "2024-09", intel: 23.7, tau2: 0.30 },
-  { date: "2024-12", intel: 30.7, tau2: 0.63 },
-  { date: "2025-02", intel: 34.7, tau2: 0.55 },
-  { date: "2025-04", intel: 38.4, tau2: 0.81 },
-  { date: "2025-08", intel: 44.6, tau2: 0.85 },
-  { date: "2025-11", intel: 49.7, tau2: 0.90 },
-  { date: "2025-12", intel: 51.3, tau2: 0.85 },
-  { date: "2026-02", intel: 57.2, tau2: 0.96 },
-  { date: "2026-04", intel: 60.2, tau2: 0.94 },
+  { year: 2023.25, intel: 30.0, agentic: 2.0, event: "GPT-4 Release" },
+  { year: 2024.20, intel: 45.0, agentic: 13.8, event: "Claude 3 Opus / Devin" },
+  { year: 2024.45, intel: 52.0, agentic: 31.4, event: "Claude 3.5 Sonnet" },
+  { year: 2024.75, intel: 55.0, agentic: 36.0, event: "o1-preview / Scaffolding boom" },
+  { year: 2025.10, intel: 58.0, agentic: 42.0, event: "DeepSeek-R1 / Gemini 2.0 Pro" },
+  { year: 2025.80, intel: 62.0, agentic: 45.0, event: "Q4 2025 Frontier" },
+  { year: 2026.35, intel: 65.0, agentic: 47.0, event: "May 2026 Frontier" },
 ];
 
 function v3GetTracker() {
   if (!v3Tracker) {
     v3Tracker = new BayesianTracker(1000);
-    // Auto-load AA frontier data
+    // Auto-load historical frontier data
     AA_FRONTIER_DATA.forEach(d => {
-      const year = parseFloat(d.date.substring(0, 4)) + (parseInt(d.date.substring(5, 7)) - 1) / 12;
-      v3Tracker.observeAAData(year, d.intel, d.tau2 * 10, 1.0);
+      v3Tracker.observeAAData(d.year, d.intel, d.agentic, 1.5);
     });
   }
   return v3Tracker;
@@ -868,14 +862,15 @@ function v3UpdateUI(tracker) {
   // Show observations
   const obsDiv = document.getElementById('v3Observations');
   const allObs = AA_FRONTIER_DATA.map(d => ({
-    year: parseFloat(d.date.substring(0, 4)) + (parseInt(d.date.substring(5, 7)) - 1) / 12,
+    year: d.year,
     intel: d.intel,
-    agentic: d.tau2 * 10,
+    agentic: d.agentic,
+    event: d.event,
     source: 'AA'
-  })).concat(v3Observations.map(o => ({ ...o, source: 'user' })));
+  })).concat(v3Observations.map(o => ({ ...o, event: null, source: 'user' })));
 
   obsDiv.innerHTML = allObs.map(o =>
-    `<span style="margin-right:12px;${o.source === 'user' ? 'color:var(--accent)' : ''}">${o.year.toFixed(1)}: I=${o.intel.toFixed(1)}, A=${o.agentic.toFixed(1)}${o.source === 'user' ? ' *' : ''}</span>`
+    `<span style="margin-right:12px;${o.source === 'user' ? 'color:var(--accent)' : ''}">${o.year.toFixed(2)}: I=${o.intel.toFixed(0)}, A=${o.agentic.toFixed(1)}${o.event ? ' (' + o.event + ')' : ''}${o.source === 'user' ? ' *' : ''}</span>`
   ).join('');
 
   // Show params
