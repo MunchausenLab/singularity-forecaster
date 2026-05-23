@@ -290,7 +290,7 @@ function createV3Config() {
     BASE_YEAR: 2023.0,          // Якорь (уровень GPT-4)
     BASE_LOG_FLOPS: 24.5,       // Начальные FLOPs в 2023
     CURRENT_YEAR: 2026.30,      // Откуда рисуем графики прогноза
-    THRESHOLDS: { agi: 10.0 },
+    THRESHOLDS: { agi: 10.0, asi: 100.0 },
     DIMENSIONS: {
       reasoning: { slope: 0.35, ceiling: 15.0 }, // Откалибровано под рост до 65 баллов
       agency:    { slope: 0.25 }, // Потолок определяет частица
@@ -441,7 +441,7 @@ class BayesianTracker {
       const hwK = Math.log(2) / Math.max(1.0, p.hw_months / 12.0);
       const algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
       let ceilingAgency = p.agency_ceiling;
-      let agiY = null;
+      let agiY = null, asiY = null;
       let plotIdx = 0;
 
       for (let step = 0; step < maxSteps; step++) {
@@ -465,11 +465,14 @@ class BayesianTracker {
             trajYears[plotIdx] = currentYear;
             trajCaps[plotIdx].push(cap);
             plotIdx++;
+        }
 
-            if (agiY === null && cap >= this.cfg.THRESHOLDS.agi) {
-                agiY = currentYear;
-                break; // Выход из симуляции при AGI (экономит CPU)
-            }
+        if (agiY === null && cap >= this.cfg.THRESHOLDS.agi) {
+            agiY = currentYear;
+        }
+        if (asiY === null && cap >= this.cfg.THRESHOLDS.asi) {
+            asiY = currentYear;
+            break;
         }
         
         let damping = 1.0;
@@ -482,7 +485,7 @@ class BayesianTracker {
       
       // Возвращаем года от СЕГОДНЯ, чтобы UI отрендерил корректно
       agiYears.push(agiY !== null ? agiY - this.cfg.CURRENT_YEAR : Infinity);
-      asiYears.push(Infinity);
+      asiYears.push(asiY !== null ? asiY - this.cfg.CURRENT_YEAR : Infinity);
     }
     
     const yrs = [], med = [], p10a = [], p25a = [], p75a = [], p90a = [];
@@ -578,7 +581,9 @@ async function runSimulation() {
       const tracker = v3GetTracker();
       const runData = tracker.runMonteCarloForecast(n);
       const agiList = runData.agiYears;
+      const asiList = runData.asiYears;
       const finite = agiList.filter(isFinite);
+      const finiteAsi = asiList.filter(isFinite);
       
       const yq = [];
       for (let y = 0.25; y <= 10; y += 0.25) yq.push(+y.toFixed(4));
@@ -590,14 +595,15 @@ async function runSimulation() {
       };
 
       currentResults = {
-        histogram: buildHistogramBins(finite), 
+        histogram: buildHistogramBins(agiList, asiList), 
         trajectory: runData.trajectory, 
-        cumulative: { x: yq, agi: yq.map(y => cdf(agiList, y)), asi: [] },
+        cumulative: { x: yq, agi: yq.map(y => cdf(agiList, y)), asi: yq.map(y => cdf(asiList, y)) },
         sensitivity: dummySensitivity,
         summary: {
-          agiMedian: percentile(finite, 50), asiMedian: Infinity,
+          agiMedian: percentile(finite, 50), 
+          asiMedian: percentile(finiteAsi, 50),
           pAgi2029: cdf(agiList, 3), pAgi2033: cdf(agiList, 7), pAgi2040: cdf(agiList, 14),
-          pAsi2035: 0, pAsi2045: 0, nRuns: n
+          pAsi2035: cdf(asiList, 9), pAsi2045: cdf(asiList, 19), nRuns: n
         },
       };
       updateUI(currentResults);
