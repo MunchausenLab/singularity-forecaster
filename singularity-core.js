@@ -731,4 +731,3 @@ function setLang(lang) {
 }
 
 window.addEventListener('load', () => setLang('ru'));
-</script>
