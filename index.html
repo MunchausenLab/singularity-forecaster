@@ -131,10 +131,6 @@ body{font-family:var(--font);background:var(--bg-primary);color:var(--text-prima
 .tip-text::before{content:'';position:absolute;top:-6px;left:50%;transform:translateX(-50%);border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:6px solid var(--border)}
 
 /* ===== MODE TOGGLE ===== */
-.mode-toggle{display:flex;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
-.mode-btn{padding:5px 14px;font-size:.72rem;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--text-secondary);transition:var(--transition);font-family:var(--font)}
-.mode-btn.active{background:var(--purple);color:#fff;border-color:var(--purple)}
-.mode-btn:hover:not(.active){color:var(--text-primary)}
 
 footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);border-top:1px solid var(--border)}
 </style>
@@ -195,39 +191,18 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 <!-- ===== CONTROLS ===== -->
 <div class="controls">
   <div class="control-group">
-    <label data-i18n="label_n">Simulations (N)</label>
+    <label>Simulations (N)</label>
     <input type="range" id="rN" min="500" max="10000" step="500" value="3000" oninput="document.getElementById('vN').textContent=this.value">
     <span class="n-display"><span id="vN">3000</span></span>
   </div>
-  <div class="control-group">
-    <label data-i18n="label_hw">HW Doubling (mo)</label>
-    <input type="number" id="iHW" value="8" min="3" max="24" step="0.5">
-  </div>
-  <div class="control-group">
-    <label data-i18n="label_algo">Algo Doubling (mo)</label>
-    <input type="number" id="iAlg" value="6" min="3" max="18" step="0.5">
-  </div>
-  <div class="control-group">
-    <label data-i18n="label_ceil">Paradigm Ceiling</label>
-    <input type="number" id="iCeil" value="8" min="4" max="20" step="0.5">
-  </div>
-  <div class="control-group">
-    <label data-i18n="label_dw">Data Wall Start</label>
-    <input type="number" id="iDW" value="2026" min="2025" max="2035" step="0.5">
-  </div>
   <button class="btn btn-primary" id="runBtn" onclick="runSimulation()">
-    ▶ <span data-i18n="run_btn">Run</span>
+    ▶ <span data-i18n="run_btn">Запуск</span>
   </button>
-  <div class="controls-right">
-    <div class="mode-toggle">
-      <button class="mode-btn active" id="mode_v2" onclick="setMode('v2')">v2 Classic</button>
-      <button class="mode-btn" id="mode_v3" onclick="setMode('v3')">v3 Bayesian</button>
-    </div>
-  </div>
 </div>
 
 <!-- ===== v3 BAYESIAN PANEL ===== -->
-<div id="v3Panel" style="display:none;background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:16px 32px">
+<div id="v3Panel" style="display:block;background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:16px 32px">
+
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
     <span style="font-size:.75rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:.5px">v3 Bayesian — Artificial Analysis Tracker</span>
     <span style="font-size:.65rem;color:var(--text-muted)">Данные AA загружены автоматически. Добавьте свои наблюдения для уточнения.</span>

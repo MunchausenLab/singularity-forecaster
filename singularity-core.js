@@ -1,284 +1,3 @@
-console.log('[SF] script loaded v4.1 (Bugfixed), defining functions...');
-// ============================================================================
-// SIMULATION CORE v2.5 — Multidimensional Bottlenecks & Geopolitics
-// ============================================================================
-
-const CONFIG = {
-  FRONTIER: { training_flops_log10: 27.5, base_capability: 1.0 },
-  THRESHOLDS: { agi: 10.0, asi: 100.0 },
-  HARDWARE: { doubling_time_months: 7.0, doubling_time_std_months: 1.5 },
-  ALGORITHMS: { doubling_time_months: 6.0, doubling_time_std_months: 2.0 },
-  DIMENSIONS: {
-    reasoning:   { slope: 0.55, ceiling: 15.0 },
-    agency:      { slope: 0.30, ceiling: 4.0 },
-    reliability: { slope: 0.35, ceiling: 6.0 },
-  },
-  SCALING_LAW: { paradigm_shift_prob_per_year: 0.15, shift_ceiling_multiplier: 3.0 },
-  INFERENCE_SCALING: {
-    max_bonus_reasoning: 3.0, max_bonus_agency: 1.5, max_bonus_reliability: 1.0,
-    saturation_capability: 5.0,
-  },
-  RSI: { activation_capability: 5.0, saturation_capability: 40.0, factor: 0.06, factor_std: 0.02 },
-  BOTTLENECKS: {
-    energy_wall_start_year: 2026.0, energy_damping_rate: 0.12,
-    data_wall_start_year: 2026.0, data_hw_damping: 0.08, data_algo_damping: 0.05,
-    economics_start_year: 2026.5, economics_base_damping: 0.08,
-  },
-  GEOPOLITICS: {
-    sputnik_trigger_reasoning: 7.0, prob_per_year: 0.30, hw_boost_multiplier: 1.25,
-  },
-  NON_TECHNICAL: {
-    regulatory_damping_mean: 0.02,
-    alignment_pause_prob_per_year: 0.05, alignment_pause_duration_years_mean: 1.5,
-  },
-  SIMULATION: { max_years: 40, dt_months: 1.0, n_monte_carlo: 3000 },
-};
-
-function randn() {
-  let u = 0, v = 0;
-  while (u === 0) u = Math.random();
-  while (v === 0) v = Math.random();
-  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
-}
-function randnRange(mean, std) { return mean + std * randn(); }
-function sigmoid(x) { return 1.0 / (1.0 + Math.exp(-Math.max(-100, Math.min(100, x)))); }
-function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-function percentile(arr, p) {
-  if (!arr.length) return Infinity;
-  const s = [...arr].sort((a, b) => a - b);
-  const i = (p / 100) * (s.length - 1);
-  const lo = Math.floor(i), hi = Math.ceil(i);
-  return lo === hi ? s[lo] : s[lo] + (i - lo) * (s[hi] - s[lo]);
-}
-function cdf(arr, x) { return (100.0 * arr.filter(v => isFinite(v) && v <= x).length) / arr.length; }
-
-function computeDim(logDiff, slope, ceiling) {
-  const S_HALF = 0.5;
-  return Math.max(ceiling * (sigmoid(slope * logDiff) - S_HALF) + 1.0, 0.01);
-}
-
-function applyInferenceBonus(cap, maxBonus, satCap) {
-  if (maxBonus <= 1.0) return cap;
-  const k = Math.log(2) / satCap;
-  const bonus = (maxBonus - 1.0) * (1.0 - Math.exp(-k * cap));
-  return cap * (1.0 + bonus);
-}
-
-function runTrajectory() {
-  const hwK = Math.log(2) / Math.max(1, randn() * CONFIG.HARDWARE.doubling_time_std_months + CONFIG.HARDWARE.doubling_time_months);
-  const algoK = Math.log(2) / Math.max(1, randn() * CONFIG.ALGORITHMS.doubling_time_std_months + CONFIG.ALGORITHMS.doubling_time_months);
-  const rsiF = clamp(CONFIG.RSI.factor + CONFIG.RSI.factor_std * randn(), 0, 1);
-  const dt = CONFIG.SIMULATION.dt_months;
-  const maxT = Math.floor(CONFIG.SIMULATION.max_years * 12 / dt);
-
-  let flopsLog = CONFIG.FRONTIER.training_flops_log10;
-  let algoLog = 0;
-  let baseLog = flopsLog;
-
-  const ceilings = {
-    reasoning: CONFIG.DIMENSIONS.reasoning.ceiling,
-    agency: CONFIG.DIMENSIONS.agency.ceiling,
-    reliability: CONFIG.DIMENSIONS.reliability.ceiling,
-  };
-
-  let agiY = null, asiY = null, geoActive = false, pauseRem = 0, shiftsCount = 0;
-  const step = Math.max(1, Math.floor(12 / dt));
-  const timeline = [];
-
-  for (let t = 0; t < maxT; t++) {
-    const yr = 2026 + (t * dt) / 12;
-
-    const logDiff = flopsLog + algoLog - baseLog;
-    const rawR = computeDim(logDiff, CONFIG.DIMENSIONS.reasoning.slope, ceilings.reasoning);
-    const rawA = computeDim(logDiff, CONFIG.DIMENSIONS.agency.slope, ceilings.agency);
-    const rawRel = computeDim(logDiff, CONFIG.DIMENSIONS.reliability.slope, ceilings.reliability);
-
-    const capR = applyInferenceBonus(rawR, CONFIG.INFERENCE_SCALING.max_bonus_reasoning, CONFIG.INFERENCE_SCALING.saturation_capability);
-    const capA = applyInferenceBonus(rawA, CONFIG.INFERENCE_SCALING.max_bonus_agency, CONFIG.INFERENCE_SCALING.saturation_capability);
-    const capRel = applyInferenceBonus(rawRel, CONFIG.INFERENCE_SCALING.max_bonus_reliability, CONFIG.INFERENCE_SCALING.saturation_capability);
-
-    const overallAGI = Math.min(capR, capA, capRel);
-    const overallASI = Math.min(capR, capA);
-
-    if (t % step === 0) {
-      timeline.push({ year: yr, cap: overallAGI, reasoning: capR, agency: capA, reliability: capRel });
-    }
-
-    if (agiY === null && overallAGI >= CONFIG.THRESHOLDS.agi) { agiY = yr; }
-    if (asiY === null && overallASI >= CONFIG.THRESHOLDS.asi && pauseRem <= 0) { asiY = yr; break; }
-
-    if (!geoActive && capR >= CONFIG.GEOPOLITICS.sputnik_trigger_reasoning) {
-      if (Math.random() < CONFIG.GEOPOLITICS.prob_per_year * dt / 12) { geoActive = true; }
-    }
-
-    if (Math.random() < CONFIG.SCALING_LAW.paradigm_shift_prob_per_year * dt / 12) {
-      shiftsCount++;
-      for (const dim in ceilings) ceilings[dim] *= CONFIG.SCALING_LAW.shift_ceiling_multiplier;
-      baseLog -= 1.0;
-    }
-
-    let hwD = 1, algoD = 1;
-    if (yr > CONFIG.BOTTLENECKS.energy_wall_start_year) {
-      const yp = yr - CONFIG.BOTTLENECKS.energy_wall_start_year;
-      let eDamp = CONFIG.BOTTLENECKS.energy_damping_rate;
-      if (geoActive) eDamp *= 0.6;
-      hwD *= Math.exp(-eDamp * yp);
-    }
-
-    if (yr > CONFIG.BOTTLENECKS.data_wall_start_year && overallAGI < CONFIG.THRESHOLDS.agi) {
-      const yp = yr - CONFIG.BOTTLENECKS.data_wall_start_year;
-      hwD *= Math.exp(-CONFIG.BOTTLENECKS.data_hw_damping * yp);
-      algoD *= Math.exp(-CONFIG.BOTTLENECKS.data_algo_damping * yp);
-    }
-
-    if (yr > CONFIG.BOTTLENECKS.economics_start_year && !geoActive) {
-      const gap = Math.max(0, capR - capA);
-      if (gap > 2.0) hwD *= Math.exp(-CONFIG.BOTTLENECKS.economics_base_damping * (gap - 2.0));
-    }
-
-    let regD = geoActive ? 1.0 : 1.0 - CONFIG.NON_TECHNICAL.regulatory_damping_mean;
-
-    if (overallAGI >= CONFIG.THRESHOLDS.agi && pauseRem <= 0) {
-      if (Math.random() < CONFIG.NON_TECHNICAL.alignment_pause_prob_per_year * dt / 12) {
-        pauseRem = CONFIG.NON_TECHNICAL.alignment_pause_duration_years_mean * 12 * Math.exp(0.5 * randn());
-      }
-    }
-    if (pauseRem > 0) { pauseRem -= dt; hwD *= 0.1; algoD *= 0.3; }
-
-    let rsi = 0;
-    if (overallAGI >= CONFIG.RSI.activation_capability) {
-      const progress = clamp((overallAGI - CONFIG.RSI.activation_capability) / (CONFIG.RSI.saturation_capability - CONFIG.RSI.activation_capability), 0, 1);
-      rsi = rsiF * progress * Math.log(1.0 + overallAGI);
-    }
-
-    const geoBoost = geoActive ? CONFIG.GEOPOLITICS.hw_boost_multiplier : 1.0;
-    flopsLog += hwK * hwD * regD * geoBoost * dt;
-    algoLog += (algoK * algoD + rsi) * regD * dt;
-  }
-
-  // RETURN RELATIVE YEARS FOR AGI/ASI (Years from Base)
-  return {
-    agiYears: agiY !== null ? agiY - 2026 : Infinity,
-    asiYears: asiY !== null ? asiY - 2026 : Infinity,
-    timeline, geoActive, shiftsCount,
-  };
-}
-
-function runMonteCarloAsync(nRuns, onProgress) {
-  return new Promise((resolve) => {
-    const agiList = [], asiList = [];
-    const MAX_POINTS = 50; 
-    const trajYears = new Float64Array(MAX_POINTS);
-    const trajCaps = Array.from({length: MAX_POINTS}, () => []);
-    let trajLen = 0, geoCount = 0, totalShifts = 0, i = 0, chunkSize = 100;
-
-    function processChunk() {
-      const end = Math.min(i + chunkSize, nRuns);
-      for (; i < end; i++) {
-        const r = runTrajectory();
-        agiList.push(r.agiYears);
-        asiList.push(r.asiYears);
-        if (r.geoActive) geoCount++;
-        totalShifts += r.shiftsCount;
-        
-        if (r.timeline.length > trajLen) trajLen = r.timeline.length;
-        for (let k = 0; k < r.timeline.length; k++) {
-          trajCaps[k].push(r.timeline[k].cap);
-          trajYears[k] = r.timeline[k].year; // Absolute year for chart X axis
-        }
-      }
-      if (onProgress) onProgress(i / nRuns);
-      if (i < nRuns) {
-        setTimeout(processChunk, 0);
-      } else {
-        const hAgi = buildHistogramBins(agiList);
-        const hAsi = buildHistogramBins(asiList);
-
-        const tStep = Math.max(1, Math.floor(trajLen / 150));
-        const yrs = [], med = [], p10a = [], p25a = [], p75a = [], p90a = [];
-        for (let j = 0; j < trajLen; j += tStep) {
-          const vals = trajCaps[j];
-          if (vals.length > 0) {
-            vals.sort((a, b) => a - b);
-            yrs.push(trajYears[j]);
-            p10a.push(percentile(vals, 10)); p25a.push(percentile(vals, 25));
-            med.push(percentile(vals, 50)); p75a.push(percentile(vals, 75)); p90a.push(percentile(vals, 90));
-          }
-        }
-
-        const yq = [];
-        for (let y = 0.25; y <= 10; y += 0.25) yq.push(+y.toFixed(4));
-        for (let y = 11; y <= 40; y++) yq.push(y);
-
-        // Sensitivity (v2)
-        const mn = Math.min(600, Math.max(300, nRuns));
-        const variations = {};
-        const tests = [
-          { k: 'hw_fast', l: 'x2 HW faster', s: 'HARDWARE', p: 'doubling_time_months', v: 4 },
-          { k: 'hw_slow', l: 'x2 HW slower', s: 'HARDWARE', p: 'doubling_time_months', v: 12 },
-          { k: 'algo_fast', l: 'x2 Algo faster', s: 'ALGORITHMS', p: 'doubling_time_months', v: 3 },
-          { k: 'algo_slow', l: 'x2 Algo slower', s: 'ALGORITHMS', p: 'doubling_time_months', v: 9 },
-          { k: 'ceil_up', l: 'Ceiling higher', s: 'DIMENSIONS', p: 'agency', v: 8 },
-          { k: 'ceil_down', l: 'Ceiling lower', s: 'DIMENSIONS', p: 'agency', v: 2 },
-        ];
-        for (const test of tests) {
-          const agis = [];
-          for (let j = 0; j < mn; j++) {
-            const orig = test.s === 'HARDWARE' ? CONFIG.HARDWARE[test.p] : test.s === 'ALGORITHMS' ? CONFIG.ALGORITHMS[test.p] : CONFIG.DIMENSIONS[test.p].ceiling;
-            if (test.s === 'HARDWARE') CONFIG.HARDWARE[test.p] = test.v;
-            else if (test.s === 'ALGORITHMS') CONFIG.ALGORITHMS[test.p] = test.v;
-            else CONFIG.DIMENSIONS[test.p].ceiling = test.v;
-            agis.push(runTrajectory().agiYears);
-            if (test.s === 'HARDWARE') CONFIG.HARDWARE[test.p] = orig;
-            else if (test.s === 'ALGORITHMS') CONFIG.ALGORITHMS[test.p] = orig;
-            else CONFIG.DIMENSIONS[test.p].ceiling = orig;
-          }
-          variations[test.k] = { label: test.l, agiMedian: percentile(agis.filter(isFinite), 50) };
-        }
-
-        resolve({
-          histogram: hAgi, // Now returns object {labels, agi, asi}
-          trajectory: { years: yrs, median: med, p10: p10a, p25: p25a, p75: p75a, p90: p90a, agiThreshold: 10, asiThreshold: 100 },
-          cumulative: { x: yq, agi: yq.map(y => cdf(agiList, y)), asi: yq.map(y => cdf(asiList, y)) },
-          sensitivity: { base: percentile(agiList.filter(isFinite), 50), variations },
-          summary: {
-            agiMedian: percentile(agiList.filter(isFinite), 50),
-            asiMedian: percentile(asiList.filter(isFinite), 50),
-            pAgi2029: cdf(agiList, 3), pAgi2033: cdf(agiList, 7), pAgi2040: cdf(agiList, 14),
-            pAsi2035: cdf(asiList, 9), pAsi2045: cdf(asiList, 19),
-            geoProb: geoCount / nRuns, avgShifts: totalShifts / nRuns, nRuns,
-          },
-        });
-      }
-    }
-    setTimeout(processChunk, 0);
-  });
-}
-
-function buildHistogramBins(listAgi, listAsi = []) {
-  const bins = [], binW = 0.5;
-  for (let x = 0.5; x <= 25.0; x += binW) bins.push(x);
-  const hAgi = new Array(bins.length - 1).fill(0);
-  const hAsi = new Array(bins.length - 1).fill(0);
-  
-  for (const v of listAgi) {
-    if (isFinite(v)) { 
-      const idx = Math.floor((v - 0.5) / binW); 
-      if (idx >= 0 && idx < hAgi.length) hAgi[idx]++; 
-    }
-  }
-  for (const v of listAsi) {
-    if (isFinite(v)) { 
-      const idx = Math.floor((v - 0.5) / binW); 
-      if (idx >= 0 && idx < hAsi.length) hAsi[idx]++; 
-    }
-  }
-  return { 
-    labels: bins.slice(0, -1).map((_, i) => ((bins[i] + bins[i + 1]) / 2).toFixed(1)), 
-    agi: hAgi, asi: hAsi 
-  };
-}
-
 
 // ============================================================================
 // v3.0 — BAYESIAN PARTICLE FILTER (Исправлено: Якорь на 2023 год + Inference)
@@ -519,11 +238,10 @@ class BayesianTracker {
 }
 
 // ============================================================================
-// UI AND STATE MANAGEMENT
+// UI AND STATE MANAGEMENT (v3 only)
 // ============================================================================
 let currentResults = null;
 let simulationRunning = false;
-let currentMode = 'v2';
 let v3Tracker = null;
 let v3Observations = [];
 
@@ -536,16 +254,6 @@ const AA_FRONTIER_DATA = [
   { year: 2025.80, intel: 62.0, agentic: 45.0, event: "Q4 2025 Frontier" },
   { year: 2026.30, intel: 68.0, agentic: 72.0, event: "Anthropic Mithos (Closed Demo)" },
 ];
-
-function setMode(mode) {
-  currentMode = mode;
-  document.getElementById('mode_v2').classList.toggle('active', mode === 'v2');
-  document.getElementById('mode_v3').classList.toggle('active', mode === 'v3');
-  document.getElementById('version').textContent = mode === 'v3' ? 'v3 β' : 'v2.5';
-  document.getElementById('v3Panel').style.display = mode === 'v3' ? 'block' : 'none';
-  if (mode === 'v3') v3UpdateUI(v3GetTracker());
-  if (currentResults) runSimulation();
-}
 
 function v3GetTracker() {
   if (!v3Tracker) {
@@ -584,62 +292,42 @@ async function runSimulation() {
   btn.disabled = true;
   const overlay = document.getElementById('overlay');
   overlay.classList.add('show');
+  document.getElementById('overlayText').textContent = 'Байесовское прогнозирование v3...';
   const n = +document.getElementById('rN').value;
 
-  if (currentMode === 'v3') {
-    document.getElementById('overlayText').textContent = 'Байесовское прогнозирование v3...';
-    await new Promise(r => setTimeout(r, 50));
-    try {
-      const tracker = v3GetTracker();
-      const runData = tracker.runMonteCarloForecast(n);
-      const agiList = runData.agiYears;
-      const asiList = runData.asiYears;
-      const finite = agiList.filter(isFinite);
-      const finiteAsi = asiList.filter(isFinite);
-      
-      const yq = [];
-      for (let y = 0.25; y <= 10; y += 0.25) yq.push(+y.toFixed(4));
-      for (let y = 11; y <= 40; y++) yq.push(y);
-
-      const dummySensitivity = {
-          base: percentile(finite, 50),
-          variations: { info: { label: '(v3: Дисперсия в облаке частиц)', agiMedian: percentile(finite, 50) } }
-      };
-
-      currentResults = {
-        histogram: buildHistogramBins(agiList, asiList), 
-        trajectory: runData.trajectory, 
-        cumulative: { x: yq, agi: yq.map(y => cdf(agiList, y)), asi: yq.map(y => cdf(asiList, y)) },
-        sensitivity: dummySensitivity,
-        summary: {
-          agiMedian: percentile(finite, 50), 
-          asiMedian: percentile(finiteAsi, 50),
-          pAgi2029: cdf(agiList, 3), pAgi2033: cdf(agiList, 7), pAgi2040: cdf(agiList, 14),
-          pAsi2035: cdf(asiList, 9), pAsi2045: cdf(asiList, 19), nRuns: n
-        },
-      };
-      updateUI(currentResults);
-    } finally {
-      simulationRunning = false; btn.disabled = false; overlay.classList.remove('show');
-    }
-    return;
-  }
-
-  // v2 Mode
-  CONFIG.SIMULATION.n_monte_carlo = n;
-  CONFIG.HARDWARE.doubling_time_months = +document.getElementById('iHW').value;
-  CONFIG.ALGORITHMS.doubling_time_months = +document.getElementById('iAlg').value;
-  CONFIG.DIMENSIONS.agency.ceiling = +document.getElementById('iCeil').value;
-  CONFIG.BOTTLENECKS.data_wall_start_year = +document.getElementById('iDW').value;
-  
-  const pFill = document.getElementById('progressFill'), pText = document.getElementById('overlayText');
+  await new Promise(r => setTimeout(r, 50));
   try {
-    currentResults = await runMonteCarloAsync(n, (f) => {
-      pFill.style.width = (f * 100) + '%'; pText.textContent = `Monte Carlo... ${Math.floor(f * 100)}%`;
-    });
+    const tracker = v3GetTracker();
+    const runData = tracker.runMonteCarloForecast(n);
+    const agiList = runData.agiYears;
+    const asiList = runData.asiYears;
+    const finite = agiList.filter(isFinite);
+    const finiteAsi = asiList.filter(isFinite);
+    
+    const yq = [];
+    for (let y = 0.25; y <= 10; y += 0.25) yq.push(+y.toFixed(4));
+    for (let y = 11; y <= 40; y++) yq.push(y);
+
+    const dummySensitivity = {
+        base: percentile(finite, 50),
+        variations: { info: { label: '(v3: Дисперсия в облаке частиц)', agiMedian: percentile(finite, 50) } }
+    };
+
+    currentResults = {
+      histogram: buildHistogramBins(agiList, asiList), 
+      trajectory: runData.trajectory, 
+      cumulative: { x: yq, agi: yq.map(y => cdf(agiList, y)), asi: yq.map(y => cdf(asiList, y)) },
+      sensitivity: dummySensitivity,
+      summary: {
+        agiMedian: percentile(finite, 50), 
+        asiMedian: percentile(finiteAsi, 50),
+        pAgi2029: cdf(agiList, 3), pAgi2033: cdf(agiList, 7), pAgi2040: cdf(agiList, 14),
+        pAsi2035: cdf(asiList, 9), pAsi2045: cdf(asiList, 19), nRuns: n
+      },
+    };
     updateUI(currentResults);
   } finally {
-    simulationRunning = false; btn.disabled = false; overlay.classList.remove('show'); pFill.style.width = '0%';
+    simulationRunning = false; btn.disabled = false; overlay.classList.remove('show');
   }
 }
 
