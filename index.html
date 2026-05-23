@@ -671,6 +671,10 @@ function setMode(mode) {
   document.getElementById('mode_v3').classList.toggle('active', mode === 'v3');
   document.getElementById('version').textContent = mode === 'v3' ? 'v3 β' : 'v2.5';
   document.getElementById('v3Panel').style.display = mode === 'v3' ? 'block' : 'none';
+  if (mode === 'v3') {
+    const tracker = v3GetTracker();
+    v3UpdateUI(tracker);
+  }
   if (currentResults) runSimulation();
 }
 
@@ -1234,8 +1238,8 @@ function createV3Config() {
       agency:    { slope: 0.30 },
     },
     SCALING_LAW: {
-      paradigm_shift_prob: 0.15,
-      shift_multiplier: 3.0,
+      paradigm_shift_prob: 0.25,
+      shift_multiplier: 3.5,
     },
     BOTTLENECKS: {
       energy_wall_start: 2026.0,
@@ -1293,7 +1297,7 @@ class BayesianTracker {
     for (let i = 0; i < this.n; i++) {
       this.particles.push({
         hw_months: Math.max(3.0, randnRange(7.5, 1.5)),
-        agency_ceiling: Math.max(1.5, randnRange(4.0, 1.0)),
+        agency_ceiling: Math.max(1.5, randnRange(5.0, 1.5)),
       });
     }
   }
