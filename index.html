@@ -705,8 +705,8 @@ async function runSimulation() {
     await new Promise(r => setTimeout(r, 50));
     try {
       const tracker = v3GetTracker();
-      if (v3Observations.length === 0) {
-        alert('Добавьте хотя бы одно наблюдение в панели v3 Bayesian');
+      if (tracker.observationLog.length === 0) {
+        alert('Нет данных для прогноза. Переключитесь на v3 для автозагрузки данных AA.');
         return;
       }
       const agiYears = tracker.runMonteCarloForecast(n);
@@ -888,8 +888,9 @@ function v3UpdateUI(tracker) {
 }
 
 async function v3RunForecast() {
-  if (v3Observations.length === 0) {
-    alert('Добавьте хотя бы одно наблюдение');
+  const tracker = v3GetTracker();
+  if (tracker.observationLog.length === 0) {
+    alert('Нет данных для прогноза. Переключитесь на v3 для автозагрузки данных AA.');
     return;
   }
 
@@ -905,7 +906,6 @@ async function v3RunForecast() {
   await new Promise(r => setTimeout(r, 50));
 
   try {
-    const tracker = v3GetTracker();
     const n = +document.getElementById('rN').value;
     const agiYears = tracker.runMonteCarloForecast(n);
 
