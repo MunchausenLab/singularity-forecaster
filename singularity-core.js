@@ -313,9 +313,11 @@ async function runSimulation() {
     const finite = agiList.filter(isFinite);
     const finiteAsi = asiList.filter(isFinite);
     
+    const CUR_Y = 2026.30;
     const yq = [];
     for (let y = 0.25; y <= 10; y += 0.25) yq.push(+y.toFixed(4));
     for (let y = 11; y <= 40; y++) yq.push(y);
+    const yqAbs = yq.map(y => +(CUR_Y + y).toFixed(2));
 
     const dummySensitivity = {
         base: percentile(finite, 50),
@@ -325,7 +327,7 @@ async function runSimulation() {
     currentResults = {
       histogram: buildHistogramBins(agiList, asiList), 
       trajectory: runData.trajectory, 
-      cumulative: { x: yq, agi: yq.map(y => cdf(agiList, y)), asi: yq.map(y => cdf(asiList, y)) },
+      cumulative: { x: yqAbs, agi: yq.map(y => cdf(agiList, y)), asi: yq.map(y => cdf(asiList, y)) },
       sensitivity: dummySensitivity,
       summary: {
         agiMedian: percentile(finite, 50), 
@@ -353,8 +355,7 @@ function setVal(id, txt, cls) { const el = document.getElementById(id); el.inner
 function colorProb(id, val) { const el = document.getElementById(id); el.classList.remove('green','orange','red'); el.classList.add(val > 50 ? 'green' : val > 10 ? 'orange' : 'red'); }
 function yearsText(yrs) {
   if (!isFinite(yrs) || yrs > 40) return LANG[window._lang||'ru'].fY_gt;
-  const d = new Date(); d.setFullYear(d.getFullYear() + yrs);
-  return yrs.toFixed(1) + LANG[window._lang||'ru'].fY_suffix + '<br>(' + d.toLocaleDateString(window._lang==='en'?'en-US':'ru-RU', {month:'short',year:'numeric'}) + ')';
+  return yrs.toFixed(1) + LANG[window._lang||'ru'].fY_suffix;
 }
 
 function buildHistogramBins(listAgi, listAsi = []) {
@@ -375,8 +376,9 @@ function buildHistogramBins(listAgi, listAsi = []) {
       if (idx >= 0 && idx < hAsi.length) hAsi[idx]++; 
     }
   }
+  const CUR_Y = 2026.30;
   return { 
-    labels: bins.slice(0, -1).map((_, i) => ((bins[i] + bins[i + 1]) / 2).toFixed(1)), 
+    labels: bins.slice(0, -1).map((_, i) => (CUR_Y + (bins[i] + bins[i + 1]) / 2).toFixed(1)), 
     agi: hAgi, asi: hAsi 
   };
 }
@@ -433,17 +435,17 @@ function plotSensitivity(s) {
 window._lang = 'ru';
 const LANG = {
   ru: {
-    run_btn:'Запуск', sb_agi:'AGI медиана', sb_asi:'ASI медиана',
+    run_btn:'Запустить прогноз', sb_agi:'AGI медиана', sb_asi:'ASI медиана',
     ch_legend_median:'Медиана', ch_legend_agi:'AGI (10)', ch_legend_asi:'ASI (100)',
-    ch1_xlabel:'Лет от сейчас', ch1_ylabel:'Прогонов', ch2_xlabel:'Год',
-    ch3_xlabel:'Лет от сейчас', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
+    ch1_xlabel:'Год', ch1_ylabel:'Прогонов', ch2_xlabel:'Год',
+    ch3_xlabel:'Год', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
     ch4_label_base:'База', fY_suffix:' лет', fY_gt:'> 40 лет'
   },
   en: {
-    run_btn:'Run', sb_agi:'AGI median', sb_asi:'ASI median',
+    run_btn:'Run Forecast', sb_agi:'AGI median', sb_asi:'ASI median',
     ch_legend_median:'Median', ch_legend_agi:'AGI (10)', ch_legend_asi:'ASI (100)',
-    ch1_xlabel:'Years from now', ch1_ylabel:'Runs', ch2_xlabel:'Year',
-    ch3_xlabel:'Years from now', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
+    ch1_xlabel:'Year', ch1_ylabel:'Runs', ch2_xlabel:'Year',
+    ch3_xlabel:'Year', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
     ch4_label_base:'Base', fY_suffix:' yrs', fY_gt:'> 40 yrs'
   }
 };

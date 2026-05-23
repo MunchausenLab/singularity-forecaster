@@ -144,11 +144,11 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     <div class="logo"><span class="logo-infinity">∞</span></div>
     <div>
       <h1 id="hdr_title" data-i18n="hdr_title">Singularity <span style="color:var(--accent)">Forecaster</span></h1>
-      <div class="subtitle" id="hdr_sub" data-i18n="hdr_sub">v2.1 Monte Carlo Dashboard</div>
+      <div class="subtitle" id="hdr_sub" data-i18n="hdr_sub">v3 Bayesian Tracker</div>
     </div>
   </div>
     <div class="header-right">
-      <div class="version" id="version">v2.1</div>
+      <div class="version" id="version">v3</div>
     <div class="lang-toggle">
       <button class="lang-btn active" id="lang_ru" onclick="setLang('ru')">RU</button>
       <button class="lang-btn" id="lang_en" onclick="setLang('en')">EN</button>
@@ -195,37 +195,29 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     <input type="range" id="rN" min="500" max="10000" step="500" value="3000" oninput="document.getElementById('vN').textContent=this.value">
     <span class="n-display"><span id="vN">3000</span></span>
   </div>
+  <div class="control-group">
+    <label>Год наблюдения</label>
+    <input type="number" id="v3Year" value="2026.5" min="2022" max="2030" step="0.1" style="width:80px">
+  </div>
+  <div class="control-group">
+    <label>Intelligence (AA)</label>
+    <input type="number" id="v3Intel" value="60" min="0" max="100" step="1" style="width:70px">
+  </div>
+  <div class="control-group">
+    <label>Agentic (AA)</label>
+    <input type="number" id="v3Agentic" value="47" min="0" max="100" step="0.1" style="width:70px">
+  </div>
+  <button class="btn btn-secondary btn-sm" onclick="v3AddObservation()">+ Добавить</button>
   <button class="btn btn-primary" id="runBtn" onclick="runSimulation()">
-    ▶ <span data-i18n="run_btn">Запуск</span>
+    ▶ <span data-i18n="run_btn">Запустить прогноз</span>
   </button>
+  <button class="btn btn-secondary btn-sm" onclick="v3ResetTracker()">Сбросить</button>
 </div>
 
-<!-- ===== v3 BAYESIAN PANEL ===== -->
-<div id="v3Panel" style="display:block;background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:16px 32px">
-
-  <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-    <span style="font-size:.75rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:.5px">v3 Bayesian — Artificial Analysis Tracker</span>
-    <span style="font-size:.65rem;color:var(--text-muted)">Данные AA загружены автоматически. Добавьте свои наблюдения для уточнения.</span>
-  </div>
-  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end">
-    <div class="control-group">
-      <label>Год наблюдения</label>
-      <input type="number" id="v3Year" value="2026.5" min="2022" max="2030" step="0.1" style="width:80px">
-    </div>
-    <div class="control-group">
-      <label>Intelligence Index (AA)</label>
-      <input type="number" id="v3Intel" value="60" min="0" max="100" step="1" style="width:80px">
-    </div>
-    <div class="control-group">
-      <label>Agentic Index (0-100)</label>
-      <input type="number" id="v3Agentic" value="47" min="0" max="100" step="0.1" style="width:80px">
-    </div>
-    <button class="btn btn-secondary btn-sm" onclick="v3AddObservation()">+ Добавить</button>
-    <button class="btn btn-primary btn-sm" onclick="runSimulation()">Запустить прогноз</button>
-    <button class="btn btn-secondary btn-sm" onclick="v3ResetTracker()">Сбросить</button>
-  </div>
-  <div id="v3Observations" style="margin-top:10px;font-size:.72rem;color:var(--text-secondary)"></div>
-  <div id="v3Params" style="margin-top:6px;font-size:.72rem;color:var(--text-muted)"></div>
+<!-- ===== v3 OBSERVATIONS ===== -->
+<div id="v3Panel" style="display:block;background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:10px 32px">
+  <div id="v3Observations" style="font-size:.72rem;color:var(--text-secondary)"></div>
+  <div id="v3Params" style="margin-top:4px;font-size:.72rem;color:var(--text-muted)"></div>
   <div id="v3NoAgi" style="margin-top:4px;font-size:.7rem;color:var(--text-muted)"></div>
 </div>
 
