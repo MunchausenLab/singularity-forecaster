@@ -251,6 +251,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   </div>
   <div id="v3Observations" style="margin-top:10px;font-size:.72rem;color:var(--text-secondary)"></div>
   <div id="v3Params" style="margin-top:6px;font-size:.72rem;color:var(--text-muted)"></div>
+  <div id="v3NoAgi" style="margin-top:4px;font-size:.7rem;color:var(--text-muted)"></div>
 </div>
 
 <!-- ===== CHARTS ===== -->
@@ -863,6 +864,7 @@ function v3ResetTracker() {
   v3Observations = [];
   document.getElementById('v3Observations').innerHTML = '';
   document.getElementById('v3Params').textContent = '';
+  document.getElementById('v3NoAgi').innerHTML = '';
 }
 
 function v3UpdateUI(tracker) {
@@ -884,7 +886,16 @@ function v3UpdateUI(tracker) {
   // Show params
   const summary = tracker.getSummary();
   document.getElementById('v3Params').textContent =
-    `Апостериор: hw_months=${summary.hwMonths.toFixed(1)}, agency_ceiling=${summary.agencyCeiling.toFixed(2)} | ESS=${tracker.effectiveSampleSize().toFixed(0)}/1000`;
+    `Апостериор: hw_months=${summary.hwMonths.toFixed(1)}, algo_months=${summary.algoMonths.toFixed(1)}, agency_ceiling=${summary.agencyCeiling.toFixed(2)} | ESS=${tracker.effectiveSampleSize().toFixed(0)}/1000`;
+
+   // Show no-AGI capability data if available
+   const noAgiDiv = document.getElementById('v3NoAgi');
+   if (noAgiDiv && tracker._lastRunData && tracker._lastRunData.length > 0) {
+     const avgR = tracker._lastRunData.reduce((s, d) => s + d.reasoning, 0) / tracker._lastRunData.length;
+     const avgA = tracker._lastRunData.reduce((s, d) => s + d.agency, 0) / tracker._lastRunData.length;
+     const avgAGI = tracker._lastRunData.reduce((s, d) => s + d.agi, 0) / tracker._lastRunData.length;
+     noAgiDiv.innerHTML = `<small>Без достижения AGI (n=${tracker._lastRunData.length}): Reasoning=${avgR.toFixed(1)}, Agency=${avgA.toFixed(1)}, min(R,A)=${avgAGI.toFixed(1)} из ${tracker.cfg.THRESHOLDS.agi}</small>`;
+   }
 }
 
 async function v3RunForecast() {
@@ -1239,6 +1250,7 @@ function createV3Config() {
     BASE_YEAR: 2026.0,
     FRONTIER_LOG_FLOPS: 27.5,
     THRESHOLDS: { agi: 10.0 },
+    ALGORITHMS: { doubling_time_months: 6.0, doubling_time_std_months: 2.0 },
     DIMENSIONS: {
       reasoning: { slope: 0.55, ceiling: 15.0 },
       agency:    { slope: 0.30 },
@@ -1282,9 +1294,7 @@ function v3SimulateToYear(particle, targetYear, cfg) {
 }
 
 function v3ComputeDim(logDiff, slope, ceiling) {
-  const S_HALF = 0.5;
-  const raw = ceiling * (sigmoid(slope * logDiff) - S_HALF) + 1.0;
-  return Math.max(raw, 0.01);
+  return Math.max(ceiling * sigmoid(slope * logDiff), 0.01);
 }
 
 class BayesianTracker {
@@ -1304,6 +1314,7 @@ class BayesianTracker {
       this.particles.push({
         hw_months: Math.max(3.0, randnRange(7.5, 1.5)),
         agency_ceiling: Math.max(1.5, randnRange(5.0, 1.5)),
+        algo_months: Math.max(2.0, randnRange(6.0, 2.0)),
       });
     }
   }
@@ -1346,6 +1357,7 @@ class BayesianTracker {
       newParticles.push({
         hw_months: Math.max(3.0, p.hw_months + randnRange(0, 0.2)),
         agency_ceiling: Math.max(1.5, p.agency_ceiling + randnRange(0, 0.1)),
+        algo_months: Math.max(2.0, p.algo_months + randnRange(0, 0.3)),
       });
     }
     this.particles = newParticles;
@@ -1359,12 +1371,13 @@ class BayesianTracker {
   }
 
   getSummary() {
-    let hwMean = 0, agnMean = 0;
+    let hwMean = 0, agnMean = 0, algoMean = 0;
     for (let i = 0; i < this.n; i++) {
       hwMean += this.particles[i].hw_months * this.weights[i];
       agnMean += this.particles[i].agency_ceiling * this.weights[i];
+      algoMean += this.particles[i].algo_months * this.weights[i];
     }
-    return { hwMonths: hwMean, agencyCeiling: agnMean };
+    return { hwMonths: hwMean, agencyCeiling: agnMean, algoMonths: algoMean };
   }
 
   runMonteCarloForecast(nRuns) {
@@ -1376,13 +1389,17 @@ class BayesianTracker {
     cumw[0] = this.weights[0];
     for (let i = 1; i < this.n; i++) cumw[i] = cumw[i - 1] + this.weights[i];
 
+    // Collect per-run final capability for charts (even without AGI)
+    this._lastRunData = [];
+
     // Debug: log particle stats
-    let hwSum = 0, acSum = 0;
+    let hwSum = 0, acSum = 0, alSum = 0;
     for (let i = 0; i < this.n; i++) {
       hwSum += this.particles[i].hw_months * this.weights[i];
       acSum += this.particles[i].agency_ceiling * this.weights[i];
+      alSum += this.particles[i].algo_months * this.weights[i];
     }
-    console.log('[v3] runMonteCarlo: nRuns=' + nRuns + ' hw_months=' + hwSum.toFixed(2) + ' agency_ceiling=' + acSum.toFixed(2) + ' cfg.BASE_YEAR=' + cfg.BASE_YEAR + ' THRESHOLDS.agi=' + cfg.THRESHOLDS.agi);
+    console.log('[v3] runMonteCarlo: nRuns=' + nRuns + ' hw_months=' + hwSum.toFixed(2) + ' agency_ceiling=' + acSum.toFixed(2) + ' algo_months=' + alSum.toFixed(2) + ' cfg.BASE_YEAR=' + cfg.BASE_YEAR + ' THRESHOLDS.agi=' + cfg.THRESHOLDS.agi);
 
     for (let run = 0; run < nRuns; run++) {
       const u = Math.random();
@@ -1392,17 +1409,23 @@ class BayesianTracker {
       let flopsLog = cfg.FRONTIER_LOG_FLOPS;
       let baseLog = flopsLog;
       const hwK = Math.log(2) / Math.max(1.0, p.hw_months / 12.0);
+      const algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
+      let algoLog = 0;
       let ceilingAgency = p.agency_ceiling;
       let agiAchieved = false;
+      let maxReasoning = 0, maxAgency = 0, finalYear = cfg.BASE_YEAR;
       for (let step = 0; step < maxSteps; step++) {
         const currentYear = cfg.BASE_YEAR + step * dt;
+        finalYear = currentYear;
         if (Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
           ceilingAgency *= cfg.SCALING_LAW.shift_multiplier;
           baseLog -= 0.5;
         }
-        const logDiff = flopsLog - baseLog;
+        const logDiff = flopsLog + algoLog - baseLog;
         const reasoning = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cfg.DIMENSIONS.reasoning.ceiling);
         const agency = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, ceilingAgency);
+        if (reasoning > maxReasoning) maxReasoning = reasoning;
+        if (agency > maxAgency) maxAgency = agency;
         if (reasoning >= cfg.THRESHOLDS.agi && agency >= cfg.THRESHOLDS.agi) {
           agiYears.push(currentYear);
           agiAchieved = true;
@@ -1413,8 +1436,12 @@ class BayesianTracker {
           damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
         }
         flopsLog += hwK * damping * dt;
+        algoLog += algoK * damping * dt;
       }
-      if (!agiAchieved) agiYears.push(Infinity);
+      if (!agiAchieved) {
+        agiYears.push(Infinity);
+        this._lastRunData.push({ year: finalYear, reasoning: maxReasoning, agency: maxAgency, agi: Math.min(maxReasoning, maxAgency) });
+      }
     }
     const finite = agiYears.filter(y => isFinite(y));
     console.log('[v3] runMonteCarlo done: total=' + agiYears.length + ' reached AGI=' + finite.length + ' not reached=' + (agiYears.length - finite.length));
@@ -1422,6 +1449,11 @@ class BayesianTracker {
       const min = Math.min(...finite);
       const max = Math.max(...finite);
       console.log('[v3] AGI year range: ' + min.toFixed(1) + ' - ' + max.toFixed(1));
+    }
+    if (this._lastRunData.length > 0) {
+      const avgR = this._lastRunData.reduce((s, d) => s + d.reasoning, 0) / this._lastRunData.length;
+      const avgA = this._lastRunData.reduce((s, d) => s + d.agency, 0) / this._lastRunData.length;
+      console.log('[v3] no-AGI runs: avg maxReasoning=' + avgR.toFixed(2) + ' avg maxAgency=' + avgA.toFixed(2));
     }
     return agiYears;
   }
