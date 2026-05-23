@@ -294,7 +294,7 @@ function createV3Config() {
 }
 
 function v3ComputeDim(logDiff, slope, ceiling) {
-  return Math.max(ceiling * sigmoid(slope * logDiff), 0.01);
+  return Math.max(ceiling * (sigmoid(slope * logDiff) - 0.5) + 1.0, 0.01);
 }
 
 function v3SimulateToYear(particle, targetYear, cfg) {
