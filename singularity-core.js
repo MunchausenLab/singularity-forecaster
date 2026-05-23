@@ -261,7 +261,7 @@ const AA_FRONTIER_DATA = [
   { year: 2024.75, intel: 55.0, agentic: 36.0, event: "OpenAI o1-preview" },
   { year: 2025.10, intel: 58.0, agentic: 42.0, event: "DeepSeek-R1 / Gemini 2.0 Pro" },
   { year: 2025.80, intel: 62.0, agentic: 45.0, event: "Q4 2025 Frontier" },
-  { year: 2026.30, intel: 68.0, agentic: 72.0, event: "Anthropic Mithos (Closed Demo)" },
+  { year: 2026.30, intel: 68.0, agentic: 72.0, event: "Anthropic Mythos (Closed Demo)" },
 ];
 
 function v3GetTracker() {
@@ -348,7 +348,8 @@ function updateUI(r) {
   setVal('v29', s.pAgi2029.toFixed(1) + '%'); setVal('v33', s.pAgi2033.toFixed(1) + '%'); setVal('v40', s.pAgi2040.toFixed(1) + '%');
   setVal('v35', s.pAsi2035.toFixed(1) + '%'); setVal('v45', s.pAsi2045.toFixed(1) + '%');
   colorProb('v29', s.pAgi2029); colorProb('v33', s.pAgi2033); colorProb('v40', s.pAgi2040);
-  plotHistogram(r.histogram); plotTrajectory(r.trajectory); plotCumulative(r.cumulative); plotSensitivity(r.sensitivity);
+  plotHistogram(r.histogram); plotTrajectory(r.trajectory); plotCumulative(r.cumulative);
+  plotEntropyGauge(v3GetTracker());
 }
 
 function setVal(id, txt, cls) { const el = document.getElementById(id); el.innerHTML = txt; el.className = 'status-value ' + (cls||''); }
@@ -423,13 +424,56 @@ function plotCumulative(c) {
     { x: c.x, y: c.asi, type: 'scatter', mode: 'lines+markers', name: t.ch3_pasi, line: { color: '#ef4444' }, fill: 'tozeroy', fillcolor: 'rgba(239,68,68,.08)' }
   ], { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch3_xlabel } }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch3_ylabel }, range: [0, 105] } }, PLOT_CFG);
 }
-function plotSensitivity(s) {
+function plotEntropyGauge(tracker) {
+  const w = tracker.weights;
+  // Shannon entropy: H = -sum(w_i * log(w_i))
+  let H = 0;
+  for (let i = 0; i < w.length; i++) {
+    if (w[i] > 0) H -= w[i] * Math.log(w[i]);
+  }
+  // Normalize: max entropy = log(N), so H_norm = H / log(N) * 100
+  const Hmax = Math.log(w.length);
+  const pct = Math.min(100, (H / Hmax) * 100);
+
   const t = LANG[window._lang || 'ru'];
-  const arr = Object.entries(s.variations).map(([k, v]) => ({ label: v.label, med: v.agiMedian, delta: v.agiMedian - s.base }));
-  arr.sort((a, b) => a.delta - b.delta);
-  const maxD = Math.max(...arr.map(a => Math.abs(a.delta)), 1);
-  document.getElementById('c4').innerHTML = `<div style="padding:8px 0"><div style="margin-bottom:10px;color:#58a6ff">${t.ch4_label_base}: ${yearsText(s.base)}</div>` + 
-    arr.map(a => `<div style="display:flex;gap:10px;margin-bottom:8px;font-size:.78rem"><div style="width:110px;text-align:right">${a.label}</div><div style="flex:1;background:#0e0e18"><div style="width:${clamp(Math.abs(a.delta)/maxD*100, 2, 100)}%;background:${a.delta<0?'#22c55e':'#ef4444'};height:14px"></div></div><div style="width:60px">${yearsText(a.med)}</div></div>`).join('') + '</div>';
+  const zone = pct <= 30 ? 'green' : pct <= 70 ? 'yellow' : 'red';
+  const zoneText = pct <= 30 ? (t.entropy_consensus || 'Консенсус')
+                  : pct <= 70 ? (t.entropy_moderate || 'Умеренная неопределённость')
+                  : (t.entropy_confusion || 'Модель в замешательстве');
+
+  const el = document.getElementById('c4');
+  el.innerHTML = '';
+
+  // Draw gauge with SVG
+  const size = 220, cx = size / 2, cy = size / 2 + 10, r = 80;
+  const startAngle = -210, endAngle = 30; // 240 degree arc
+  const angle = startAngle + (endAngle - startAngle) * pct / 100;
+
+  function arcPath(a1, a2, r) {
+    const toRad = a => a * Math.PI / 180;
+    const x1 = cx + r * Math.cos(toRad(a1)), y1 = cy + r * Math.sin(toRad(a1));
+    const x2 = cx + r * Math.cos(toRad(a2)), y2 = cy + r * Math.sin(toRad(a2));
+    const large = a2 - a1 > 180 ? 1 : 0;
+    return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
+  }
+
+  // Color zones: green 0-30, yellow 30-70, red 70-100
+  const z1 = startAngle + (endAngle - startAngle) * 30 / 100;
+  const z2 = startAngle + (endAngle - startAngle) * 70 / 100;
+
+  const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <path d="${arcPath(startAngle, z1, r)}" fill="none" stroke="#22c55e" stroke-width="12" stroke-linecap="round" opacity=".25"/>
+    <path d="${arcPath(z1, z2, r)}" fill="none" stroke="#eab308" stroke-width="12" stroke-linecap="round" opacity=".25"/>
+    <path d="${arcPath(z2, endAngle, r)}" fill="none" stroke="#ef4444" stroke-width="12" stroke-linecap="round" opacity=".25"/>
+    <path d="${arcPath(startAngle, angle, r)}" fill="none" stroke="${zone==='green'?'#22c55e':zone==='yellow'?'#eab308':'#ef4444'}" stroke-width="12" stroke-linecap="round"/>
+    <text x="${cx}" y="${cy - 10}" text-anchor="middle" fill="#e8e8f0" font-size="28" font-weight="700" font-family="JetBrains Mono, monospace">${pct.toFixed(0)}%</text>
+    <text x="${cx}" y="${cy + 12}" text-anchor="middle" fill="#9898b0" font-size="11" font-family="Inter, sans-serif">${zoneText}</text>
+    <text x="${cx}" y="${cy + 28}" text-anchor="middle" fill="#666680" font-size="9" font-family="Inter, sans-serif">H = ${H.toFixed(2)} / ${Hmax.toFixed(2)}</text>
+  </svg>`;
+
+  el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:16px">${svg}
+    <div style="font-size:.68rem;color:#666680;text-align:center;max-width:240px;line-height:1.5">${t.entropy_desc || 'Энтропия показывает насколько частицы размазаны. Низкая = консенсус, высокая = данные противоречивы.'}</div>
+  </div>`;
 }
 
 window._lang = 'ru';
@@ -439,14 +483,18 @@ const LANG = {
     ch_legend_median:'Медиана', ch_legend_agi:'AGI (10)', ch_legend_asi:'ASI (100)',
     ch1_xlabel:'Год', ch1_ylabel:'Прогонов', ch2_xlabel:'Год',
     ch3_xlabel:'Год', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
-    ch4_label_base:'База', fY_suffix:' лет', fY_gt:'> 40 лет'
+    ch4_label_base:'База', fY_suffix:' лет', fY_gt:'> 40 лет',
+    entropy_consensus:'Консенсус', entropy_moderate:'Умеренная неопределённость', entropy_confusion:'Модель в замешательстве',
+    entropy_desc:'Энтропия показывает насколько частицы размазаны. Низкая = консенсус, высокая = данные противоречивы.'
   },
   en: {
     run_btn:'Run Forecast', sb_agi:'AGI median', sb_asi:'ASI median',
     ch_legend_median:'Median', ch_legend_agi:'AGI (10)', ch_legend_asi:'ASI (100)',
     ch1_xlabel:'Year', ch1_ylabel:'Runs', ch2_xlabel:'Year',
     ch3_xlabel:'Year', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
-    ch4_label_base:'Base', fY_suffix:' yrs', fY_gt:'> 40 yrs'
+    ch4_label_base:'Base', fY_suffix:' yrs', fY_gt:'> 40 yrs',
+    entropy_consensus:'Consensus', entropy_moderate:'Moderate uncertainty', entropy_confusion:'Model confused',
+    entropy_desc:'Entropy shows how spread particles are. Low = consensus, high = contradictory data.'
   }
 };
 function setLang(lang) {

@@ -248,12 +248,12 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     <div class="chart-container" id="c3"></div>
   </div>
   <div class="card">
-    <span class="card-tag" data-i18n="tag4">Анализ чувствительности</span>
+    <span class="card-tag" style="background:rgba(167,139,250,.15);color:var(--purple)">Уверенность модели</span>
     <div class="card-header">
-      <h3 data-i18n="chart4">4. Вклад факторов: аналитика барьеров</h3>
-      <span class="tip">?<span class="tip-text" data-i18n="tip4">Каждый параметр прогоняется с 600 симуляциями — один изменён, остальные базовые. Зелёные бары = AGI быстрее, красные = медленнее. Самый длинный бар — фактор с наибольшим влиянием.</span></span>
+      <h3>4. Спидометр Энтропии — Model Confidence</h3>
+      <span class="tip">?<span class="tip-text">Показывает насколько частицы размазаны. Зелёная зона = консенсус, красная = данные противоречивы, нужны новые наблюдения.</span></span>
     </div>
-    <div class="chart-container" id="c4"></div>
+    <div class="chart-container" id="c4" style="display:flex;align-items:center;justify-content:center"></div>
   </div>
 </div>
 
