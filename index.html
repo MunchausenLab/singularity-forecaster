@@ -201,11 +201,11 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   </div>
   <div class="control-group">
     <label>Intelligence (AA)</label>
-    <input type="number" id="v3Intel" value="60" min="0" max="100" step="1" style="width:70px">
+    <input type="number" id="v3Intel" value="68" min="0" max="100" step="1" style="width:70px">
   </div>
   <div class="control-group">
     <label>Agentic (AA)</label>
-    <input type="number" id="v3Agentic" value="47" min="0" max="100" step="0.1" style="width:70px">
+    <input type="number" id="v3Agentic" value="72" min="0" max="100" step="0.1" style="width:70px">
   </div>
   <button class="btn btn-secondary btn-sm" onclick="v3AddObservation()">+ Добавить</button>
   <button class="btn btn-primary" id="runBtn" onclick="runSimulation()">
@@ -260,43 +260,33 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 <!-- ===== ABOUT ===== -->
 <div style="padding:0 32px;max-width:1100px;margin:0 auto;width:100%">
   <div class="about" id="aboutSection">
-    <h2 data-i18n="about_title">О модели v2.5</h2>
-    <p data-i18n="about_intro">Модель v2.5 использует трёхмерную архитектуру интеллекта (Reasoning, Agency, Reliability) и учитывает геополитику, экономику и энергетику:</p>
+    <h2 data-i18n="about_title">О модели v3</h2>
+    <p data-i18n="about_intro">Модель v3 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных Artificial Analysis. Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения AA обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге.</p>
+    <div class="sec-label" data-i18n="defs_label">Архитектура модели</div>
     <div class="fgrid">
       <div class="fc">
-        <h4 data-i18n="f1_title">3 вектора интеллекта</h4>
-        <p data-i18n="f1_text">AGI определяется как min(Reasoning, Agency, Reliability). Reasoning скейлится легко, но Agency — бутылочное горлышко: потолок 4.0 без смены парадигмы.</p>
+        <h4>Байесовский трекер</h4>
+        <p>1000 частиц с априорными распределениями на hw_months, algo_months, agency_ceiling. Каждое наблюдение AA (Intelligence + Agentic) обновляет веса через гауссово правдоподобие. ESS-ресэмплинг предотвращает вырождение.</p>
       </div>
       <div class="fc">
-        <h4 data-i18n="f2_title">Геополитический форсаж</h4>
-        <p data-i18n="f2_text">При Reasoning > 7.0 с вероятностью 30%/год запускается «Момент Спутника» — государства отменяют регуляции и форсируют энергетику (×1.25 к железу).</p>
+        <h4>Два измерения интеллекта</h4>
+        <p>Reasoning (slope 0.35, ceiling 15.0) и Agency (slope 0.25, ceiling — параметр частицы). Capability = min(Reasoning, Agency). Оба растут логистически от log(FLOPs), но упираются в потолки.</p>
       </div>
       <div class="fc">
-        <h4 data-i18n="f3_title">Экономическая стена</h4>
-        <p data-i18n="f3_text">Если Reasoning растёт, а Agency отстаёт (разрыв > 2.0), инвестиции падают. ROI инференса становится отрицательным без автономности.</p>
+        <h4>Смена парадигмы</h4>
+        <p>После 2026.30 каждый месяц с вероятностью ~1.7% происходит сдвиг: оба потолка ×3, базовый уровень FLOPs сдвигается. Это позволяет модели преодолеть текущие ограничения трансформеров.</p>
       </div>
       <div class="fc">
-        <h4 data-i18n="f4_title">Энергетическая стена</h4>
-        <p data-i18n="f4_text">С 2026 года дефицит трансформаторов и сетей тормозит рост compute. Геополитика смягчает этот эффект на 40%.</p>
-      </div>
-    </div>
-    <div class="sec-label" data-i18n="defaults_label">Ключевые допущения (параметры по умолчанию):</div>
-    <div class="fgrid">
-      <div class="fc">
-        <h4 data-i18n="d1_title">Железо (удвоение): 7 месяцев</h4>
-        <p data-i18n="d1_text">Ускорено из-за огромного capex 2025-2026 (xAI Colossus, GPT-Next).</p>
+        <h4>RSI — рекурсивное самоулучшение</h4>
+        <p>При capability >= 5.0 включается обратная связь: рост алгоритмов ускоряется пропорционально текущему уровню. Чем выше агентность — тем быстрее прогресс. Это ключевой механизм для достижения ASI.</p>
       </div>
       <div class="fc">
-        <h4 data-i18n="d2_title">Алгоритмы (удвоение): 6 месяцев</h4>
-        <p data-i18n="d2_text">Исторически быстрый прогресс, замедляется из-за нехватки данных.</p>
+        <h4>Бутылочные горлышки</h4>
+        <p>Экономическая стена: если Reasoning обгоняет Agency более чем на 2.0, инвестиции падают. Энергетическая стена: с 2026 года дефицит инфраструктуры тормозит рост compute.</p>
       </div>
       <div class="fc">
-        <h4 data-i18n="d3_title">Потолок агентности: 4.0</h4>
-        <p data-i18n="d3_text">Agency — главное бутылочное горлышко. AGI = 10.0 невозможен без смены парадигмы (вероятность 15%/год, ×3 к потолкам).</p>
-      </div>
-      <div class="fc">
-        <h4 data-i18n="d4_title">Прогонов (N): 3000</h4>
-        <p data-i18n="d4_text">Обеспечивает статистическую значимость и гладкие кривые.</p>
+        <h4>Monte Carlo прогноз</h4>
+        <p>3000 прогонов из апостериорного распределения. Каждый прогон — симуляция от 2023 до 2068 года с месячным шагом. Результат: распределение лет до AGI (cap >= 10) и ASI (cap >= 100).</p>
       </div>
     </div>
   </div>
@@ -322,7 +312,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 </div>
 
 <footer>
-  BelikVCP | Singularity Forecaster v2.5 | <span data-i18n="footer_note">Данные оценочные</span>
+  BelikVCP | Singularity Forecaster v3 | Bayesian Tracker | <span data-i18n="footer_note">Данные оценочные</span>
 </footer>
 
 <!-- ===== OVERLAY ===== -->
