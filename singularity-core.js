@@ -289,7 +289,7 @@ function createV3Config() {
   return {
     BASE_YEAR: 2023.0,          // Якорь (уровень GPT-4)
     BASE_LOG_FLOPS: 24.5,       // Начальные FLOPs в 2023
-    CURRENT_YEAR: 2026.35,      // Откуда рисуем графики прогноза
+    CURRENT_YEAR: 2026.30,      // Откуда рисуем графики прогноза
     THRESHOLDS: { agi: 10.0 },
     DIMENSIONS: {
       reasoning: { slope: 0.35, ceiling: 15.0 }, // Откалибровано под рост до 65 баллов
@@ -514,12 +514,12 @@ let v3Observations = [];
 
 const AA_FRONTIER_DATA = [
   { year: 2023.25, intel: 30.0, agentic: 2.0, event: "GPT-4 Release" },
-  { year: 2024.20, intel: 45.0, agentic: 13.8, event: "Claude 3 Opus" },
+  { year: 2024.20, intel: 45.0, agentic: 13.8, event: "Claude 3 Opus / Devin" },
   { year: 2024.45, intel: 52.0, agentic: 31.4, event: "Claude 3.5 Sonnet" },
-  { year: 2024.75, intel: 55.0, agentic: 36.0, event: "o1-preview" },
-  { year: 2025.10, intel: 58.0, agentic: 42.0, event: "DeepSeek-R1" },
+  { year: 2024.75, intel: 55.0, agentic: 36.0, event: "OpenAI o1-preview" },
+  { year: 2025.10, intel: 58.0, agentic: 42.0, event: "DeepSeek-R1 / Gemini 2.0 Pro" },
   { year: 2025.80, intel: 62.0, agentic: 45.0, event: "Q4 2025 Frontier" },
-  { year: 2026.35, intel: 65.0, agentic: 47.0, event: "May 2026 Frontier" },
+  { year: 2026.30, intel: 68.0, agentic: 72.0, event: "Anthropic Mithos (Closed Demo)" },
 ];
 
 function setMode(mode) {
