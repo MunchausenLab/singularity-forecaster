@@ -1,5 +1,14 @@
 
 // ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+function sigmoid(x) { return 1.0 / (1.0 + Math.exp(-Math.max(-30, Math.min(30, x)))); }
+function randnRange(mean, std) { const u1 = Math.random(), u2 = Math.random(); return mean + std * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2); }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function percentile(arr, p) { const sorted = arr.slice().sort((a, b) => a - b); const idx = clamp(Math.floor(p / 100 * sorted.length), 0, sorted.length - 1); return sorted[idx]; }
+function cdf(list, x) { const c = list.filter(v => isFinite(v) && v <= x).length; return list.length ? (c / list.length) * 100 : 0; }
+
+// ============================================================================
 // v3.0 — BAYESIAN PARTICLE FILTER (Исправлено: Якорь на 2023 год + Inference)
 // ============================================================================
 const V3_DEFAULT_PARTICLES = 1000;
@@ -401,13 +410,15 @@ function plotTrajectory(tr) {
     { x: tr.years, y: tr.p25, type: 'scatter', mode: 'lines', line: {width:0}, fill: 'tonexty', fillcolor: 'rgba(88,166,255,.12)', showlegend: false, hoverinfo:'skip' },
     { x: tr.years, y: tr.p10, type: 'scatter', mode: 'lines', line: {width:0}, fill: 'tonexty', fillcolor: 'rgba(88,166,255,.18)', showlegend: false, hoverinfo:'skip' },
     { x: tr.years, y: tr.median, type: 'scatter', mode: 'lines', name: t.ch_legend_median, line: { color: '#58a6ff', width: 2.5 } },
-    { x: [tr.years[0], tr.years[tr.years.length - 1]], y: [tr.agiThreshold, tr.agiThreshold], type: 'scatter', mode: 'lines', name: t.ch_legend_agi, line: { color: '#f0883e', dash: 'dot' } }
-  ], { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel }, range: [2026, 2050] }, yaxis: { ...LAYOUT_BASE.yaxis, type: 'log', range: [0, 1.5] } }, PLOT_CFG);
+    { x: [tr.years[0], tr.years[tr.years.length - 1]], y: [tr.agiThreshold, tr.agiThreshold], type: 'scatter', mode: 'lines', name: t.ch_legend_agi, line: { color: '#f0883e', dash: 'dot' } },
+    { x: [tr.years[0], tr.years[tr.years.length - 1]], y: [tr.asiThreshold, tr.asiThreshold], type: 'scatter', mode: 'lines', name: t.ch_legend_asi, line: { color: '#ef4444', dash: 'dot' } }
+  ], { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel }, range: [2026, 2050] }, yaxis: { ...LAYOUT_BASE.yaxis, type: 'log', range: [0, 2.0] } }, PLOT_CFG);
 }
 function plotCumulative(c) {
   const t = LANG[window._lang || 'ru'];
   Plotly.newPlot('c3', [
-    { x: c.x, y: c.agi, type: 'scatter', mode: 'lines+markers', name: t.ch3_pagi, line: { color: '#f0883e' }, fill: 'tozeroy', fillcolor: 'rgba(240,136,62,.08)' }
+    { x: c.x, y: c.agi, type: 'scatter', mode: 'lines+markers', name: t.ch3_pagi, line: { color: '#f0883e' }, fill: 'tozeroy', fillcolor: 'rgba(240,136,62,.08)' },
+    { x: c.x, y: c.asi, type: 'scatter', mode: 'lines+markers', name: t.ch3_pasi, line: { color: '#ef4444' }, fill: 'tozeroy', fillcolor: 'rgba(239,68,68,.08)' }
   ], { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch3_xlabel } }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch3_ylabel }, range: [0, 105] } }, PLOT_CFG);
 }
 function plotSensitivity(s) {
@@ -422,12 +433,18 @@ function plotSensitivity(s) {
 window._lang = 'ru';
 const LANG = {
   ru: {
-    run_btn:'Запуск', sb_agi:'AGI медиана', ch_legend_median:'Медиана', ch_legend_agi:'AGI (10)',
-    ch1_xlabel:'Лет от сейчас', ch1_ylabel:'Прогонов', ch2_xlabel:'Год', ch3_xlabel:'Лет от сейчас', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch4_label_base:'База', fY_suffix:' лет', fY_gt:'> 40 лет'
+    run_btn:'Запуск', sb_agi:'AGI медиана', sb_asi:'ASI медиана',
+    ch_legend_median:'Медиана', ch_legend_agi:'AGI (10)', ch_legend_asi:'ASI (100)',
+    ch1_xlabel:'Лет от сейчас', ch1_ylabel:'Прогонов', ch2_xlabel:'Год',
+    ch3_xlabel:'Лет от сейчас', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
+    ch4_label_base:'База', fY_suffix:' лет', fY_gt:'> 40 лет'
   },
   en: {
-    run_btn:'Run', sb_agi:'AGI median', ch_legend_median:'Median', ch_legend_agi:'AGI (10)',
-    ch1_xlabel:'Years from now', ch1_ylabel:'Runs', ch2_xlabel:'Year', ch3_xlabel:'Years from now', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch4_label_base:'Base', fY_suffix:' yrs', fY_gt:'> 40 yrs'
+    run_btn:'Run', sb_agi:'AGI median', sb_asi:'ASI median',
+    ch_legend_median:'Median', ch_legend_agi:'AGI (10)', ch_legend_asi:'ASI (100)',
+    ch1_xlabel:'Years from now', ch1_ylabel:'Runs', ch2_xlabel:'Year',
+    ch3_xlabel:'Years from now', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
+    ch4_label_base:'Base', fY_suffix:' yrs', fY_gt:'> 40 yrs'
   }
 };
 function setLang(lang) {
