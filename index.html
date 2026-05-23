@@ -365,6 +365,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 </div>
 
 <script>
+console.log('[SF] script loaded, defining functions...');
 // ============================================================================
 // SIMULATION CORE v2.5 — Multidimensional Bottlenecks & Geopolitics
 // ============================================================================
@@ -666,6 +667,7 @@ let simulationRunning = false;
 let currentMode = 'v2';
 
 function setMode(mode) {
+  console.log('[setMode] mode=' + mode);
   currentMode = mode;
   document.getElementById('mode_v2').classList.toggle('active', mode === 'v2');
   document.getElementById('mode_v3').classList.toggle('active', mode === 'v3');
@@ -833,6 +835,7 @@ const AA_FRONTIER_DATA = [
 ];
 
 function v3GetTracker() {
+  console.log('[v3] v3GetTracker called');
   if (!v3Tracker) {
     v3Tracker = new BayesianTracker(1000);
     // Auto-load historical frontier data
@@ -863,6 +866,7 @@ function v3ResetTracker() {
 }
 
 function v3UpdateUI(tracker) {
+  console.log('[v3] v3UpdateUI called', !!tracker);
   // Show observations
   const obsDiv = document.getElementById('v3Observations');
   const allObs = AA_FRONTIER_DATA.map(d => ({
