@@ -365,7 +365,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 </div>
 
 <script>
-console.log('[SF] script loaded v3, defining functions...');
+console.log('[SF] script loaded v4, defining functions...');
 // ============================================================================
 // SIMULATION CORE v2.5 — Multidimensional Bottlenecks & Geopolitics
 // ============================================================================
@@ -933,6 +933,8 @@ async function v3RunForecast() {
       },
     };
 
+    console.log('[v3] results: agiMedian=' + results.summary.agiMedian + ' v3NotReached=' + (results.summary.v3NotReached * 100).toFixed(1) + '%');
+
     currentResults = results;
     updateUI(results);
 
@@ -1373,6 +1375,15 @@ class BayesianTracker {
     const cumw = new Float64Array(this.n);
     cumw[0] = this.weights[0];
     for (let i = 1; i < this.n; i++) cumw[i] = cumw[i - 1] + this.weights[i];
+
+    // Debug: log particle stats
+    let hwSum = 0, acSum = 0;
+    for (let i = 0; i < this.n; i++) {
+      hwSum += this.particles[i].hw_months * this.weights[i];
+      acSum += this.particles[i].agency_ceiling * this.weights[i];
+    }
+    console.log('[v3] runMonteCarlo: nRuns=' + nRuns + ' hw_months=' + hwSum.toFixed(2) + ' agency_ceiling=' + acSum.toFixed(2) + ' cfg.BASE_YEAR=' + cfg.BASE_YEAR + ' THRESHOLDS.agi=' + cfg.THRESHOLDS.agi);
+
     for (let run = 0; run < nRuns; run++) {
       const u = Math.random();
       let idx = 0;
@@ -1404,6 +1415,13 @@ class BayesianTracker {
         flopsLog += hwK * damping * dt;
       }
       if (!agiAchieved) agiYears.push(Infinity);
+    }
+    const finite = agiYears.filter(y => isFinite(y));
+    console.log('[v3] runMonteCarlo done: total=' + agiYears.length + ' reached AGI=' + finite.length + ' not reached=' + (agiYears.length - finite.length));
+    if (finite.length > 0) {
+      const min = Math.min(...finite);
+      const max = Math.max(...finite);
+      console.log('[v3] AGI year range: ' + min.toFixed(1) + ' - ' + max.toFixed(1));
     }
     return agiYears;
   }
