@@ -279,16 +279,28 @@ function buildHistogramBins(listAgi, listAsi = []) {
   };
 }
 
+
 // ============================================================================
-// v3.0 — BAYESIAN PARTICLE FILTER
+// v3.0 — BAYESIAN PARTICLE FILTER (Исправлено: Якорь на 2023 год + Inference)
 // ============================================================================
 const V3_DEFAULT_PARTICLES = 1000;
 
 function createV3Config() {
   return {
-    BASE_YEAR: 2026.0, FRONTIER_LOG_FLOPS: 27.5, THRESHOLDS: { agi: 10.0 },
-    DIMENSIONS: { reasoning: { slope: 0.55, ceiling: 15.0 }, agency: { slope: 0.30 } },
-    SCALING_LAW: { paradigm_shift_prob: 0.25, shift_multiplier: 3.5 },
+    BASE_YEAR: 2023.0,          // Якорь (уровень GPT-4)
+    BASE_LOG_FLOPS: 24.5,       // Начальные FLOPs в 2023
+    CURRENT_YEAR: 2026.35,      // Откуда рисуем графики прогноза
+    THRESHOLDS: { agi: 10.0 },
+    DIMENSIONS: {
+      reasoning: { slope: 0.35, ceiling: 15.0 }, // Откалибровано под рост до 65 баллов
+      agency:    { slope: 0.25 }, // Потолок определяет частица
+    },
+    INFERENCE_SCALING: {
+      max_bonus_reasoning: 2.0,
+      max_bonus_agency: 1.5,
+      saturation_cap: 5.0
+    },
+    SCALING_LAW: { paradigm_shift_prob: 0.20, shift_multiplier: 3.0 },
     BOTTLENECKS: { energy_wall_start: 2026.0, energy_damping: 0.10, econ_wall_start: 2026.5, econ_damping: 0.15 },
   };
 }
@@ -297,35 +309,49 @@ function v3ComputeDim(logDiff, slope, ceiling) {
   return Math.max(ceiling * (sigmoid(slope * logDiff) - 0.5) + 1.0, 0.01);
 }
 
+function v3ApplyInference(rawCap, maxBonus, satCap) {
+  if (maxBonus <= 1.0) return rawCap;
+  const k = Math.LN2 / satCap;
+  const bonus = (maxBonus - 1.0) * (1.0 - Math.exp(-k * rawCap));
+  return rawCap * (1.0 + bonus);
+}
+
 function v3SimulateToYear(particle, targetYear, cfg) {
   const dt = 1.0 / 12.0;
   const steps = Math.max(1, Math.floor((targetYear - cfg.BASE_YEAR) * 12));
-  let flopsLog = cfg.FRONTIER_LOG_FLOPS;
-  let algoLog = 0; // BUGFIX: missing algo accumulator
+  let flopsLog = cfg.BASE_LOG_FLOPS;
+  let algoLog = 0; 
   const baseLog = flopsLog;
   
   const hwK = Math.log(2) / Math.max(1.0, particle.hw_months / 12.0);
-  const algoK = Math.log(2) / Math.max(1.0, particle.algo_months / 12.0); // BUGFIX
+  const algoK = Math.log(2) / Math.max(1.0, particle.algo_months / 12.0);
 
   for (let step = 0; step < steps; step++) {
     const currentYear = cfg.BASE_YEAR + step * dt;
     const logDiff = flopsLog + algoLog - baseLog;
-    const reasoning = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cfg.DIMENSIONS.reasoning.ceiling);
-    const agency = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, particle.agency_ceiling);
     
+    let rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cfg.DIMENSIONS.reasoning.ceiling);
+    let rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, particle.agency_ceiling);
+    
+    let reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
+    let agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
+
     let damping = 1.0;
     if (currentYear > cfg.BOTTLENECKS.econ_wall_start) {
       const gap = reasoning - agency;
       if (gap > 2.0) damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (gap - 2.0));
     }
     flopsLog += hwK * damping * dt;
-    algoLog += algoK * damping * dt; // BUGFIX
+    algoLog += algoK * damping * dt;
   }
   
   const logDiff = flopsLog + algoLog - baseLog;
+  let rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cfg.DIMENSIONS.reasoning.ceiling);
+  let rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, particle.agency_ceiling);
+  
   return {
-    reasoning: v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cfg.DIMENSIONS.reasoning.ceiling),
-    agency:    v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, particle.agency_ceiling),
+    reasoning: v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap),
+    agency:    v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap),
   };
 }
 
@@ -339,13 +365,13 @@ class BayesianTracker {
     for (let i = 0; i < this.n; i++) {
       this.particles.push({
         hw_months: Math.max(3.0, randnRange(7.5, 1.5)),
-        algo_months: Math.max(2.0, randnRange(6.0, 2.0)), // BUGFIX: tracking algorithm progress too
-        agency_ceiling: Math.max(1.5, randnRange(5.0, 1.5)),
+        algo_months: Math.max(2.0, randnRange(6.0, 2.0)),
+        agency_ceiling: Math.max(2.0, randnRange(8.0, 3.0)), // Априорный потолок Трансформеров
       });
     }
   }
 
-  observeAAData(year, aaIntelligence, aaAgentic, sigma = 0.5) {
+  observeAAData(year, aaIntelligence, aaAgentic, sigma = 1.0) {
     const tR = aaIntelligence / 10.0, tA = aaAgentic / 10.0;
     for (let i = 0; i < this.n; i++) {
       const p = this.particles[i];
@@ -373,7 +399,7 @@ class BayesianTracker {
         newP.push({
           hw_months: Math.max(3.0, p.hw_months + randnRange(0, 0.2)),
           algo_months: Math.max(2.0, p.algo_months + randnRange(0, 0.3)),
-          agency_ceiling: Math.max(1.5, p.agency_ceiling + randnRange(0, 0.1)),
+          agency_ceiling: Math.max(1.5, p.agency_ceiling + randnRange(0, 0.2)),
         });
       }
       this.particles = newP;
@@ -393,12 +419,13 @@ class BayesianTracker {
   }
 
   runMonteCarloForecast(nRuns) {
-    const agiYears = [], asiYears = []; // asi array just for dummy compatibility
-    const maxSteps = 12 * 40, dt = 1.0 / 12.0;
+    const agiYears = [], asiYears = []; 
+    const maxSteps = 12 * 45, dt = 1.0 / 12.0; // 45 лет от 2023 = до 2068
     
-    // Aggregation arrays for trajectory (BUGFIX #2)
-    const trajYears = new Float64Array(maxSteps);
-    const trajCaps = Array.from({length: maxSteps}, () => []);
+    // Графики нужны только от текущего времени (2026.35)
+    const plotSteps = 40 * 12; 
+    const trajYears = new Float64Array(plotSteps);
+    const trajCaps = Array.from({length: plotSteps}, () => []);
 
     const cumw = new Float64Array(this.n);
     cumw[0] = this.weights[0];
@@ -409,32 +436,40 @@ class BayesianTracker {
       let idx = 0; while (idx < this.n - 1 && cumw[idx] < u) idx++;
       const p = this.particles[idx];
       
-      let flopsLog = this.cfg.FRONTIER_LOG_FLOPS, algoLog = 0;
+      let flopsLog = this.cfg.BASE_LOG_FLOPS, algoLog = 0;
       let baseLog = flopsLog;
       const hwK = Math.log(2) / Math.max(1.0, p.hw_months / 12.0);
       const algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
       let ceilingAgency = p.agency_ceiling;
       let agiY = null;
+      let plotIdx = 0;
 
       for (let step = 0; step < maxSteps; step++) {
         const currentYear = this.cfg.BASE_YEAR + step * dt;
-        if (Math.random() < this.cfg.SCALING_LAW.paradigm_shift_prob * dt) {
+        
+        // Случайные сдвиги парадигм происходят только в будущем!
+        if (currentYear > this.cfg.CURRENT_YEAR && Math.random() < this.cfg.SCALING_LAW.paradigm_shift_prob * dt) {
           ceilingAgency *= this.cfg.SCALING_LAW.shift_multiplier; baseLog -= 0.5;
         }
         
         const logDiff = flopsLog + algoLog - baseLog;
-        const reasoning = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.reasoning.slope, this.cfg.DIMENSIONS.reasoning.ceiling);
-        const agency = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.agency.slope, ceilingAgency);
+        const rawR = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.reasoning.slope, this.cfg.DIMENSIONS.reasoning.ceiling);
+        const rawA = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.agency.slope, ceilingAgency);
+        
+        const reasoning = v3ApplyInference(rawR, this.cfg.INFERENCE_SCALING.max_bonus_reasoning, this.cfg.INFERENCE_SCALING.saturation_cap);
+        const agency = v3ApplyInference(rawA, this.cfg.INFERENCE_SCALING.max_bonus_agency, this.cfg.INFERENCE_SCALING.saturation_cap);
         
         const cap = Math.min(reasoning, agency);
         
-        // Track trajectory using absolute year
-        trajYears[step] = currentYear;
-        trajCaps[step].push(cap);
+        if (currentYear >= this.cfg.CURRENT_YEAR && plotIdx < plotSteps) {
+            trajYears[plotIdx] = currentYear;
+            trajCaps[plotIdx].push(cap);
+            plotIdx++;
 
-        if (agiY === null && cap >= this.cfg.THRESHOLDS.agi) {
-            agiY = currentYear;
-            break; // Stop simulating this run once AGI is hit
+            if (agiY === null && cap >= this.cfg.THRESHOLDS.agi) {
+                agiY = currentYear;
+                break; // Выход из симуляции при AGI (экономит CPU)
+            }
         }
         
         let damping = 1.0;
@@ -445,14 +480,13 @@ class BayesianTracker {
         algoLog += algoK * damping * dt;
       }
       
-      // BUGFIX #1: Push relative years for agiList!
-      agiYears.push(agiY !== null ? agiY - this.cfg.BASE_YEAR : Infinity);
-      asiYears.push(Infinity); // ASI omitted in simplified v3 tracking
+      // Возвращаем года от СЕГОДНЯ, чтобы UI отрендерил корректно
+      agiYears.push(agiY !== null ? agiY - this.cfg.CURRENT_YEAR : Infinity);
+      asiYears.push(Infinity);
     }
     
-    // Process Trajectory Data
     const yrs = [], med = [], p10a = [], p25a = [], p75a = [], p90a = [];
-    for (let step = 0; step < maxSteps; step++) {
+    for (let step = 0; step < plotSteps; step++) {
         const vals = trajCaps[step];
         if (vals.length > 0) {
             vals.sort((a,b) => a - b);
@@ -525,7 +559,7 @@ function v3UpdateUI(tracker) {
   obsDiv.innerHTML = allObs.map(o => `<span style="margin-right:12px;${o.source === 'user' ? 'color:var(--accent)' : ''}">${o.year.toFixed(2)}: I=${o.intel.toFixed(0)}, A=${o.agentic.toFixed(1)}${o.event ? ' ('+o.event+')' : ''}</span>`).join('');
   const s = tracker.getSummary();
   const ess = 1.0 / tracker.weights.reduce((a, b) => a + b * b, 0);
-  document.getElementById('v3Params').textContent = `Апостериор (Байес): Удвоение HW = ${s.hwMonths.toFixed(1)} мес | Удвоение Algo = ${s.algoMonths.toFixed(1)} мес | Потолок Agency = ${s.agencyCeiling.toFixed(2)} (AGI=10) | ESS: ${ess.toFixed(0)}`;
+  document.getElementById('v3Params').textContent = `Апостериор (Байес): Удвоение HW = ${s.hwMonths.toFixed(1)} мес | Удвоение Algo = ${s.algoMonths.toFixed(1)} мес | Потолок Agency = ${s.agencyCeiling.toFixed(2)} | ESS: ${ess.toFixed(0)}`;
 }
 
 async function runSimulation() {
@@ -550,17 +584,14 @@ async function runSimulation() {
       for (let y = 0.25; y <= 10; y += 0.25) yq.push(+y.toFixed(4));
       for (let y = 11; y <= 40; y++) yq.push(y);
 
-      // BUGFIX #3: Dummy data for Sensitivity chart to avoid blank rendering
       const dummySensitivity = {
           base: percentile(finite, 50),
-          variations: {
-              info: { label: '(v3: Дисперсия в облаке частиц)', agiMedian: percentile(finite, 50) }
-          }
+          variations: { info: { label: '(v3: Дисперсия в облаке частиц)', agiMedian: percentile(finite, 50) } }
       };
 
       currentResults = {
-        histogram: buildHistogramBins(finite), // Reusing v2 histogram builder for perfect alignment
-        trajectory: runData.trajectory, // Now populated!
+        histogram: buildHistogramBins(finite), 
+        trajectory: runData.trajectory, 
         cumulative: { x: yq, agi: yq.map(y => cdf(agiList, y)), asi: [] },
         sensitivity: dummySensitivity,
         summary: {
@@ -611,8 +642,32 @@ function yearsText(yrs) {
   return yrs.toFixed(1) + LANG[window._lang||'ru'].fY_suffix + '<br>(' + d.toLocaleDateString(window._lang==='en'?'en-US':'ru-RU', {month:'short',year:'numeric'}) + ')';
 }
 
+function buildHistogramBins(listAgi, listAsi = []) {
+  const bins = [], binW = 0.5;
+  for (let x = 0.5; x <= 25.0; x += binW) bins.push(x);
+  const hAgi = new Array(bins.length - 1).fill(0);
+  const hAsi = new Array(bins.length - 1).fill(0);
+  
+  for (const v of listAgi) {
+    if (isFinite(v)) { 
+      const idx = Math.floor((v - 0.5) / binW); 
+      if (idx >= 0 && idx < hAgi.length) hAgi[idx]++; 
+    }
+  }
+  for (const v of listAsi) {
+    if (isFinite(v)) { 
+      const idx = Math.floor((v - 0.5) / binW); 
+      if (idx >= 0 && idx < hAsi.length) hAsi[idx]++; 
+    }
+  }
+  return { 
+    labels: bins.slice(0, -1).map((_, i) => ((bins[i] + bins[i + 1]) / 2).toFixed(1)), 
+    agi: hAgi, asi: hAsi 
+  };
+}
+
 // ============================================================================
-// PLOTLY RENDERERS & i18n ... (Keep existing layout and translation config from original)
+// PLOTLY RENDERERS & i18n
 // ============================================================================
 const LAYOUT_BASE = {
   paper_bgcolor: '#161620', plot_bgcolor: '#0e0e18',
@@ -641,7 +696,7 @@ function plotTrajectory(tr) {
     { x: tr.years, y: tr.p10, type: 'scatter', mode: 'lines', line: {width:0}, fill: 'tonexty', fillcolor: 'rgba(88,166,255,.18)', showlegend: false, hoverinfo:'skip' },
     { x: tr.years, y: tr.median, type: 'scatter', mode: 'lines', name: t.ch_legend_median, line: { color: '#58a6ff', width: 2.5 } },
     { x: [tr.years[0], tr.years[tr.years.length - 1]], y: [tr.agiThreshold, tr.agiThreshold], type: 'scatter', mode: 'lines', name: t.ch_legend_agi, line: { color: '#f0883e', dash: 'dot' } }
-  ], { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel }, range: [2026, 2050] }, yaxis: { ...LAYOUT_BASE.yaxis, type: 'log', range: [0, 3.3] } }, PLOT_CFG);
+  ], { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel }, range: [2026, 2050] }, yaxis: { ...LAYOUT_BASE.yaxis, type: 'log', range: [0, 1.5] } }, PLOT_CFG);
 }
 function plotCumulative(c) {
   const t = LANG[window._lang || 'ru'];
@@ -673,7 +728,7 @@ function setLang(lang) {
   window._lang = lang;
   document.getElementById('lang_ru').classList.toggle('active', lang === 'ru');
   document.getElementById('lang_en').classList.toggle('active', lang === 'en');
-  // Refresh UI texts logic here...
 }
 
 window.addEventListener('load', () => setLang('ru'));
+</script>
