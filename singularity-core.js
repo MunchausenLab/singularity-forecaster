@@ -420,9 +420,7 @@ class BayesianTracker {
 
   runMonteCarloForecast(nRuns) {
     const agiYears = [], asiYears = []; 
-    const maxSteps = 12 * 45, dt = 1.0 / 12.0; // 45 лет от 2023 = до 2068
-    
-    // Графики нужны только от текущего времени (2026.35)
+    const maxSteps = 12 * 45, dt = 1.0 / 12.0; 
     const plotSteps = 40 * 12; 
     const trajYears = new Float64Array(plotSteps);
     const trajCaps = Array.from({length: plotSteps}, () => []);
@@ -440,20 +438,26 @@ class BayesianTracker {
       let baseLog = flopsLog;
       const hwK = Math.log(2) / Math.max(1.0, p.hw_months / 12.0);
       const algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
+      
+      // ИСПРАВЛЕНИЕ 1: Оба потолка теперь локальные переменные
+      let ceilingReasoning = this.cfg.DIMENSIONS.reasoning.ceiling;
       let ceilingAgency = p.agency_ceiling;
+      
       let agiY = null, asiY = null;
       let plotIdx = 0;
 
       for (let step = 0; step < maxSteps; step++) {
         const currentYear = this.cfg.BASE_YEAR + step * dt;
         
-        // Случайные сдвиги парадигм происходят только в будущем!
+        // Смена парадигмы теперь поднимает оба потолка!
         if (currentYear > this.cfg.CURRENT_YEAR && Math.random() < this.cfg.SCALING_LAW.paradigm_shift_prob * dt) {
-          ceilingAgency *= this.cfg.SCALING_LAW.shift_multiplier; baseLog -= 0.5;
+          ceilingAgency *= this.cfg.SCALING_LAW.shift_multiplier; 
+          ceilingReasoning *= this.cfg.SCALING_LAW.shift_multiplier; // <- Добавлено
+          baseLog -= 0.5;
         }
         
         const logDiff = flopsLog + algoLog - baseLog;
-        const rawR = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.reasoning.slope, this.cfg.DIMENSIONS.reasoning.ceiling);
+        const rawR = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.reasoning.slope, ceilingReasoning);
         const rawA = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.agency.slope, ceilingAgency);
         
         const reasoning = v3ApplyInference(rawR, this.cfg.INFERENCE_SCALING.max_bonus_reasoning, this.cfg.INFERENCE_SCALING.saturation_cap);
@@ -466,24 +470,32 @@ class BayesianTracker {
             trajCaps[plotIdx].push(cap);
             plotIdx++;
         }
-
+        
         if (agiY === null && cap >= this.cfg.THRESHOLDS.agi) {
             agiY = currentYear;
         }
         if (asiY === null && cap >= this.cfg.THRESHOLDS.asi) {
             asiY = currentYear;
-            break;
+            break; // Остановка только на ASI
         }
         
         let damping = 1.0;
         if (currentYear > this.cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
           damping *= Math.exp(-this.cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
         }
+        
+        // ИСПРАВЛЕНИЕ 2: Включен RSI (Recursive Self-Improvement)
+        // Включается, когда агентность пробивает 5.0
+        let rsi = 0;
+        if (cap >= 5.0) {
+          const progress = Math.max(0, Math.min(1.0, (cap - 5.0) / (40.0 - 5.0)));
+          rsi = 0.08 * progress * Math.log(1.0 + cap);
+        }
+        
         flopsLog += hwK * damping * dt;
-        algoLog += algoK * damping * dt;
+        algoLog += (algoK * damping + rsi) * dt; // Добавляем RSI к росту алгоритмов
       }
       
-      // Возвращаем года от СЕГОДНЯ, чтобы UI отрендерил корректно
       agiYears.push(agiY !== null ? agiY - this.cfg.CURRENT_YEAR : Infinity);
       asiYears.push(asiY !== null ? asiY - this.cfg.CURRENT_YEAR : Infinity);
     }
@@ -498,12 +510,12 @@ class BayesianTracker {
             med.push(percentile(vals, 50));  p75a.push(percentile(vals, 75)); p90a.push(percentile(vals, 90));
         }
     }
-
     return { 
         agiYears, asiYears, 
         trajectory: { years: yrs, median: med, p10: p10a, p25: p25a, p75: p75a, p90: p90a, agiThreshold: 10, asiThreshold: 100 }
     };
   }
+
 }
 
 // ============================================================================
