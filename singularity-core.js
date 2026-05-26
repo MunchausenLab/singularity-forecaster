@@ -433,7 +433,7 @@ function v3AddObservation() {
   v3Observations.push({ year: y, intel: i, agentic: a });
   v3Tracker = new BayesianTracker(1000);
   AA_FRONTIER_DATA.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 1.5));
-  v3Observations.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 5.0));
+  v3Observations.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 2.0));
   v3UpdateUI(v3Tracker);
 }
 
@@ -450,6 +450,28 @@ function v3UpdateUI(tracker) {
   const s = tracker.getSummary();
   const ess = 1.0 / tracker.weights.reduce((a, b) => a + b * b, 0);
   document.getElementById('v3Params').textContent = `Апостериор (Байес): Удвоение HW = ${s.hwMonths.toFixed(1)} мес | Удвоение Algo = ${s.algoMonths.toFixed(1)} мес | Потолок Agency = ${s.agencyCeiling.toFixed(2)} | ESS: ${ess.toFixed(0)}`;
+  v3CheckWarning(tracker);
+}
+
+function v3CheckWarning(tracker) {
+  const warnEl = document.getElementById('v3Warning');
+  if (!warnEl) return;
+  const curI = +document.getElementById('v3Intel').value;
+  const curA = +document.getElementById('v3Agentic').value;
+  const tR = curI / 10.0, tA = curA / 10.0;
+  let minDist = Infinity;
+  for (let i = 0; i < Math.min(tracker.n, 100); i++) {
+    if (tracker.weights[i] < 0.001) continue;
+    const pred = v3SimulateToYear(tracker.particles[i], tracker.cfg.CURRENT_YEAR, tracker.cfg);
+    const dist = Math.sqrt((tR - pred.reasoning) ** 2 + (tA - pred.agency) ** 2);
+    if (dist < minDist) minDist = dist;
+  }
+  if (minDist > 8.0) {
+    warnEl.style.display = '';
+    warnEl.textContent = '⚠️ Значения далеко от диапазона частиц — модель не может надёжно экстраполировать. Прогноз ближе к априорному.';
+  } else {
+    warnEl.style.display = 'none';
+  }
 }
 
 async function runSimulation() {
@@ -469,10 +491,10 @@ async function runSimulation() {
     const currentA = +document.getElementById('v3Agentic').value;
     v3Tracker = new BayesianTracker(1000);
     AA_FRONTIER_DATA.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 1.5));
-    v3Observations.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 5.0));
+    v3Observations.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 2.0));
     v3Observations = v3Observations.filter(o => o.year < currentY - 0.01);
     v3Observations.push({ year: currentY, intel: currentI, agentic: currentA });
-    v3Tracker.observeAAData(currentY, currentI, currentA, 5.0);
+    v3Tracker.observeAAData(currentY, currentI, currentA, 2.0);
     const tracker = v3Tracker;
     const runData = tracker.runMonteCarloForecast(n);
     const agiList = runData.agiYears;
@@ -799,3 +821,12 @@ function setLang(lang) {
 }
 
 window.addEventListener('load', () => setLang('ru'));
+window.addEventListener('load', () => {
+  const tracker = v3GetTracker();
+  v3UpdateUI(tracker);
+});
+
+function v3QuickWarning() {
+  const t = v3Tracker || v3GetTracker();
+  v3CheckWarning(t);
+}

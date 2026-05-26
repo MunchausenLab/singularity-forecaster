@@ -197,15 +197,15 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   </div>
   <div class="control-group">
     <label data-i18n="ctrl_obs_year">Год наблюдения</label>
-    <input type="number" id="v3Year" value="2026.5" min="2022" max="2030" step="0.1" style="width:80px">
+    <input type="number" id="v3Year" value="2026.5" min="2022" max="2030" step="0.1" style="width:80px" oninput="v3QuickWarning()">
   </div>
   <div class="control-group">
     <label data-i18n="ctrl_intelligence">Интеллект (AA)</label>
-    <input type="number" id="v3Intel" value="68" min="0" max="100" step="1" style="width:70px">
+    <input type="number" id="v3Intel" value="68" min="0" max="100" step="1" style="width:70px" oninput="v3QuickWarning()">
   </div>
   <div class="control-group">
     <label data-i18n="ctrl_agentic">Агентность (AA)</label>
-    <input type="number" id="v3Agentic" value="72" min="0" max="100" step="0.1" style="width:70px">
+    <input type="number" id="v3Agentic" value="72" min="0" max="100" step="0.1" style="width:70px" oninput="v3QuickWarning()">
   </div>
   <button class="btn btn-secondary btn-sm" data-i18n="ctrl_add" onclick="v3AddObservation()">+ Добавить</button>
   <button class="btn btn-primary" id="runBtn" onclick="runSimulation()">
@@ -218,6 +218,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 <div id="v3Panel" style="display:block;background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:10px 32px">
   <div id="v3Observations" style="font-size:.72rem;color:var(--text-secondary)"></div>
   <div id="v3Params" style="margin-top:4px;font-size:.72rem;color:var(--text-muted)"></div>
+  <div id="v3Warning" style="margin-top:4px;font-size:.72rem;color:var(--orange);display:none"></div>
   <div id="v3NoAgi" style="margin-top:4px;font-size:.7rem;color:var(--text-muted)"></div>
 </div>
 
