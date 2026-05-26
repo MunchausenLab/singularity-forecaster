@@ -747,6 +747,10 @@ const LANG = {
     footer_note:'Данные оценочные',
     // Loading
     loading:'Байесовское прогнозирование v3...',
+    // Swarm
+    swarm_title:'Анимация: «Сжатие роя» (Bayesian Particle Swarm)',
+    swarm_desc:'Интерактивная визуализация того, как модель «думает» и учится на исторических данных. Каждая точка — гипотеза о будущем. Ось X — скорость удвоения железа (месяцев), Ось Y — потолок агентности. При поступлении новых данные слабые гипотезы тускнеют, сильные — ярют и клонируются.',
+    swarm_play:'Запуск', swarm_reset:'Сброс', swarm_drag:'Перетаскивайте ползунок для ручного просмотра',
   },
   en: {
     // Header
@@ -807,8 +811,143 @@ const LANG = {
     footer_note:'Data is estimated',
     // Loading
     loading:'Running Bayesian v3 forecast...',
+    // Swarm
+    swarm_title:'Bayesian Particle Swarm',
+    swarm_desc:'Interactive visualization of how the model "thinks" and learns from historical data. Each dot is a hypothesis about the future. X-axis — hardware doubling speed (months), Y-axis — agency ceiling. As new data arrives, weak hypotheses dim, strong ones brighten and clone.',
+    swarm_play:'Play', swarm_reset:'Reset', swarm_drag:'Drag the slider for manual playback',
   }
 };
+
+// ===== PARTICLE SWARM ANIMATION =====
+let swarmAnimating = false;
+let swarmRafId = null;
+let swarmTracker = null;
+let swarmObsIdx = 0;
+let swarmParticles = [];
+let swarmWeights = [];
+
+const SWARM_PAD = 50;
+const SWARM_X_MIN = 2, SWARM_X_MAX = 20;
+const SWARM_Y_MIN = 1, SWARM_Y_MAX = 25;
+
+function swarmInit() {
+  const canvas = document.getElementById('swarmCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = canvas.offsetHeight * dpr;
+  ctx.scale(dpr, dpr);
+  swarmTracker = new BayesianTracker(1000);
+  swarmObsIdx = 0;
+  swarmParticles = swarmTracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling }));
+  swarmWeights = Array.from(swarmTracker.weights);
+  swarmDraw();
+}
+
+function swarmDraw() {
+  const canvas = document.getElementById('swarmCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.offsetWidth, h = canvas.offsetHeight;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, w, h);
+  const pw = w - SWARM_PAD * 2, ph = h - SWARM_PAD * 2;
+  ctx.strokeStyle = '#2a2a3a';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const x = SWARM_PAD + (pw * i / 4);
+    ctx.beginPath(); ctx.moveTo(x, SWARM_PAD); ctx.lineTo(x, h - SWARM_PAD); ctx.stroke();
+    const y = SWARM_PAD + (ph * i / 4);
+    ctx.beginPath(); ctx.moveTo(SWARM_PAD, y); ctx.lineTo(w - SWARM_PAD, y); ctx.stroke();
+  }
+  ctx.fillStyle = '#666680';
+  ctx.font = '11px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Удвоение HW (мес)', w / 2, h - 10);
+  ctx.save();
+  ctx.translate(14, h / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('Потолок Agency', 0, 0);
+  ctx.restore();
+  const maxW = Math.max(...swarmWeights, 0.001);
+  for (let i = 0; i < swarmParticles.length; i++) {
+    const px = swarmParticles[i].x, py = swarmParticles[i].y;
+    const sx = SWARM_PAD + ((px - SWARM_X_MIN) / (SWARM_X_MAX - SWARM_X_MIN)) * pw;
+    const sy = h - SWARM_PAD - ((py - SWARM_Y_MIN) / (SWARM_Y_MAX - SWARM_Y_MIN)) * ph;
+    const nw = swarmWeights[i] / maxW;
+    const alpha = 0.15 + nw * 0.85;
+    const r = 1.5 + nw * 2.5;
+    if (nw > 0.3) {
+      ctx.fillStyle = `rgba(88,166,255,${alpha * 0.3})`;
+      ctx.beginPath(); ctx.arc(sx, sy, r * 3, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = nw > 0.5 ? `rgba(88,166,255,${alpha})` : nw > 0.1 ? `rgba(167,139,250,${alpha})` : `rgba(100,100,130,${alpha * 0.6})`;
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
+  }
+  if (swarmObsIdx > 0 && swarmObsIdx <= AA_FRONTIER_DATA.length) {
+    const obs = AA_FRONTIER_DATA[swarmObsIdx - 1];
+    ctx.fillStyle = '#f0883e';
+    ctx.font = 'bold 12px Inter, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${obs.year.toFixed(2)}: ${obs.event}`, w - SWARM_PAD, SWARM_PAD + 16);
+    ctx.font = '11px JetBrains Mono, monospace';
+    ctx.fillStyle = '#9898b0';
+    ctx.fillText(`I=${obs.intel.toFixed(0)} A=${obs.agentic.toFixed(1)}`, w - SWARM_PAD, SWARM_PAD + 32);
+  }
+  const ess = 1.0 / swarmWeights.reduce((a, b) => a + b * b, 0);
+  ctx.fillStyle = '#666680';
+  ctx.font = '10px JetBrains Mono, monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(`ESS: ${ess.toFixed(0)} | N: ${swarmParticles.length}`, SWARM_PAD, SWARM_PAD - 6);
+}
+
+function swarmStep() {
+  if (swarmObsIdx >= AA_FRONTIER_DATA.length) {
+    swarmAnimating = false;
+    const t = LANG[window._lang || 'ru'];
+    document.getElementById('swarmPlayBtn').innerHTML = '<span>' + (t.swarm_play || 'Запуск') + '</span>';
+    return;
+  }
+  const obs = AA_FRONTIER_DATA[swarmObsIdx];
+  swarmTracker.observeAAData(obs.year, obs.intel, obs.agentic, 1.5);
+  swarmWeights = Array.from(swarmTracker.weights);
+  swarmObsIdx++;
+  swarmDraw();
+  const eventEl = document.getElementById('swarmEvent');
+  if (eventEl) {
+    eventEl.textContent = obs.event;
+    eventEl.style.opacity = '1';
+    setTimeout(() => { eventEl.style.opacity = '0'; }, 2000);
+  }
+  swarmRafId = setTimeout(swarmStep, 600);
+}
+
+function swarmPlay() {
+  if (swarmAnimating) {
+    swarmAnimating = false;
+    if (swarmRafId) clearTimeout(swarmRafId);
+    const t = LANG[window._lang || 'ru'];
+    document.getElementById('swarmPlayBtn').innerHTML = '<span>' + (t.swarm_play || 'Запуск') + '</span>';
+    return;
+  }
+  if (!swarmTracker || swarmObsIdx >= AA_FRONTIER_DATA.length) swarmReset();
+  swarmAnimating = true;
+  document.getElementById('swarmPlayBtn').innerHTML = '<span>⏸</span>';
+  swarmStep();
+}
+
+function swarmReset() {
+  swarmAnimating = false;
+  if (swarmRafId) clearTimeout(swarmRafId);
+  const eventEl = document.getElementById('swarmEvent');
+  if (eventEl) eventEl.style.opacity = '0';
+  swarmInit();
+}
+
+window.addEventListener('load', () => { setTimeout(swarmInit, 100); });
+
 function setLang(lang) {
   window._lang = lang;
   document.getElementById('lang_ru').classList.toggle('active', lang === 'ru');
