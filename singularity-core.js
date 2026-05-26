@@ -100,7 +100,7 @@ class BayesianTracker {
   }
 
   observeAAData(year, aaIntelligence, aaAgentic, sigma = 1.0) {
-    const tR = Math.max(0, Math.min(aaIntelligence, 200)) / 10.0, tA = Math.max(0, Math.min(aaAgentic, 200)) / 10.0;
+    const tR = aaIntelligence / 10.0, tA = aaAgentic / 10.0;
     for (let i = 0; i < this.n; i++) {
       const p = this.particles[i];
       if (p.hw_months < 1.0 || p.agency_ceiling < 1.0) { this.weights[i] = 0; continue; }
@@ -433,7 +433,7 @@ function v3AddObservation() {
   v3Observations.push({ year: y, intel: i, agentic: a });
   v3Tracker = new BayesianTracker(1000);
   AA_FRONTIER_DATA.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 1.5));
-  v3Observations.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 1.0));
+  v3Observations.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 5.0));
   v3UpdateUI(v3Tracker);
 }
 
@@ -469,10 +469,10 @@ async function runSimulation() {
     const currentA = +document.getElementById('v3Agentic').value;
     v3Tracker = new BayesianTracker(1000);
     AA_FRONTIER_DATA.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 1.5));
-    v3Observations.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 1.0));
+    v3Observations.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 5.0));
     v3Observations = v3Observations.filter(o => o.year < currentY - 0.01);
     v3Observations.push({ year: currentY, intel: currentI, agentic: currentA });
-    v3Tracker.observeAAData(currentY, currentI, currentA, 1.0);
+    v3Tracker.observeAAData(currentY, currentI, currentA, 5.0);
     const tracker = v3Tracker;
     const runData = tracker.runMonteCarloForecast(n);
     const agiList = runData.agiYears;
