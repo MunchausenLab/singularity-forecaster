@@ -248,21 +248,45 @@ class BayesianTracker {
   // ADVANCED ANALYSIS: Sensitivity, Scenarios, Decomposition, Paradigm Shifts
   // ==========================================================================
 
+  // Clone particles + weights for sensitivity analysis (same hypotheses, different observations)
+  cloneState() {
+    return {
+      particles: this.particles.map(p => ({ ...p })),
+      weights: new Float64Array(this.weights),
+      observationLog: this.observationLog.map(o => ({ ...o })),
+    };
+  }
+
+  // Restore cloned state
+  restoreState(state) {
+    this.particles = state.particles.map(p => ({ ...p }));
+    this.weights = new Float64Array(state.weights);
+    this.observationLog = state.observationLog.map(o => ({ ...o }));
+    this.n = this.particles.length;
+  }
+
   runSensitivityMatrix(intelRange, agenticRange) {
-    const results = [];
+    // Clone the current posterior (all points share same particle hypotheses)
     const baseObs = AA_FRONTIER_DATA[AA_FRONTIER_DATA.length - 1];
+    const state = this.cloneState();
+
+    const results = [];
     for (const intel of intelRange) {
       const row = [];
       for (const agentic of agenticRange) {
-        const tmpTracker = new BayesianTracker(200);
-        AA_FRONTIER_DATA.forEach(d => tmpTracker.observeAAData(d.year, d.intel, d.agentic, 1.5));
-        tmpTracker.observeAAData(baseObs.year, intel, agentic, 1.0);
-        const mc = tmpTracker.runMonteCarloForecast(200);
+        // Restore original posterior state for each grid point
+        this.restoreState(state);
+        // Add observation with varied parameters
+        this.observeAAData(baseObs.year, intel, agentic, 1.0);
+        // Run forecast with same particles, different observation
+        const mc = this.runMonteCarloForecast(300);
         const finite = mc.agiYears.filter(isFinite);
         row.push(finite.length > 0 ? percentile(finite, 50) : 40);
       }
       results.push(row);
     }
+    // Restore original state after all sensitivity runs
+    this.restoreState(state);
     return results;
   }
 
