@@ -399,100 +399,6 @@ class BayesianTracker {
     }
     return { years, hwComp, algoComp, paradigmComp, rsiComp };
   }
-
-  runParadigmShiftTimeline(nRuns) {
-    const cfg = this.cfg;
-    const cumw = new Float64Array(this.n);
-    cumw[0] = this.weights[0];
-    for (let i = 1; i < this.n; i++) cumw[i] = cumw[i - 1] + this.weights[i];
-
-    const yearStart = 2027;
-    const yearEnd = 2045;
-    const years = [];
-    for (let y = yearStart; y <= yearEnd; y++) years.push(y);
-
-    // For each year: count runs that reached this year AND had a shift
-    const shiftCounts = new Array(years.length).fill(0);
-    const aliveCounts = new Array(years.length).fill(0);
-
-    const dt = 1.0 / 12.0;
-    const maxSteps = 12 * 45;
-
-    for (let run = 0; run < nRuns; run++) {
-      const u = Math.random();
-      let idx = 0; while (idx < this.n - 1 && cumw[idx] < u) idx++;
-      const p = this.particles[idx];
-
-      let flopsLog = cfg.BASE_LOG_FLOPS, algoLog = 0;
-      let baseLog = flopsLog;
-      let cR = cfg.DIMENSIONS.reasoning.ceiling;
-      let cA = p.agency_ceiling;
-      const hwK = Math.log(2) / Math.max(1.0, p.hw_months / 12.0);
-      const algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
-
-      const shiftedYears = new Set();
-      let alive = true;
-
-      for (let step = 0; step < maxSteps; step++) {
-        const y = cfg.BASE_YEAR + step * dt;
-        const year = Math.floor(y);
-
-        // Check if still alive at the start of this year
-        if (alive) {
-          const yearIdx = year - yearStart;
-          if (yearIdx >= 0 && yearIdx < aliveCounts.length) {
-            aliveCounts[yearIdx]++;
-          }
-        }
-
-        if (y > cfg.CURRENT_YEAR && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
-          shiftedYears.add(year);
-          cA *= cfg.SCALING_LAW.shift_multiplier;
-          cR *= cfg.SCALING_LAW.shift_multiplier;
-          baseLog -= 0.5;
-        }
-
-        const logDiff = flopsLog + algoLog - baseLog;
-        const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
-        const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
-        const reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
-        const agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
-        const cap = Math.min(reasoning, agency);
-
-        if (cap >= cfg.THRESHOLDS.asi) {
-          alive = false;
-          break;
-        }
-
-        let damping = 1.0;
-        if (y > cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
-          damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
-        }
-        let rsi = 0;
-        if (cap >= 5.0) {
-          const progress = Math.max(0, Math.min(1.0, (cap - 5.0) / 35.0));
-          rsi = 0.08 * progress * Math.log(1.0 + cap);
-        }
-        flopsLog += hwK * damping * dt;
-        algoLog += (algoK * damping + rsi) * dt;
-      }
-
-      // Increment shift counts for years that had shifts
-      for (const year of shiftedYears) {
-        const i = year - yearStart;
-        if (i >= 0 && i < shiftCounts.length) shiftCounts[i]++;
-      }
-    }
-
-    // Conditional probability: P(shift | alive) = shiftCounts / aliveCounts
-    const percentages = years.map((_, i) => {
-      if (aliveCounts[i] === 0) return 0;
-      return (shiftCounts[i] / aliveCounts[i]) * 100;
-    });
-
-    return { years, percentages };
-  }
-
 }
 
 // ============================================================================
@@ -605,7 +511,6 @@ function updateUI(r) {
     requestAnimationFrame(() => {
       plotScenarioFan(tracker);
       plotDecomposition(tracker);
-      plotParadigmShifts(tracker);
     });
   });
 }
@@ -747,62 +652,95 @@ function plotDecomposition(tracker) {
   }, PLOT_CFG);
 }
 
-function plotParadigmShifts(tracker) {
-  const t = LANG[window._lang || 'ru'];
-  const data = tracker.runParadigmShiftTimeline(500);
-
-  const colors = data.percentages.map(v => v > 50 ? '#ef4444' : v > 20 ? '#f0883e' : '#eab308');
-
-  Plotly.newPlot('c9', [
-    { x: data.years.map(String), y: data.percentages, type: 'bar', name: 'P(сдвиг)', marker: { color: colors } },
-  ], {
-    ...LAYOUT_BASE,
-    xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel }, dtick: 1 },
-    yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch9_ylabel || 'P(сдвиг), %' }, range: [0, 105] },
-    bargap: 0.15,
-  }, PLOT_CFG);
-}
-
 window._lang = 'ru';
 const LANG = {
   ru: {
-    run_btn:'Запустить прогноз', sb_agi:'AGI медиана', sb_asi:'ASI медиана',
-    ch_legend_median:'Медиана', ch_legend_agi:'AGI (10)', ch_legend_asi:'ASI (100)',
-    ch1_xlabel:'Год', ch1_ylabel:'Прогонов', ch2_xlabel:'Год',
-    ch3_xlabel:'Год', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
-    ch4_label_base:'База', fY_suffix:' лет', fY_gt:'> 40 лет',
-    entropy_consensus:'Консенсус', entropy_moderate:'Умеренная неопределённость', entropy_confusion:'Модель в замешательстве',
-    entropy_desc:'Энтропия показывает насколько частицы размазаны. Низкая = консенсус, высокая = данные противоречивы.',
-    // Advanced charts i18n
-    ch5_label:'Лет до AGI', ch5_colorbar:'Лет до AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score',
-    ch7_ylabel:'Суммарный вклад (log FLOPs)',
-    ch9_ylabel:'P(сдвиг), %',
-    chart5:'3. Карта чувствительности (Intel x Agentic)',
+    // Header
+    hdr_title:'Singularity Forecaster', hdr_sub:'v3 Bayesian Tracker',
+    // Status bar
+    sb_agi:'AGI медиана', sb_asi:'ASI медиана',
+    sb_pagi_2029:'P(AGI · 2029)', sb_pagi_2033:'P(AGI · 2033)', sb_pagi_2040:'P(AGI · 2040)',
+    sb_pasi_2035:'P(ASI · 2035)', sb_pasi_2045:'P(ASI · 2045)',
+    // Controls
+    run_btn:'Запустить прогноз',
+    // Charts
+    tag1:'Вероятностный анализ', tag3:'Кумулятивная',
+    chart1:'1. Распределение AGI / ASI по Monte Carlo',
+    chart3:'2. Накопленная вероятность AGI / ASI',
+    chart5:'3. Карта чувствительности (Intel × Agentic)',
     chart6:'4. Веер сценариев (Multi-Run Overlay)',
     chart7:'5. Вклад компонент (Stacked Area)',
-    chart9:'6. Таймлайн смены парадигм',
+    tip1:'Показывает, где группируются 3000 прогонов Монте-Карло. Чем выше столбец — тем больше сценариев привели к AGI/ASI в этом году.',
+    tip3:'P(AGI ≤ X) — шанс, что AGI появится не позднее, чем через X лет. Если кривая круто поднимается — быстрый переход от «почти нет» к «почти точно».',
     tip5:'Тепловая карта: оси — параметры Intelligence и Agentic последнего наблюдения. Цвет — медианный год AGI. Показывает, какой параметр доминирует в прогнозе.',
     tip6:'30 случайных прогонов из апостериорного распределения, наложенных полупрозрачно. Показывает разброс возможных путей к сингулярности.',
     tip7:'Разбивка capability на составляющие: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Показывает, что двигает прогресс.',
-    tip9:'Вертикальные маркеры — моменты, когда в каждом прогоне сработала смена парадигмы. Плотность маркеров = вероятность сдвига в данный год.',
+    ch1_xlabel:'Год', ch1_ylabel:'Прогонов',
+    ch3_xlabel:'Год', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
+    ch5_label:'Лет до AGI', ch5_colorbar:'Лет до AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score',
+    ch7_ylabel:'Суммарный вклад (log FLOPs)',
+    fY_suffix:' лет', fY_gt:'> 40 лет',
+    // About
+    about_title:'О модели v3',
+    about_intro:'Модель v3 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных Artificial Analysis. Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения AA обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге.',
+    defs_label:'Архитектура модели',
+    defs_intro:'В модели v3 используются строгие операциональные определения на основе двухмерной шкалы (Reasoning, Agency), где текущие передовые модели начала 2026 года = 1.0.',
+    agi_def_title:'AGI — Artificial General Intelligence',
+    agi_def_score:'min(Reasoning, Agency) = 10.0',
+    agi_def_text1:'Автономный ИИ-исследователь уровня PhD. Демонстрирует истинное обобщение, способен к сложному планированию и надёжной работе (>99%). Может автономно проводить эксперименты, писать продакшен-код и находить ошибки в чужих статьях.',
+    agi_def_text2:'Роль в модели: триггер для RSI и геополитической реакции. Без достаточного уровня Agency невозможен.',
+    asi_def_title:'ASI — Artificial Superintelligence',
+    asi_def_score:'min(Reasoning, Agency) = 100.0',
+    asi_def_text1:'Фазовый переход. ИИ автономно сжимает десятилетия научного прогресса в месяцы. Разрыв между ASI и AGI сопоставим с разницей между академиком и первоклассником.',
+    asi_def_text2:'Роль в модели: конец симуляции. За этой чертой прогнозы теряют смысл.',
+    // Footer
+    footer_note:'Данные оценочные',
+    // Loading
+    loading:'Байесовское прогнозирование v3...',
   },
   en: {
-    run_btn:'Run Forecast', sb_agi:'AGI median', sb_asi:'ASI median',
-    ch1_xlabel:'Year', ch1_ylabel:'Runs',
-    ch3_xlabel:'Year', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
-    fY_suffix:' yrs', fY_gt:'> 40 yrs',
-    // Advanced charts i18n
-    ch5_label:'Years to AGI', ch5_colorbar:'Years to AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score',
-    ch7_ylabel:'Cumulative contribution (log FLOPs)',
-    ch9_ylabel:'P(shift), %',
-    chart5:'3. Sensitivity Heatmap (Intel x Agentic)',
+    // Header
+    hdr_title:'Singularity Forecaster', hdr_sub:'v3 Bayesian Tracker',
+    // Status bar
+    sb_agi:'AGI median', sb_asi:'ASI median',
+    sb_pagi_2029:'P(AGI · 2029)', sb_pagi_2033:'P(AGI · 2033)', sb_pagi_2040:'P(AGI · 2040)',
+    sb_pasi_2035:'P(ASI · 2035)', sb_pasi_2045:'P(ASI · 2045)',
+    // Controls
+    run_btn:'Run Forecast',
+    // Charts
+    tag1:'Probabilistic Analysis', tag3:'Cumulative',
+    chart1:'1. AGI / ASI Distribution (Monte Carlo)',
+    chart3:'2. Cumulative Probability AGI / ASI',
+    chart5:'3. Sensitivity Heatmap (Intel × Agentic)',
     chart6:'4. Scenario Fan (Multi-Run Overlay)',
     chart7:'5. Component Decomposition (Stacked Area)',
-    chart9:'6. Paradigm Shift Timeline',
+    tip1:'Shows where 3000 Monte Carlo runs cluster. Higher bar = more scenarios led to AGI/ASI in that year.',
+    tip3:'P(AGI ≤ X) — chance that AGI appears no later than X years. Steep rise = fast transition from "almost no" to "almost certain".',
     tip5:'Heatmap: axes are Intelligence and Agentic scores of the last observation. Color = median AGI year. Shows which parameter dominates the forecast.',
     tip6:'30 random runs from the posterior distribution, overlaid semi-transparently. Shows the spread of possible paths to singularity.',
     tip7:'Breakdown of capability into components: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Shows what drives progress.',
-    tip9:'Vertical markers — moments when paradigm shift triggered in each run. Marker density = probability of shift in that year.',
+    ch1_xlabel:'Year', ch1_ylabel:'Runs',
+    ch3_xlabel:'Year', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
+    ch5_label:'Years to AGI', ch5_colorbar:'Years to AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score',
+    ch7_ylabel:'Cumulative contribution (log FLOPs)',
+    fY_suffix:' yrs', fY_gt:'> 40 yrs',
+    // About
+    about_title:'About v3 Model',
+    about_intro:'The v3 model uses a Bayesian Particle Filter to calibrate predictions on real Artificial Analysis data. Each particle is a hypothesis about the future: hardware growth rate, algorithm progress, and agency ceiling. AA observations update particle weights via likelihood, and unlikely hypotheses die during resampling.',
+    defs_label:'Model Architecture',
+    defs_intro:'The v3 model uses strict operational definitions based on a two-dimensional scale (Reasoning, Agency), where current frontier models in early 2026 = 1.0.',
+    agi_def_title:'AGI — Artificial General Intelligence',
+    agi_def_score:'min(Reasoning, Agency) = 10.0',
+    agi_def_text1:'Autonomous AI researcher at PhD level. Demonstrates true generalization, capable of complex planning and reliable work (>99%). Can autonomously conduct experiments, write production code, and find errors in others\' papers.',
+    agi_def_text2:'Role in model: trigger for RSI and geopolitical reaction. Impossible without sufficient Agency level.',
+    asi_def_title:'ASI — Artificial Superintelligence',
+    asi_def_score:'min(Reasoning, Agency) = 100.0',
+    asi_def_text1:'Phase transition. AI autonomously compresses decades of scientific progress into months. The gap between ASI and AGI is comparable to the difference between an academician and a first-grader.',
+    asi_def_text2:'Role in model: end of simulation. Beyond this threshold, predictions lose meaning.',
+    // Footer
+    footer_note:'Data is estimated',
+    // Loading
+    loading:'Running Bayesian v3 forecast...',
   }
 };
 function setLang(lang) {
