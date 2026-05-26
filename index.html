@@ -227,14 +227,13 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     <span class="card-tag" data-i18n="tag1">Вероятностный анализ</span>
     <div class="card-header">
       <h3 data-i18n="chart1">1. Распределение AGI / ASI по Monte Carlo</h3>
-      <span class="tip">?<span class="tip-text" data-i18n="tip1">Показывает, где группируются 3000 прогонов Монте-Карло. Чем выше столбец — тем больше сценариев привели к AGI/ASI в этом году. Хвост справа — сценарии «ещё не случилось».</span></span>
     </div>
     <div class="chart-container" id="c1"></div>
   </div>
   <div class="card">
     <span class="card-tag" data-i18n="tag3">Кумулятивная</span>
     <div class="card-header">
-      <h3 data-i18n="chart3">3. Накопленная вероятность AGI / ASI</h3>
+      <h3 data-i18n="chart3">2. Накопленная вероятность AGI / ASI</h3>
       <span class="tip">?<span class="tip-text" data-i18n="tip3">P(AGI <= X) — шанс, что AGI появится не позднее, чем через X лет. Если кривая круто поднимается — быстрый переход от «почти нет» к «почти точно». Плоская часть — затор (data wall, регуляция, энергетика).</span></span>
     </div>
     <div class="chart-container" id="c3"></div>
@@ -246,7 +245,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <div class="card">
     <span class="card-tag" style="background:rgba(6,182,212,.15);color:var(--cyan)">Чувствительность</span>
     <div class="card-header">
-      <h3 data-i18n="chart5">5. Карта чувствительности (Intel × Agentic)</h3>
+      <h3 data-i18n="chart5">3. Карта чувствительности (Intel × Agentic)</h3>
       <span class="tip">?<span class="tip-text" data-i18n="tip5">Тепловая карта: оси — параметры Intelligence и Agentic последнего наблюдения. Цвет — медианный год AGI. Показывает, какой параметр доминирует в прогнозе.</span></span>
     </div>
     <div class="chart-container" id="c5"></div>
@@ -254,7 +253,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <div class="card">
     <span class="card-tag" style="background:rgba(34,197,94,.15);color:var(--green)">Сценарии</span>
     <div class="card-header">
-      <h3 data-i18n="chart6">6. Веер сценариев (Multi-Run Overlay)</h3>
+      <h3 data-i18n="chart6">4. Веер сценариев (Multi-Run Overlay)</h3>
       <span class="tip">?<span class="tip-text" data-i18n="tip6">30 случайных прогонов из апостериорного распределения, наложенных полупрозрачно. Показывает разброс возможных путей к сингулярности.</span></span>
     </div>
     <div class="chart-container" id="c6"></div>
@@ -262,7 +261,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <div class="card">
     <span class="card-tag" style="background:rgba(240,136,62,.15);color:var(--orange)">Декомпозиция</span>
     <div class="card-header">
-      <h3 data-i18n="chart7">7. Вклад компонент (Stacked Area)</h3>
+      <h3 data-i18n="chart7">5. Вклад компонент (Stacked Area)</h3>
       <span class="tip">?<span class="tip-text" data-i18n="tip7">Разбивка capability на составляющие: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Показывает, что двигает прогресс.</span></span>
     </div>
     <div class="chart-container" id="c7"></div>
@@ -270,7 +269,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <div class="card">
     <span class="card-tag" style="background:rgba(167,139,250,.15);color:var(--purple)">Парадигмы</span>
     <div class="card-header">
-      <h3 data-i18n="chart9">9. Таймлайн смены парадигм</h3>
+      <h3 data-i18n="chart9">6. Таймлайн смены парадигм</h3>
       <span class="tip">?<span class="tip-text" data-i18n="tip9">Столбцы — количество срабатываний смены парадигмы за год по 500 прогонам. Высокий столбец = вероятность сдвига в этот год.</span></span>
     </div>
     <div class="chart-container" id="c9"></div>

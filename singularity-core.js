@@ -406,12 +406,14 @@ class BayesianTracker {
     cumw[0] = this.weights[0];
     for (let i = 1; i < this.n; i++) cumw[i] = cumw[i - 1] + this.weights[i];
 
-    // For each year, count runs with at least one paradigm shift
     const yearStart = 2027;
     const yearEnd = 2045;
     const years = [];
     for (let y = yearStart; y <= yearEnd; y++) years.push(y);
-    const runCounts = new Array(years.length).fill(0);
+
+    // For each year: count runs that reached this year AND had a shift
+    const shiftCounts = new Array(years.length).fill(0);
+    const aliveCounts = new Array(years.length).fill(0);
 
     const dt = 1.0 / 12.0;
     const maxSteps = 12 * 45;
@@ -428,25 +430,39 @@ class BayesianTracker {
       const hwK = Math.log(2) / Math.max(1.0, p.hw_months / 12.0);
       const algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
 
-      // Track which years had at least one shift in this run
       const shiftedYears = new Set();
+      let alive = true;
 
       for (let step = 0; step < maxSteps; step++) {
         const y = cfg.BASE_YEAR + step * dt;
+        const year = Math.floor(y);
+
+        // Check if still alive at the start of this year
+        if (alive) {
+          const yearIdx = year - yearStart;
+          if (yearIdx >= 0 && yearIdx < aliveCounts.length) {
+            aliveCounts[yearIdx]++;
+          }
+        }
+
         if (y > cfg.CURRENT_YEAR && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
-          const year = Math.floor(y);
           shiftedYears.add(year);
           cA *= cfg.SCALING_LAW.shift_multiplier;
           cR *= cfg.SCALING_LAW.shift_multiplier;
           baseLog -= 0.5;
         }
+
         const logDiff = flopsLog + algoLog - baseLog;
         const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
         const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
         const reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
         const agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
         const cap = Math.min(reasoning, agency);
-        if (cap >= cfg.THRESHOLDS.asi) break;
+
+        if (cap >= cfg.THRESHOLDS.asi) {
+          alive = false;
+          break;
+        }
 
         let damping = 1.0;
         if (y > cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
@@ -461,15 +477,19 @@ class BayesianTracker {
         algoLog += (algoK * damping + rsi) * dt;
       }
 
-      // Increment counts for years that had shifts
+      // Increment shift counts for years that had shifts
       for (const year of shiftedYears) {
         const i = year - yearStart;
-        if (i >= 0 && i < runCounts.length) runCounts[i]++;
+        if (i >= 0 && i < shiftCounts.length) shiftCounts[i]++;
       }
     }
 
-    // Convert to percentages
-    const percentages = runCounts.map(c => (c / nRuns) * 100);
+    // Conditional probability: P(shift | alive) = shiftCounts / aliveCounts
+    const percentages = years.map((_, i) => {
+      if (aliveCounts[i] === 0) return 0;
+      return (shiftCounts[i] / aliveCounts[i]) * 100;
+    });
+
     return { years, percentages };
   }
 
@@ -757,10 +777,10 @@ const LANG = {
     ch5_label:'Лет до AGI', ch5_colorbar:'Лет до AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score',
     ch7_ylabel:'Суммарный вклад (log FLOPs)',
     ch9_ylabel:'P(сдвиг), %',
-    chart5:'5. Карта чувствительности (Intel x Agentic)',
-    chart6:'6. Веер сценариев (Multi-Run Overlay)',
-    chart7:'7. Вклад компонент (Stacked Area)',
-    chart9:'9. Таймлайн смены парадигм',
+    chart5:'3. Карта чувствительности (Intel x Agentic)',
+    chart6:'4. Веер сценариев (Multi-Run Overlay)',
+    chart7:'5. Вклад компонент (Stacked Area)',
+    chart9:'6. Таймлайн смены парадигм',
     tip5:'Тепловая карта: оси — параметры Intelligence и Agentic последнего наблюдения. Цвет — медианный год AGI. Показывает, какой параметр доминирует в прогнозе.',
     tip6:'30 случайных прогонов из апостериорного распределения, наложенных полупрозрачно. Показывает разброс возможных путей к сингулярности.',
     tip7:'Разбивка capability на составляющие: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Показывает, что двигает прогресс.',
@@ -775,10 +795,10 @@ const LANG = {
     ch5_label:'Years to AGI', ch5_colorbar:'Years to AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score',
     ch7_ylabel:'Cumulative contribution (log FLOPs)',
     ch9_ylabel:'P(shift), %',
-    chart5:'5. Sensitivity Heatmap (Intel x Agentic)',
-    chart6:'6. Scenario Fan (Multi-Run Overlay)',
-    chart7:'7. Component Decomposition (Stacked Area)',
-    chart9:'9. Paradigm Shift Timeline',
+    chart5:'3. Sensitivity Heatmap (Intel x Agentic)',
+    chart6:'4. Scenario Fan (Multi-Run Overlay)',
+    chart7:'5. Component Decomposition (Stacked Area)',
+    chart9:'6. Paradigm Shift Timeline',
     tip5:'Heatmap: axes are Intelligence and Agentic scores of the last observation. Color = median AGI year. Shows which parameter dominates the forecast.',
     tip6:'30 random runs from the posterior distribution, overlaid semi-transparently. Shows the spread of possible paths to singularity.',
     tip7:'Breakdown of capability into components: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Shows what drives progress.',
