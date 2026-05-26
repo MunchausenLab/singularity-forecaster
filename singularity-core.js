@@ -238,10 +238,196 @@ class BayesianTracker {
             med.push(percentile(vals, 50));  p75a.push(percentile(vals, 75)); p90a.push(percentile(vals, 90));
         }
     }
-    return { 
-        agiYears, asiYears, 
+    return {
+        agiYears, asiYears,
         trajectory: { years: yrs, median: med, p10: p10a, p25: p25a, p75: p75a, p90: p90a, agiThreshold: 10, asiThreshold: 100 }
     };
+  }
+
+  // ==========================================================================
+  // ADVANCED ANALYSIS: Sensitivity, Scenarios, Decomposition, Paradigm Shifts
+  // ==========================================================================
+
+  runSensitivityMatrix(intelRange, agenticRange) {
+    const results = [];
+    const baseObs = AA_FRONTIER_DATA[AA_FRONTIER_DATA.length - 1];
+    for (const intel of intelRange) {
+      const row = [];
+      for (const agentic of agenticRange) {
+        const tmpTracker = new BayesianTracker(200);
+        AA_FRONTIER_DATA.forEach(d => tmpTracker.observeAAData(d.year, d.intel, d.agentic, 1.5));
+        tmpTracker.observeAAData(baseObs.year, intel, agentic, 1.0);
+        const mc = tmpTracker.runMonteCarloForecast(200);
+        const finite = mc.agiYears.filter(isFinite);
+        row.push(finite.length > 0 ? percentile(finite, 50) : 40);
+      }
+      results.push(row);
+    }
+    return results;
+  }
+
+  runScenarioOverlay(nScenarios) {
+    const cfg = this.cfg;
+    const cumw = new Float64Array(this.n);
+    cumw[0] = this.weights[0];
+    for (let i = 1; i < this.n; i++) cumw[i] = cumw[i - 1] + this.weights[i];
+
+    const scenarios = [];
+    const dt = 1.0 / 12.0;
+    const steps = 40 * 12;
+
+    for (let s = 0; s < nScenarios; s++) {
+      const u = Math.random();
+      let idx = 0; while (idx < this.n - 1 && cumw[idx] < u) idx++;
+      const p = this.particles[idx];
+
+      let flopsLog = cfg.BASE_LOG_FLOPS, algoLog = 0;
+      let baseLog = flopsLog;
+      const hwK = Math.log(2) / Math.max(1.0, p.hw_months / 12.0);
+      const algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
+      let cR = cfg.DIMENSIONS.reasoning.ceiling;
+      let cA = p.agency_ceiling;
+
+      const years = [], caps = [];
+      for (let step = 0; step < steps; step++) {
+        const y = cfg.BASE_YEAR + step * dt;
+        if (y > cfg.CURRENT_YEAR && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
+          cA *= cfg.SCALING_LAW.shift_multiplier;
+          cR *= cfg.SCALING_LAW.shift_multiplier;
+          baseLog -= 0.5;
+        }
+        const logDiff = flopsLog + algoLog - baseLog;
+        const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
+        const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
+        const reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
+        const agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
+        years.push(y);
+        caps.push(Math.min(reasoning, agency));
+
+        let damping = 1.0;
+        if (y > cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
+          damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
+        }
+        let rsi = 0;
+        const cap = Math.min(reasoning, agency);
+        if (cap >= 5.0) {
+          const progress = Math.max(0, Math.min(1.0, (cap - 5.0) / 35.0));
+          rsi = 0.08 * progress * Math.log(1.0 + cap);
+        }
+        flopsLog += hwK * damping * dt;
+        algoLog += (algoK * damping + rsi) * dt;
+      }
+      scenarios.push({ years, caps });
+    }
+    return scenarios;
+  }
+
+  runDecomposition() {
+    const cfg = this.cfg;
+    const p = this.particles[0];
+    let flopsLog = cfg.BASE_LOG_FLOPS, algoLog = 0;
+    let baseLog = flopsLog;
+    const hwK = Math.log(2) / Math.max(1.0, p.hw_months / 12.0);
+    const algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
+    let cR = cfg.DIMENSIONS.reasoning.ceiling;
+    let cA = p.agency_ceiling;
+
+    const dt = 1.0 / 12.0;
+    const steps = 40 * 12;
+    const years = [], hwComp = [], algoComp = [], paradigmComp = [], rsiComp = [];
+    let accumulatedParadigm = 0, accumulatedRsi = 0;
+
+    for (let step = 0; step < steps; step++) {
+      const y = cfg.BASE_YEAR + step * dt;
+      let paradigmBonus = 0, rsiBonus = 0;
+      if (y > cfg.CURRENT_YEAR && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
+        cA *= cfg.SCALING_LAW.shift_multiplier;
+        cR *= cfg.SCALING_LAW.shift_multiplier;
+        baseLog -= 0.5;
+        paradigmBonus = cfg.SCALING_LAW.shift_multiplier;
+        accumulatedParadigm += paradigmBonus;
+      }
+      const logDiff = flopsLog + algoLog - baseLog;
+      const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
+      const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
+      const reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
+      const agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
+      const cap = Math.min(reasoning, agency);
+
+      years.push(y);
+      hwComp.push(flopsLog - cfg.BASE_LOG_FLOPS);
+      algoComp.push(algoLog);
+      paradigmComp.push(accumulatedParadigm);
+
+      let damping = 1.0;
+      if (y > cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
+        damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
+      }
+      let rsi = 0;
+      if (cap >= 5.0) {
+        const progress = Math.max(0, Math.min(1.0, (cap - 5.0) / 35.0));
+        rsi = 0.08 * progress * Math.log(1.0 + cap);
+        accumulatedRsi += rsi * dt;
+      }
+      rsiComp.push(accumulatedRsi);
+      flopsLog += hwK * damping * dt;
+      algoLog += (algoK * damping + rsi) * dt;
+    }
+    return { years, hwComp, algoComp, paradigmComp, rsiComp };
+  }
+
+  runParadigmShiftTimeline(nRuns) {
+    const cfg = this.cfg;
+    const cumw = new Float64Array(this.n);
+    cumw[0] = this.weights[0];
+    for (let i = 1; i < this.n; i++) cumw[i] = cumw[i - 1] + this.weights[i];
+
+    const shiftYears = [];
+    const dt = 1.0 / 12.0;
+    const maxSteps = 12 * 45;
+
+    for (let run = 0; run < nRuns; run++) {
+      const u = Math.random();
+      let idx = 0; while (idx < this.n - 1 && cumw[idx] < u) idx++;
+      const p = this.particles[idx];
+
+      let flopsLog = cfg.BASE_LOG_FLOPS, algoLog = 0;
+      let baseLog = flopsLog;
+      let cR = cfg.DIMENSIONS.reasoning.ceiling;
+      let cA = p.agency_ceiling;
+      const hwK = Math.log(2) / Math.max(1.0, p.hw_months / 12.0);
+      const algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
+
+      for (let step = 0; step < maxSteps; step++) {
+        const y = cfg.BASE_YEAR + step * dt;
+        if (y > cfg.CURRENT_YEAR && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
+          shiftYears.push(y);
+          cA *= cfg.SCALING_LAW.shift_multiplier;
+          cR *= cfg.SCALING_LAW.shift_multiplier;
+          baseLog -= 0.5;
+        }
+        const logDiff = flopsLog + algoLog - baseLog;
+        const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
+        const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
+        const reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
+        const agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
+        const cap = Math.min(reasoning, agency);
+        if (cap >= cfg.THRESHOLDS.asi) break;
+
+        let damping = 1.0;
+        if (y > cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
+          damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
+        }
+        let rsi = 0;
+        if (cap >= 5.0) {
+          const progress = Math.max(0, Math.min(1.0, (cap - 5.0) / 35.0));
+          rsi = 0.08 * progress * Math.log(1.0 + cap);
+        }
+        flopsLog += hwK * damping * dt;
+        algoLog += (algoK * damping + rsi) * dt;
+      }
+    }
+    return shiftYears;
   }
 
 }
@@ -350,6 +536,17 @@ function updateUI(r) {
   colorProb('v29', s.pAgi2029); colorProb('v33', s.pAgi2033); colorProb('v40', s.pAgi2040);
   plotHistogram(r.histogram); plotTrajectory(r.trajectory); plotCumulative(r.cumulative);
   plotEntropyGauge(v3GetTracker());
+  // Advanced charts (async-like, yield between heavy plots)
+  requestAnimationFrame(() => {
+    const tracker = v3GetTracker();
+    plotSensitivityHeatmap(tracker);
+    requestAnimationFrame(() => {
+      plotScenarioFan(tracker);
+      plotDecomposition(tracker);
+      plotDistributionCDF(r.histogram._agiYears || []);
+      plotParadigmShifts(tracker);
+    });
+  });
 }
 
 function setVal(id, txt, cls) { const el = document.getElementById(id); el.innerHTML = txt; el.className = 'status-value ' + (cls||''); }
@@ -380,7 +577,8 @@ function buildHistogramBins(listAgi, listAsi = []) {
   const CUR_Y = 2026.30;
   return { 
     labels: bins.slice(0, -1).map((_, i) => (CUR_Y + (bins[i] + bins[i + 1]) / 2).toFixed(1)), 
-    agi: hAgi, asi: hAsi 
+    agi: hAgi, asi: hAsi,
+    _agiYears: listAgi,
   };
 }
 
@@ -476,6 +674,139 @@ function plotEntropyGauge(tracker) {
   </div>`;
 }
 
+// ===== NEW ADVANCED PLOT FUNCTIONS =====
+
+function plotSensitivityHeatmap(tracker) {
+  const t = LANG[window._lang || 'ru'];
+  const intelRange = [40, 45, 50, 55, 60, 65, 70, 75, 80, 85];
+  const agenticRange = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
+  // Run sensitivity matrix (this is expensive, limit grid)
+  const matrix = tracker.runSensitivityMatrix(intelRange, agenticRange);
+
+  const textMatrix = matrix.map((row, i) =>
+    row.map((v, j) => `Intel=${intelRange[i]}, Agentic=${agenticRange[j]}<br>${t.ch5_label}: ${v.toFixed(1)} лет`)
+  );
+
+  Plotly.newPlot('c5', [{
+    z: matrix,
+    x: agenticRange.map(String),
+    y: intelRange.map(String),
+    type: 'heatmap',
+    colorscale: [[0, '#0a0a0f'], [0.2, '#1a3a4a'], [0.4, '#0e5e7a'], [0.6, '#f0883e'], [0.8, '#ef4444'], [1, '#ff0040']],
+    text: textMatrix,
+    hoverinfo: 'text',
+    colorbar: { title: { text: t.ch5_colorbar || 'Лет до AGI' }, thickness: 12, len: 0.8 },
+  }], {
+    ...LAYOUT_BASE,
+    xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch5_xaxis || 'Agentic score' } },
+    yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch5_yaxis || 'Intelligence score' } },
+    margin: { ...LAYOUT_BASE.margin, l: 52 },
+  }, PLOT_CFG);
+}
+
+function plotScenarioFan(tracker) {
+  const t = LANG[window._lang || 'ru'];
+  const scenarios = tracker.runScenarioOverlay(30);
+  const traces = scenarios.map((s, i) => ({
+    x: s.years,
+    y: s.caps,
+    type: 'scatter',
+    mode: 'lines',
+    line: { color: 'rgba(88,166,255,0.15)', width: 1 },
+    showlegend: false,
+    hoverinfo: i === 0 ? 'skip' : 'skip',
+  }));
+
+  // Add AGI/ASI lines
+  const yrRange = [2026, 2050];
+  traces.push(
+    { x: yrRange, y: [10, 10], type: 'scatter', mode: 'lines', name: t.ch_legend_agi, line: { color: '#f0883e', dash: 'dot', width: 1 } },
+    { x: yrRange, y: [100, 100], type: 'scatter', mode: 'lines', name: t.ch_legend_asi, line: { color: '#ef4444', dash: 'dot', width: 1 } }
+  );
+
+  Plotly.newPlot('c6', traces, {
+    ...LAYOUT_BASE,
+    xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel }, range: yrRange },
+    yaxis: { ...LAYOUT_BASE.yaxis, type: 'log', range: [0, 2.0], title: { text: 'Capability (log)' } },
+  }, PLOT_CFG);
+}
+
+function plotDecomposition(tracker) {
+  const t = LANG[window._lang || 'ru'];
+  const d = tracker.runDecomposition();
+
+  Plotly.newPlot('c7', [
+    { x: d.years, y: d.hwComp, type: 'scatter', mode: 'lines', name: 'Hardware', stackgroup: 'one', fillcolor: 'rgba(88,166,255,0.5)', line: { color: '#58a6ff', width: 0.5 } },
+    { x: d.years, y: d.algoComp, type: 'scatter', mode: 'lines', name: 'Algorithms', stackgroup: 'one', fillcolor: 'rgba(34,197,94,0.5)', line: { color: '#22c55e', width: 0.5 } },
+    { x: d.years, y: d.paradigmComp, type: 'scatter', mode: 'lines', name: 'Paradigm Shifts', stackgroup: 'one', fillcolor: 'rgba(167,139,250,0.5)', line: { color: '#a78bfa', width: 0.5 } },
+    { x: d.years, y: d.rsiComp, type: 'scatter', mode: 'lines', name: 'RSI Feedback', stackgroup: 'one', fillcolor: 'rgba(239,68,68,0.5)', line: { color: '#ef4444', width: 0.5 } },
+  ], {
+    ...LAYOUT_BASE,
+    xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel } },
+    yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch7_ylabel || 'Суммарный вклад (log FLOPs)' } },
+    legend: { ...LAYOUT_BASE.legend, orientation: 'h', y: -0.15 },
+  }, PLOT_CFG);
+}
+
+function plotDistributionCDF(agiYears) {
+  const t = LANG[window._lang || 'ru'];
+  const finite = agiYears.filter(isFinite).sort((a, b) => a - b);
+  if (finite.length === 0) return;
+
+  const cdfY = finite.map((_, i) => ((i + 1) / finite.length) * 100);
+  const CUR_Y = 2026.30;
+  const cdfX = finite.map(v => +(CUR_Y + v).toFixed(2));
+
+  // Also build histogram for bimodality check
+  const bins = [], binW = 1.0;
+  for (let x = 1; x <= 20; x += binW) bins.push(x);
+  const hist = new Array(bins.length).fill(0);
+  for (const v of finite) {
+    const idx = Math.min(Math.floor((v - 1) / binW), bins.length - 1);
+    if (idx >= 0) hist[idx]++;
+  }
+  const histLabels = bins.map(b => (CUR_Y + b + binW / 2).toFixed(1));
+
+  const yAxis2 = { ...LAYOUT_BASE.yaxis, title: { text: t.ch1_ylabel }, overlaying: 'y', side: 'right', range: [0, Math.max(...hist) * 1.2] };
+
+  Plotly.newPlot('c8', [
+    { x: cdfX, y: cdfY, type: 'scatter', mode: 'lines', name: 'CDF AGI', line: { color: '#f0883e', width: 2.5 }, fill: 'tozeroy', fillcolor: 'rgba(240,136,62,.06)', yaxis: 'y' },
+    { x: histLabels, y: hist, type: 'bar', name: 'Распределение', marker: { color: 'rgba(167,139,250,0.4)' }, yaxis: 'y2', opacity: 0.6 },
+  ], {
+    ...LAYOUT_BASE,
+    xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch3_xlabel } },
+    yaxis: { title: { text: 'CDF %' }, range: [0, 105] },
+    yaxis2: { title: { text: t.ch1_ylabel }, overlaying: 'y', side: 'right', showgrid: false },
+    legend: { ...LAYOUT_BASE.legend, orientation: 'h', y: -0.15 },
+    margin: { ...LAYOUT_BASE.margin, r: 52 },
+  }, PLOT_CFG);
+}
+
+function plotParadigmShifts(tracker) {
+  const t = LANG[window._lang || 'ru'];
+  const shiftYears = tracker.runParadigmShiftTimeline(500);
+
+  // Build density histogram
+  const bins = [], binW = 0.5;
+  for (let x = 2026; x <= 2045; x += binW) bins.push(x);
+  const counts = new Array(bins.length - 1).fill(0);
+  for (const sy of shiftYears) {
+    const idx = Math.floor((sy - 2026) / binW);
+    if (idx >= 0 && idx < counts.length) counts[idx]++;
+  }
+  const binLabels = bins.slice(0, -1).map((b, i) => (b + bins[i + 1]) / 2);
+
+  Plotly.newPlot('c9', [
+    { x: binLabels, y: counts, type: 'bar', name: 'Смены парадигм', marker: { color: counts.map(v => v > 50 ? '#ef4444' : v > 20 ? '#f0883e' : '#a78bfa') } },
+  ], {
+    ...LAYOUT_BASE,
+    xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel }, dtick: 1 },
+    yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch9_ylabel || 'Срабатываний / полгода' } },
+    bargap: 0.05,
+  }, PLOT_CFG);
+}
+
 window._lang = 'ru';
 const LANG = {
   ru: {
@@ -485,7 +816,21 @@ const LANG = {
     ch3_xlabel:'Год', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
     ch4_label_base:'База', fY_suffix:' лет', fY_gt:'> 40 лет',
     entropy_consensus:'Консенсус', entropy_moderate:'Умеренная неопределённость', entropy_confusion:'Модель в замешательстве',
-    entropy_desc:'Энтропия показывает насколько частицы размазаны. Низкая = консенсус, высокая = данные противоречивы.'
+    entropy_desc:'Энтропия показывает насколько частицы размазаны. Низкая = консенсус, высокая = данные противоречивы.',
+    // Advanced charts i18n
+    ch5_label:'Лет до AGI', ch5_colorbar:'Лет до AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score',
+    ch7_ylabel:'Суммарный вклад (log FLOPs)',
+    ch9_ylabel:'Срабатываний / полгода',
+    chart5:'5. Карта чувствительности (Intel x Agentic)',
+    chart6:'6. Веер сценариев (Multi-Run Overlay)',
+    chart7:'7. Вклад компонент (Stacked Area)',
+    chart8:'8. Распределение года AGI (CDF)',
+    chart9:'9. Таймлайн смены парадигм',
+    tip5:'Тепловая карта: оси — параметры Intelligence и Agentic последнего наблюдения. Цвет — медианный год AGI. Показывает, какой параметр доминирует в прогнозе.',
+    tip6:'30 случайных прогонов из апостериорного распределения, наложенных полупрозрачно. Показывает разброс возможных путей к сингулярности.',
+    tip7:'Разбивка capability на составляющие: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Показывает, что двигает прогресс.',
+    tip8:'Кумулятивное распределение года достижения AGI по всем прогонам. Бимодальность = два кластера сценариев. Крутой подъём = модель уверена.',
+    tip9:'Вертикальные маркеры — моменты, когда в каждом прогоне сработала смена парадигмы. Плотность маркеров = вероятность сдвига в данный год.',
   },
   en: {
     run_btn:'Run Forecast', sb_agi:'AGI median', sb_asi:'ASI median',
@@ -494,13 +839,32 @@ const LANG = {
     ch3_xlabel:'Year', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
     ch4_label_base:'Base', fY_suffix:' yrs', fY_gt:'> 40 yrs',
     entropy_consensus:'Consensus', entropy_moderate:'Moderate uncertainty', entropy_confusion:'Model confused',
-    entropy_desc:'Entropy shows how spread particles are. Low = consensus, high = contradictory data.'
+    entropy_desc:'Entropy shows how spread particles are. Low = consensus, high = contradictory data.',
+    // Advanced charts i18n
+    ch5_label:'Years to AGI', ch5_colorbar:'Years to AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score',
+    ch7_ylabel:'Cumulative contribution (log FLOPs)',
+    ch9_ylabel:'Triggers / half-year',
+    chart5:'5. Sensitivity Heatmap (Intel x Agentic)',
+    chart6:'6. Scenario Fan (Multi-Run Overlay)',
+    chart7:'7. Component Decomposition (Stacked Area)',
+    chart8:'8. AGI Year Distribution (CDF)',
+    chart9:'9. Paradigm Shift Timeline',
+    tip5:'Heatmap: axes are Intelligence and Agentic scores of the last observation. Color = median AGI year. Shows which parameter dominates the forecast.',
+    tip6:'30 random runs from the posterior distribution, overlaid semi-transparently. Shows the spread of possible paths to singularity.',
+    tip7:'Breakdown of capability into components: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Shows what drives progress.',
+    tip8:'Cumulative distribution of AGI achievement year across all runs. Bimodality = two scenario clusters. Steep rise = model is confident.',
+    tip9:'Vertical markers — moments when paradigm shift triggered in each run. Marker density = probability of shift in that year.',
   }
 };
 function setLang(lang) {
   window._lang = lang;
   document.getElementById('lang_ru').classList.toggle('active', lang === 'ru');
   document.getElementById('lang_en').classList.toggle('active', lang === 'en');
+  const t = LANG[lang];
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (t[key]) el.textContent = t[key];
+  });
 }
 
 window.addEventListener('load', () => setLang('ru'));
