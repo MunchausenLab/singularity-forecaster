@@ -748,9 +748,10 @@ const LANG = {
     // Loading
     loading:'Байесовское прогнозирование v3...',
     // Swarm
-    swarm_title:'Анимация: «Сжатие роя» (Bayesian Particle Swarm)',
-    swarm_desc:'Интерактивная визуализация того, как модель «думает» и учится на исторических данных. Каждая точка — гипотеза о будущем. Ось X — скорость удвоения железа (месяцев), Ось Y — потолок агентности. При поступлении новых данные слабые гипотезы тускнеют, сильные — ярют и клонируются.',
-    swarm_play:'Запуск', swarm_reset:'Сброс', swarm_drag:'Перетаскивайте ползунок для ручного просмотра',
+    swarm_title:'Анимация: «Сжатие роя»',
+    swarm_desc:'Интерактивная визуализация байесовского обучения. Режим «Обучение» показывает как наблюдения убивают слабые гипотезы. Режим «Прогноз» разворачивает выжившие гипотезы в предсказания AGI/ASI.',
+    swarm_play:'Запуск', swarm_reset:'Сброс', swarm_hint:'Нажмите «Запуск» или перетаскивайте ползунок',
+    swarm_mode_learn:'Обучение', swarm_mode_forecast:'Прогноз',
   },
   en: {
     // Header
@@ -813,137 +814,198 @@ const LANG = {
     loading:'Running Bayesian v3 forecast...',
     // Swarm
     swarm_title:'Bayesian Particle Swarm',
-    swarm_desc:'Interactive visualization of how the model "thinks" and learns from historical data. Each dot is a hypothesis about the future. X-axis — hardware doubling speed (months), Y-axis — agency ceiling. As new data arrives, weak hypotheses dim, strong ones brighten and clone.',
-    swarm_play:'Play', swarm_reset:'Reset', swarm_drag:'Drag the slider for manual playback',
+    swarm_desc:'Interactive visualization of Bayesian learning. "Learning" mode shows how observations kill weak hypotheses. "Forecast" mode unfolds surviving hypotheses into AGI/ASI predictions.',
+    swarm_play:'Play', swarm_reset:'Reset', swarm_hint:'Press Play or drag the slider',
+    swarm_mode_learn:'Learning', swarm_mode_forecast:'Forecast',
   }
 };
 
 // ===== PARTICLE SWARM ANIMATION =====
-let swarmAnimating = false;
-let swarmRafId = null;
-let swarmTracker = null;
-let swarmObsIdx = 0;
-let swarmParticles = [];
-let swarmWeights = [];
+// ===== PARTICLE SWARM v2 =====
+let swarm = { mode:'learn', obsIdx:0, tracker:null, particles:[], weights:[], animating:false, rafId:null };
 
-const SWARM_PAD = 50;
-const SWARM_X_MIN = 2, SWARM_X_MAX = 20;
-const SWARM_Y_MIN = 1, SWARM_Y_MAX = 25;
+function swarmBuildTracker(idx) {
+  const t = new BayesianTracker(1000);
+  for (let i = 0; i < idx && i < AA_FRONTIER_DATA.length; i++) {
+    const d = AA_FRONTIER_DATA[i];
+    t.observeAAData(d.year, d.intel, d.agentic, 1.5);
+  }
+  return t;
+}
 
 function swarmInit() {
-  const canvas = document.getElementById('swarmCanvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
+  const c = document.getElementById('swarmCanvas');
+  if (!c) return;
+  const ctx = c.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = canvas.offsetWidth * dpr;
-  canvas.height = canvas.offsetHeight * dpr;
+  c.width = c.offsetWidth * dpr; c.height = c.offsetHeight * dpr;
   ctx.scale(dpr, dpr);
-  swarmTracker = new BayesianTracker(1000);
-  swarmObsIdx = 0;
-  swarmParticles = swarmTracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling }));
-  swarmWeights = Array.from(swarmTracker.weights);
+  swarm.tracker = swarmBuildTracker(swarm.obsIdx);
+  swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling }));
+  swarm.weights = Array.from(swarm.tracker.weights);
+  swarmDraw();
+}
+
+function swarmSetMode(m) {
+  swarm.mode = m;
+  document.getElementById('swarmModeLearn').classList.toggle('active', m === 'learn');
+  document.getElementById('swarmModeForecast').classList.toggle('active', m === 'forecast');
+  swarmDraw();
+}
+
+function swarmOnSlider(v) {
+  swarm.obsIdx = +v;
+  swarm.tracker = swarmBuildTracker(v);
+  swarm.weights = Array.from(swarm.tracker.weights);
+  swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling }));
   swarmDraw();
 }
 
 function swarmDraw() {
-  const canvas = document.getElementById('swarmCanvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const w = canvas.offsetWidth, h = canvas.offsetHeight;
+  const c = document.getElementById('swarmCanvas');
+  if (!c || !swarm.tracker) return;
+  const ctx = c.getContext('2d');
+  const w = c.offsetWidth, h = c.offsetHeight;
   ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = '#0a0a0f';
-  ctx.fillRect(0, 0, w, h);
-  const pw = w - SWARM_PAD * 2, ph = h - SWARM_PAD * 2;
-  ctx.strokeStyle = '#2a2a3a';
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const x = SWARM_PAD + (pw * i / 4);
-    ctx.beginPath(); ctx.moveTo(x, SWARM_PAD); ctx.lineTo(x, h - SWARM_PAD); ctx.stroke();
-    const y = SWARM_PAD + (ph * i / 4);
-    ctx.beginPath(); ctx.moveTo(SWARM_PAD, y); ctx.lineTo(w - SWARM_PAD, y); ctx.stroke();
+  ctx.fillStyle = '#0a0a0f'; ctx.fillRect(0, 0, w, h);
+  const pad = 50, pw = w - pad * 2, ph = h - pad * 2;
+  ctx.strokeStyle = '#1a1a2a'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 5; i++) {
+    const x = pad + (pw * i / 5); ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, h - pad); ctx.stroke();
+    const y = pad + (ph * i / 5); ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w - pad, y); ctx.stroke();
   }
-  ctx.fillStyle = '#666680';
-  ctx.font = '11px Inter, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('Удвоение HW (мес)', w / 2, h - 10);
-  ctx.save();
-  ctx.translate(14, h / 2);
-  ctx.rotate(-Math.PI / 2);
-  ctx.fillText('Потолок Agency', 0, 0);
-  ctx.restore();
-  const maxW = Math.max(...swarmWeights, 0.001);
-  for (let i = 0; i < swarmParticles.length; i++) {
-    const px = swarmParticles[i].x, py = swarmParticles[i].y;
-    const sx = SWARM_PAD + ((px - SWARM_X_MIN) / (SWARM_X_MAX - SWARM_X_MIN)) * pw;
-    const sy = h - SWARM_PAD - ((py - SWARM_Y_MIN) / (SWARM_Y_MAX - SWARM_Y_MIN)) * ph;
-    const nw = swarmWeights[i] / maxW;
-    const alpha = 0.15 + nw * 0.85;
-    const r = 1.5 + nw * 2.5;
-    if (nw > 0.3) {
-      ctx.fillStyle = `rgba(88,166,255,${alpha * 0.3})`;
-      ctx.beginPath(); ctx.arc(sx, sy, r * 3, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.fillStyle = nw > 0.5 ? `rgba(88,166,255,${alpha})` : nw > 0.1 ? `rgba(167,139,250,${alpha})` : `rgba(100,100,130,${alpha * 0.6})`;
-    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
-  }
-  if (swarmObsIdx > 0 && swarmObsIdx <= AA_FRONTIER_DATA.length) {
-    const obs = AA_FRONTIER_DATA[swarmObsIdx - 1];
-    ctx.fillStyle = '#f0883e';
-    ctx.font = 'bold 12px Inter, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(`${obs.year.toFixed(2)}: ${obs.event}`, w - SWARM_PAD, SWARM_PAD + 16);
-    ctx.font = '11px JetBrains Mono, monospace';
-    ctx.fillStyle = '#9898b0';
-    ctx.fillText(`I=${obs.intel.toFixed(0)} A=${obs.agentic.toFixed(1)}`, w - SWARM_PAD, SWARM_PAD + 32);
-  }
-  const ess = 1.0 / swarmWeights.reduce((a, b) => a + b * b, 0);
-  ctx.fillStyle = '#666680';
-  ctx.font = '10px JetBrains Mono, monospace';
-  ctx.textAlign = 'left';
-  ctx.fillText(`ESS: ${ess.toFixed(0)} | N: ${swarmParticles.length}`, SWARM_PAD, SWARM_PAD - 6);
+  if (swarm.mode === 'learn') swarmDrawLearn(ctx, w, h, pad, pw, ph);
+  else swarmDrawForecast(ctx, w, h, pad, pw, ph);
+  swarmDrawOverlay(ctx, w, h, pad);
 }
 
-function swarmStep() {
-  if (swarmObsIdx >= AA_FRONTIER_DATA.length) {
-    swarmAnimating = false;
-    const t = LANG[window._lang || 'ru'];
-    document.getElementById('swarmPlayBtn').innerHTML = '<span>' + (t.swarm_play || 'Запуск') + '</span>';
-    return;
+function swarmDrawLearn(ctx, w, h, pad, pw, ph) {
+  const maxW = Math.max(...swarm.weights, 1e-10);
+  const bins = 40;
+  const binW = 20 / bins, binH = 24 / bins;
+  const grid = new Float64Array(bins * bins);
+  for (let i = 0; i < swarm.particles.length; i++) {
+    const px = Math.min(bins - 1, Math.max(0, Math.floor((swarm.particles[i].x - 2) / binW)));
+    const py = Math.min(bins - 1, Math.max(0, Math.floor((swarm.particles[i].y - 1) / binH)));
+    grid[py * bins + px] += swarm.weights[i];
   }
-  const obs = AA_FRONTIER_DATA[swarmObsIdx];
-  swarmTracker.observeAAData(obs.year, obs.intel, obs.agentic, 1.5);
-  swarmWeights = Array.from(swarmTracker.weights);
-  swarmObsIdx++;
-  swarmDraw();
-  const eventEl = document.getElementById('swarmEvent');
-  if (eventEl) {
-    eventEl.textContent = obs.event;
-    eventEl.style.opacity = '1';
-    setTimeout(() => { eventEl.style.opacity = '0'; }, 2000);
+  const maxBin = Math.max(...grid, 1e-10);
+  for (let by = 0; by < bins; by++) {
+    for (let bx = 0; bx < bins; bx++) {
+      const d = grid[by * bins + bx] / maxBin;
+      if (d < 0.01) continue;
+      const alpha = Math.min(1, d * 1.5);
+      const r = Math.floor(88 + d * 100), g = Math.floor(100 + d * 66), b = Math.floor(180 + d * 75);
+      ctx.fillStyle = `rgba(${r},${g},${b},${alpha * 0.6})`;
+      ctx.fillRect(pad + (bx / bins) * pw, h - pad - ((by + 1) / bins) * ph, pw / bins + 0.5, ph / bins + 0.5);
+    }
   }
-  swarmRafId = setTimeout(swarmStep, 600);
+  const cx = pad + ((5 - 2) / 18) * pw, cy = h - pad - ((8 - 1) / 24) * ph;
+  ctx.strokeStyle = '#f0883e'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.stroke();
+  if (swarm.obsIdx > 0 && swarm.obsIdx <= AA_FRONTIER_DATA.length) {
+    const obs = AA_FRONTIER_DATA[swarm.obsIdx - 1];
+    const ox = pad + (((obs.intel / 10) - 2) / 18) * pw;
+    const oy = h - pad - (((obs.agentic / 10) - 1) / 24) * ph;
+    ctx.strokeStyle = '#ef4444'; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ox, oy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath(); ctx.arc(ox, oy, 4, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = '#58a6ff'; ctx.font = '9px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+  ctx.fillText('Медиана роя', pad + 4, pad + 12);
+  ctx.fillStyle = '#666680'; ctx.font = '11px Inter, sans-serif';
+  ctx.textAlign = 'center'; ctx.fillText('Удвоение HW (мес)', w / 2, h - 8);
+  ctx.save(); ctx.translate(12, h / 2); ctx.rotate(-Math.PI / 2);
+  ctx.fillText('Потолок Agency', 0, 0); ctx.restore();
+  ctx.fillStyle = '#ef4444'; ctx.font = '9px JetBrains Mono, monospace'; ctx.textAlign = 'right';
+  ctx.fillText('Наблюдение', w - pad - 4, pad + 12);
+}
+
+function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
+  const CUR_Y = 2026.30;
+  const xMin = 2023, xMax = 2068;
+  const nBins = 45;
+  const hist = new Float64Array(nBins);
+  let totalW = 0;
+  for (let i = 0; i < swarm.particles.length; i++) {
+    const p = swarm.particles[i];
+    const cfg = swarm.tracker.cfg;
+    let simCap = 0;
+    for (let step = 0; step < 500; step++) {
+      const y = cfg.BASE_YEAR + step * (1/12);
+      if (y > CUR_Y) {
+        const logDiff = Math.log2(Math.max(1, p.hw_months)) * 0.5;
+        simCap = Math.min(logDiff * 0.35, logDiff * 0.25);
+        if (simCap >= 10) {
+          const bin = Math.min(nBins - 1, Math.max(0, Math.floor((y - xMin) / (xMax - xMin) * nBins)));
+          hist[bin] += swarm.weights[i];
+          break;
+        }
+      }
+      p.hw_months *= 0.998;
+    }
+    totalW += swarm.weights[i];
+  }
+  const maxHist = Math.max(...hist, 1e-10);
+  const barW = pw / nBins;
+  for (let i = 0; i < nBins; i++) {
+    const d = hist[i] / maxHist;
+    if (d < 0.001) continue;
+    const alpha = 0.3 + d * 0.7;
+    ctx.fillStyle = `rgba(88,166,255,${alpha})`;
+    ctx.fillRect(pad + i * barW, h - pad - (d * ph * 0.9), barW - 0.5, d * ph * 0.9);
+  }
+  ctx.fillStyle = '#666680'; ctx.font = '11px Inter, sans-serif';
+  ctx.textAlign = 'center'; ctx.fillText('Год', w / 2, h - 8);
+  ctx.save(); ctx.translate(12, h / 2); ctx.rotate(-Math.PI / 2);
+  ctx.fillText('P(AGI)', 0, 0); ctx.restore();
+}
+
+function swarmDrawOverlay(ctx, w, h, pad) {
+  const ess = 1.0 / swarm.weights.reduce((a, b) => a + b * b, 0);
+  ctx.fillStyle = '#666680'; ctx.font = '10px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+  ctx.fillText(`ESS: ${ess.toFixed(0)} | частиц: ${swarm.particles.length}`, pad + 4, pad - 4);
+  const slider = document.getElementById('swarmSlider');
+  if (slider) slider.value = swarm.obsIdx;
+  const ov = document.getElementById('swarmOverlay');
+  const leg = document.getElementById('swarmLegend');
+  if (swarm.obsIdx > 0 && swarm.obsIdx <= AA_FRONTIER_DATA.length) {
+    const obs = AA_FRONTIER_DATA[swarm.obsIdx - 1];
+    if (ov) { ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">${obs.year.toFixed(2)}</div><div style="font-size:.68rem;color:#9898b0">${obs.event}</div><div style="font-size:.65rem;color:#666680;margin-top:4px">I=${obs.intel.toFixed(0)} A=${obs.agentic.toFixed(1)}</div>`; ov.style.opacity = '1'; }
+  } else { if (ov) ov.style.opacity = '0'; }
+  if (leg) {
+    if (swarm.mode === 'learn') {
+      leg.innerHTML = '<span style="color:#58a6ff">●</span> Плотность роя &nbsp; <span style="color:#ef4444">●</span> Наблюдение &nbsp; <span style="color:#f0883e">●</span> Медиана';
+    } else {
+      leg.innerHTML = '<span style="color:#58a6ff">▮</span> Гистограмма P(AGI) по году &nbsp; <span style="color:#666680">Каждый столбик = вероятность AGI в этот год</span>';
+    }
+  }
 }
 
 function swarmPlay() {
-  if (swarmAnimating) {
-    swarmAnimating = false;
-    if (swarmRafId) clearTimeout(swarmRafId);
-    const t = LANG[window._lang || 'ru'];
-    document.getElementById('swarmPlayBtn').innerHTML = '<span>' + (t.swarm_play || 'Запуск') + '</span>';
-    return;
-  }
-  if (!swarmTracker || swarmObsIdx >= AA_FRONTIER_DATA.length) swarmReset();
-  swarmAnimating = true;
+  if (swarm.animating) { swarm.animating = false; clearTimeout(swarm.rafId); document.getElementById('swarmPlayBtn').innerHTML = '<span>' + (LANG[window._lang||'ru'].swarm_play||'Запуск') + '</span>'; return; }
+  if (swarm.obsIdx >= AA_FRONTIER_DATA.length) { swarm.obsIdx = 0; swarmInit(); }
+  swarm.animating = true;
   document.getElementById('swarmPlayBtn').innerHTML = '<span>⏸</span>';
-  swarmStep();
+  function step() {
+    if (!swarm.animating || swarm.obsIdx >= AA_FRONTIER_DATA.length) { swarm.animating = false; document.getElementById('swarmPlayBtn').innerHTML = '<span>' + (LANG[window._lang||'ru'].swarm_play||'Запуск') + '</span>'; return; }
+    swarm.obsIdx++;
+    swarm.tracker = swarmBuildTracker(swarm.obsIdx);
+    swarm.weights = Array.from(swarm.tracker.weights);
+    swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling }));
+    swarmDraw();
+    swarm.rafId = setTimeout(step, 800);
+  }
+  step();
 }
 
 function swarmReset() {
-  swarmAnimating = false;
-  if (swarmRafId) clearTimeout(swarmRafId);
-  const eventEl = document.getElementById('swarmEvent');
-  if (eventEl) eventEl.style.opacity = '0';
-  swarmInit();
+  swarm.animating = false; clearTimeout(swarm.rafId);
+  swarm.obsIdx = 0; swarmInit();
+  document.getElementById('swarmPlayBtn').innerHTML = '<span>' + (LANG[window._lang||'ru'].swarm_play||'Запуск') + '</span>';
+  document.getElementById('swarmOverlay').style.opacity = '0';
 }
 
 window.addEventListener('load', () => { setTimeout(swarmInit, 100); });

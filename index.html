@@ -273,25 +273,33 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 <!-- ===== PARTICLE SWARM ===== -->
 <div style="padding:20px 32px;max-width:1100px;margin:0 auto;width:100%">
   <div class="about" id="swarmSection">
-    <h2 data-i18n="swarm_title">Анимация: «Сжатие роя» (Bayesian Particle Swarm)</h2>
-    <p data-i18n="swarm_desc">Интерактивная визуализация того, как модель «думает» и учится на исторических данных. Каждая точка — гипотеза о будущем. Ось X — скорость удвоения железа (месяцев), Ось Y — потолок агентности. При поступлении новых данные слабые гипотезы тускнеют, сильные — ярют и клонируются.</p>
-    <div style="position:relative;width:100%;height:420px;background:#0a0a0f;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-top:12px">
+    <h2 data-i18n="swarm_title">Анимация: «Сжатие роя»</h2>
+    <p data-i18n="swarm_desc">Интерактивная визуализация байесовского обучения. Режим «Обучение» показывает как наблюдения убивают слабые гипотезы. Режим «Прогноз» разворачивает выжившие гипотезы в предсказания AGI/ASI.</p>
+    <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">
+      <div class="lang-toggle" style="margin:0">
+        <button class="lang-btn active" id="swarmModeLearn" onclick="swarmSetMode('learn')" data-i18n="swarm_mode_learn">Обучение</button>
+        <button class="lang-btn" id="swarmModeForecast" onclick="swarmSetMode('forecast')" data-i18n="swarm_mode_forecast">Прогноз</button>
+      </div>
+    </div>
+    <div style="position:relative;width:100%;height:440px;background:#0a0a0f;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-top:12px">
       <canvas id="swarmCanvas" style="width:100%;height:100%"></canvas>
-      <div id="swarmLabel" style="position:absolute;bottom:12px;left:16px;font-size:.7rem;color:var(--text-muted);font-family:var(--mono);pointer-events:none"></div>
-      <div id="swarmEvent" style="position:absolute;top:12px;right:16px;font-size:.72rem;color:var(--accent);font-weight:600;opacity:0;transition:opacity .4s;pointer-events:none"></div>
+      <div id="swarmOverlay" style="position:absolute;top:12px;right:16px;font-size:.72rem;color:var(--accent);font-weight:600;opacity:0;transition:opacity .4s;pointer-events:none;text-align:right;line-height:1.6"></div>
+      <div id="swarmLegend" style="position:absolute;bottom:12px;left:16px;font-size:.65rem;color:var(--text-muted);font-family:var(--mono);pointer-events:none;line-height:1.5"></div>
+    </div>
+    <div style="margin-top:12px">
+      <input type="range" id="swarmSlider" min="0" max="7" step="1" value="0" style="width:100%;accent-color:var(--accent)" oninput="swarmOnSlider(this.value)">
+      <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--text-muted);font-family:var(--mono);margin-top:2px">
+        <span>2023.0</span><span>2023.5</span><span>2024.0</span><span>2024.5</span><span>2025.0</span><span>2025.5</span><span>2026.0</span><span>2026.5</span>
+      </div>
     </div>
     <div style="display:flex;gap:12px;margin-top:12px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-primary btn-sm" id="swarmPlayBtn" onclick="swarmPlay()">
-        <span data-i18n="swarm_play">Запуск</span>
-      </button>
-      <button class="btn btn-secondary btn-sm" onclick="swarmReset()">
-        <span data-i18n="swarm_reset">Сброс</span>
-      </button>
-      <span style="font-size:.7rem;color:var(--text-muted)" data-i18n="swarm_drag">Перетаскивайте ползунок для ручного просмотра</span>
+      <button class="btn btn-primary btn-sm" id="swarmPlayBtn" onclick="swarmPlay()"><span data-i18n="swarm_play">Запуск</span></button>
+      <button class="btn btn-secondary btn-sm" onclick="swarmReset()"><span data-i18n="swarm_reset">Сброс</span></button>
+      <span id="swarmHint" style="font-size:.7rem;color:var(--text-muted)" data-i18n="swarm_hint">Нажмите «Запуск» или перетаскивайте ползунок</span>
     </div>
   </div>
 </div>
-
+<!-- ===== ABOUT ===== -->
 <!-- ===== ABOUT ===== -->
 <div style="padding:0 32px;max-width:1100px;margin:0 auto;width:100%">
   <div class="about" id="aboutSection">
