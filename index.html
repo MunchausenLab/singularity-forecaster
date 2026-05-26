@@ -191,27 +191,27 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 <!-- ===== CONTROLS ===== -->
 <div class="controls">
   <div class="control-group">
-    <label>Simulations (N)</label>
+    <label data-i18n="ctrl_simulations">Симуляции (N)</label>
     <input type="range" id="rN" min="500" max="10000" step="500" value="3000" oninput="document.getElementById('vN').textContent=this.value">
     <span class="n-display"><span id="vN">3000</span></span>
   </div>
   <div class="control-group">
-    <label>Год наблюдения</label>
+    <label data-i18n="ctrl_obs_year">Год наблюдения</label>
     <input type="number" id="v3Year" value="2026.5" min="2022" max="2030" step="0.1" style="width:80px">
   </div>
   <div class="control-group">
-    <label>Intelligence (AA)</label>
+    <label data-i18n="ctrl_intelligence">Интеллект (AA)</label>
     <input type="number" id="v3Intel" value="68" min="0" max="100" step="1" style="width:70px">
   </div>
   <div class="control-group">
-    <label>Agentic (AA)</label>
+    <label data-i18n="ctrl_agentic">Агентность (AA)</label>
     <input type="number" id="v3Agentic" value="72" min="0" max="100" step="0.1" style="width:70px">
   </div>
-  <button class="btn btn-secondary btn-sm" onclick="v3AddObservation()">+ Добавить</button>
+  <button class="btn btn-secondary btn-sm" data-i18n="ctrl_add" onclick="v3AddObservation()">+ Добавить</button>
   <button class="btn btn-primary" id="runBtn" onclick="runSimulation()">
     ▶ <span data-i18n="run_btn">Запустить прогноз</span>
   </button>
-  <button class="btn btn-secondary btn-sm" onclick="v3ResetTracker()">Сбросить</button>
+  <button class="btn btn-secondary btn-sm" data-i18n="ctrl_reset" onclick="v3ResetTracker()">Сбросить</button>
 </div>
 
 <!-- ===== v3 OBSERVATIONS ===== -->
@@ -227,6 +227,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     <span class="card-tag" data-i18n="tag1">Вероятностный анализ</span>
     <div class="card-header">
       <h3 data-i18n="chart1">1. Распределение AGI / ASI по Monte Carlo</h3>
+      <span class="tip">?<span class="tip-text" data-i18n="tip1">Показывает, где группируются 3000 прогонов Монте-Карло. Чем выше столбец — тем больше сценариев привели к AGI/ASI в этом году.</span></span>
     </div>
     <div class="chart-container" id="c1"></div>
   </div>
@@ -276,28 +277,28 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     <div class="sec-label" data-i18n="defs_label">Архитектура модели</div>
     <div class="fgrid">
       <div class="fc">
-        <h4>Байесовский трекер</h4>
-        <p>1000 частиц с априорными распределениями на hw_months, algo_months, agency_ceiling. Каждое наблюдение AA (Intelligence + Agentic) обновляет веса через гауссово правдоподобие. ESS-ресэмплинг предотвращает вырождение.</p>
+        <h4 data-i18n="arch_tracker_title">Байесовский трекер</h4>
+        <p data-i18n="arch_tracker_desc">1000 частиц с априорными распределениями на hw_months, algo_months, agency_ceiling. Каждое наблюдение AA (Intelligence + Agentic) обновляет веса через гауссово правдоподобие. ESS-ресэмплинг предотвращает вырождение.</p>
       </div>
       <div class="fc">
-        <h4>Два измерения интеллекта</h4>
-        <p>Reasoning (slope 0.35, ceiling 15.0) и Agency (slope 0.25, ceiling — параметр частицы). Capability = min(Reasoning, Agency). Оба растут логистически от log(FLOPs), но упираются в потолки.</p>
+        <h4 data-i18n="arch_dims_title">Два измерения интеллекта</h4>
+        <p data-i18n="arch_dims_desc">Reasoning (slope 0.35, ceiling 15.0) и Agency (slope 0.25, ceiling — параметр частицы). Capability = min(Reasoning, Agency). Оба растут логистически от log(FLOPs), но упираются в потолки.</p>
       </div>
       <div class="fc">
-        <h4>Смена парадигмы</h4>
-        <p>После 2026.30 каждый месяц с вероятностью ~1.7% происходит сдвиг: оба потолка ×3, базовый уровень FLOPs сдвигается. Это позволяет модели преодолеть текущие ограничения трансформеров.</p>
+        <h4 data-i18n="arch_paradigm_title">Смена парадигмы</h4>
+        <p data-i18n="arch_paradigm_desc">После 2026.30 каждый месяц с вероятностью ~1.7% происходит сдвиг: оба потолка ×3, базовый уровень FLOPs сдвигается. Это позволяет модели преодолеть текущие ограничения трансформеров.</p>
       </div>
       <div class="fc">
-        <h4>RSI — рекурсивное самоулучшение</h4>
-        <p>При capability >= 5.0 включается обратная связь: рост алгоритмов ускоряется пропорционально текущему уровню. Чем выше агентность — тем быстрее прогресс. Это ключевой механизм для достижения ASI.</p>
+        <h4 data-i18n="arch_rsi_title">RSI — рекурсивное самоулучшение</h4>
+        <p data-i18n="arch_rsi_desc">При capability >= 5.0 включается обратная связь: рост алгоритмов ускоряется пропорционально текущему уровню. Чем выше агентность — тем быстрее прогресс. Это ключевой механизм для достижения ASI.</p>
       </div>
       <div class="fc">
-        <h4>Бутылочные горлышки</h4>
-        <p>Экономическая стена: если Reasoning обгоняет Agency более чем на 2.0, инвестиции падают. Энергетическая стена: с 2026 года дефицит инфраструктуры тормозит рост compute.</p>
+        <h4 data-i18n="arch_bottlenecks_title">Бутылочные горлышки</h4>
+        <p data-i18n="arch_bottlenecks_desc">Экономическая стена: если Reasoning обгоняет Agency более чем на 2.0, инвестиции падают. Энергетическая стена: с 2026 года дефицит инфраструктуры тормозит рост compute.</p>
       </div>
       <div class="fc">
-        <h4>Monte Carlo прогноз</h4>
-        <p>3000 прогонов из апостериорного распределения. Каждый прогон — симуляция от 2023 до 2068 года с месячным шагом. Результат: распределение лет до AGI (cap >= 10) и ASI (cap >= 100).</p>
+        <h4 data-i18n="arch_mc_title">Monte Carlo прогноз</h4>
+        <p data-i18n="arch_mc_desc">3000 прогонов из апостериорного распределения. Каждый прогон — симуляция от 2023 до 2068 года с месячным шагом. Результат: распределение лет до AGI (cap >= 10) и ASI (cap >= 100).</p>
       </div>
     </div>
   </div>
