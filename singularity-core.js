@@ -406,7 +406,13 @@ class BayesianTracker {
     cumw[0] = this.weights[0];
     for (let i = 1; i < this.n; i++) cumw[i] = cumw[i - 1] + this.weights[i];
 
-    const shiftYears = [];
+    // For each year, count runs with at least one paradigm shift
+    const yearStart = 2027;
+    const yearEnd = 2045;
+    const years = [];
+    for (let y = yearStart; y <= yearEnd; y++) years.push(y);
+    const runCounts = new Array(years.length).fill(0);
+
     const dt = 1.0 / 12.0;
     const maxSteps = 12 * 45;
 
@@ -422,10 +428,14 @@ class BayesianTracker {
       const hwK = Math.log(2) / Math.max(1.0, p.hw_months / 12.0);
       const algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
 
+      // Track which years had at least one shift in this run
+      const shiftedYears = new Set();
+
       for (let step = 0; step < maxSteps; step++) {
         const y = cfg.BASE_YEAR + step * dt;
         if (y > cfg.CURRENT_YEAR && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
-          shiftYears.push(y);
+          const year = Math.floor(y);
+          shiftedYears.add(year);
           cA *= cfg.SCALING_LAW.shift_multiplier;
           cR *= cfg.SCALING_LAW.shift_multiplier;
           baseLog -= 0.5;
@@ -450,8 +460,17 @@ class BayesianTracker {
         flopsLog += hwK * damping * dt;
         algoLog += (algoK * damping + rsi) * dt;
       }
+
+      // Increment counts for years that had shifts
+      for (const year of shiftedYears) {
+        const i = year - yearStart;
+        if (i >= 0 && i < runCounts.length) runCounts[i]++;
+      }
     }
-    return shiftYears;
+
+    // Convert to percentages
+    const percentages = runCounts.map(c => (c / nRuns) * 100);
+    return { years, percentages };
   }
 
 }
@@ -710,24 +729,16 @@ function plotDecomposition(tracker) {
 
 function plotParadigmShifts(tracker) {
   const t = LANG[window._lang || 'ru'];
-  const shiftYears = tracker.runParadigmShiftTimeline(500);
+  const data = tracker.runParadigmShiftTimeline(500);
 
-  // Build density histogram by year
-  const bins = [];
-  for (let x = 2026; x <= 2045; x += 1) bins.push(x);
-  const counts = new Array(bins.length - 1).fill(0);
-  for (const sy of shiftYears) {
-    const idx = Math.floor(sy) - 2026;
-    if (idx >= 0 && idx < counts.length) counts[idx]++;
-  }
-  const binLabels = bins.slice(0, -1).map(b => String(Math.round(b)));
+  const colors = data.percentages.map(v => v > 50 ? '#ef4444' : v > 20 ? '#f0883e' : '#eab308');
 
   Plotly.newPlot('c9', [
-    { x: binLabels, y: counts, type: 'bar', name: 'Смены парадигм', marker: { color: counts.map(v => v > 50 ? '#ef4444' : v > 20 ? '#f0883e' : '#eab308') } },
+    { x: data.years.map(String), y: data.percentages, type: 'bar', name: 'P(сдвиг)', marker: { color: colors } },
   ], {
     ...LAYOUT_BASE,
     xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel }, dtick: 1 },
-    yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch9_ylabel || 'Срабатываний / год' } },
+    yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch9_ylabel || 'P(сдвиг), %' }, range: [0, 105] },
     bargap: 0.15,
   }, PLOT_CFG);
 }
@@ -745,7 +756,7 @@ const LANG = {
     // Advanced charts i18n
     ch5_label:'Лет до AGI', ch5_colorbar:'Лет до AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score',
     ch7_ylabel:'Суммарный вклад (log FLOPs)',
-    ch9_ylabel:'Срабатываний / год',
+    ch9_ylabel:'P(сдвиг), %',
     chart5:'5. Карта чувствительности (Intel x Agentic)',
     chart6:'6. Веер сценариев (Multi-Run Overlay)',
     chart7:'7. Вклад компонент (Stacked Area)',
@@ -763,7 +774,7 @@ const LANG = {
     // Advanced charts i18n
     ch5_label:'Years to AGI', ch5_colorbar:'Years to AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score',
     ch7_ylabel:'Cumulative contribution (log FLOPs)',
-    ch9_ylabel:'Triggers / year',
+    ch9_ylabel:'P(shift), %',
     chart5:'5. Sensitivity Heatmap (Intel x Agentic)',
     chart6:'6. Scenario Fan (Multi-Run Overlay)',
     chart7:'7. Component Decomposition (Stacked Area)',
