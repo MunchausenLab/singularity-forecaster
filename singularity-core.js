@@ -841,7 +841,7 @@ function swarmInit() {
   c.width = c.offsetWidth * dpr; c.height = c.offsetHeight * dpr;
   ctx.scale(dpr, dpr);
   swarm.tracker = swarmBuildTracker(swarm.obsIdx);
-  swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling }));
+  swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
   swarm.weights = Array.from(swarm.tracker.weights);
   swarmDraw();
 }
@@ -857,7 +857,7 @@ function swarmOnSlider(v) {
   swarm.obsIdx = +v;
   swarm.tracker = swarmBuildTracker(v);
   swarm.weights = Array.from(swarm.tracker.weights);
-  swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling }));
+  swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
   swarmDraw();
 }
 
@@ -925,28 +925,47 @@ function swarmDrawLearn(ctx, w, h, pad, pw, ph) {
 
 function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
   const CUR_Y = 2026.30;
-  const xMin = 2023, xMax = 2068;
+  const xMin = 2026, xMax = 2068;
   const nBins = 45;
   const hist = new Float64Array(nBins);
-  let totalW = 0;
-  for (let i = 0; i < swarm.particles.length; i++) {
-    const p = swarm.particles[i];
-    const cfg = swarm.tracker.cfg;
-    let simCap = 0;
-    for (let step = 0; step < 500; step++) {
-      const y = cfg.BASE_YEAR + step * (1/12);
-      if (y > CUR_Y) {
-        const logDiff = Math.log2(Math.max(1, p.hw_months)) * 0.5;
-        simCap = Math.min(logDiff * 0.35, logDiff * 0.25);
-        if (simCap >= 10) {
-          const bin = Math.min(nBins - 1, Math.max(0, Math.floor((y - xMin) / (xMax - xMin) * nBins)));
-          hist[bin] += swarm.weights[i];
-          break;
-        }
+  const cfg = swarm.tracker.cfg;
+  const dt = 1/12;
+  const maxYear = 2068;
+  const totalSteps = Math.floor((maxYear - cfg.BASE_YEAR) * 12);
+  const sampleEvery = Math.max(1, Math.floor(swarm.particles.length / 200));
+  for (let i = 0; i < swarm.particles.length; i += sampleEvery) {
+    if (swarm.weights[i] < 1e-6) continue;
+    const tp = swarm.tracker.particles[i];
+    let flopsLog = cfg.BASE_LOG_FLOPS;
+    let algoLog = 0;
+    const baseLog = flopsLog;
+    const hwK = Math.log(2) / Math.max(1.0, tp.hw_months / 12.0);
+    const algoK = Math.log(2) / Math.max(1.0, tp.algo_months / 12.0);
+    let agiYear = null;
+    for (let step = 0; step < totalSteps; step++) {
+      const y = cfg.BASE_YEAR + step * dt;
+      const logDiff = flopsLog + algoLog - baseLog;
+      const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cfg.DIMENSIONS.reasoning.ceiling);
+      const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, tp.agency_ceiling);
+      const reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
+      const agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
+      const cap = Math.min(reasoning, agency);
+      if (agiYear === null && cap >= cfg.THRESHOLDS.agi && y > CUR_Y) {
+        agiYear = y;
+        break;
       }
-      p.hw_months *= 0.998;
+      let damping = 1.0;
+      if (y > cfg.BOTTLENECKS.econ_wall_start) {
+        const gap = reasoning - agency;
+        if (gap > 2.0) damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (gap - 2.0));
+      }
+      flopsLog += hwK * damping * dt;
+      algoLog += algoK * damping * dt;
     }
-    totalW += swarm.weights[i];
+    if (agiYear !== null && agiYear >= xMin && agiYear <= xMax) {
+      const bin = Math.min(nBins - 1, Math.max(0, Math.floor((agiYear - xMin) / (xMax - xMin) * nBins)));
+      hist[bin] += swarm.weights[i] * sampleEvery;
+    }
   }
   const maxHist = Math.max(...hist, 1e-10);
   const barW = pw / nBins;
@@ -961,6 +980,15 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
   ctx.textAlign = 'center'; ctx.fillText('Год', w / 2, h - 8);
   ctx.save(); ctx.translate(12, h / 2); ctx.rotate(-Math.PI / 2);
   ctx.fillText('P(AGI)', 0, 0); ctx.restore();
+  const totalAGI = hist.reduce((a, b) => a + b, 0);
+  const sumYear = hist.reduce((a, b, i) => a + b * (xMin + (i + 0.5) * (xMax - xMin) / nBins), 0);
+  const medianYear = totalAGI > 1e-10 ? sumYear / totalAGI : 0;
+  if (totalAGI > 0.01) {
+    ctx.fillStyle = '#f0883e'; ctx.font = 'bold 11px JetBrains Mono, monospace'; ctx.textAlign = 'center';
+    ctx.fillText(`Медиана AGI: ${medianYear.toFixed(1)}`, w / 2, pad - 4);
+  }
+  ctx.fillStyle = '#f0883e'; ctx.font = '9px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+  ctx.fillText(`Суммарная P(AGI): ${(totalAGI * 100).toFixed(1)}%`, pad + 4, pad + 12);
 }
 
 function swarmDrawOverlay(ctx, w, h, pad) {
@@ -994,7 +1022,7 @@ function swarmPlay() {
     swarm.obsIdx++;
     swarm.tracker = swarmBuildTracker(swarm.obsIdx);
     swarm.weights = Array.from(swarm.tracker.weights);
-    swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling }));
+    swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
     swarmDraw();
     swarm.rafId = setTimeout(step, 800);
   }
