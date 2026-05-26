@@ -668,6 +668,7 @@ const LANG = {
     run_btn:'Запустить прогноз',
     // Charts
     tag1:'Вероятностный анализ', tag3:'Кумулятивная',
+    tag5:'Чувствительность', tag6:'Сценарии', tag7:'Декомпозиция',
     chart1:'1. Распределение AGI / ASI по Monte Carlo',
     chart3:'2. Накопленная вероятность AGI / ASI',
     chart5:'3. Карта чувствительности (Intel × Agentic)',
@@ -727,6 +728,7 @@ const LANG = {
     run_btn:'Run Forecast',
     // Charts
     tag1:'Probabilistic Analysis', tag3:'Cumulative',
+    tag5:'Sensitivity', tag6:'Scenarios', tag7:'Decomposition',
     chart1:'1. AGI / ASI Distribution (Monte Carlo)',
     chart3:'2. Cumulative Probability AGI / ASI',
     chart5:'3. Sensitivity Heatmap (Intel × Agentic)',
