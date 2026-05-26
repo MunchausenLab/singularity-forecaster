@@ -558,8 +558,7 @@ function updateUI(r) {
   setVal('v29', s.pAgi2029.toFixed(1) + '%'); setVal('v33', s.pAgi2033.toFixed(1) + '%'); setVal('v40', s.pAgi2040.toFixed(1) + '%');
   setVal('v35', s.pAsi2035.toFixed(1) + '%'); setVal('v45', s.pAsi2045.toFixed(1) + '%');
   colorProb('v29', s.pAgi2029); colorProb('v33', s.pAgi2033); colorProb('v40', s.pAgi2040);
-  plotHistogram(r.histogram); plotTrajectory(r.trajectory); plotCumulative(r.cumulative);
-  plotEntropyGauge(v3GetTracker());
+  plotHistogram(r.histogram); plotCumulative(r.cumulative);
   // Advanced charts (async-like, yield between heavy plots)
   requestAnimationFrame(() => {
     const tracker = v3GetTracker();
@@ -567,7 +566,6 @@ function updateUI(r) {
     requestAnimationFrame(() => {
       plotScenarioFan(tracker);
       plotDecomposition(tracker);
-      plotDistributionCDF(r.histogram._agiYears || []);
       plotParadigmShifts(tracker);
     });
   });
@@ -627,18 +625,6 @@ function plotHistogram(h) {
     { x: h.labels, y: h.asi, type: 'bar', name: 'ASI', marker: { color: '#ef4444' } }
   ], { ...LAYOUT_BASE, barmode: 'group', xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch1_xlabel } }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch1_ylabel } } }, PLOT_CFG);
 }
-function plotTrajectory(tr) {
-  const t = LANG[window._lang || 'ru'];
-  Plotly.newPlot('c2', [
-    { x: tr.years, y: tr.p90, type: 'scatter', mode: 'lines', line: {width:0}, showlegend: false, hoverinfo: 'skip' },
-    { x: tr.years, y: tr.p75, type: 'scatter', mode: 'lines', line: {width:0}, fill: 'tonexty', fillcolor: 'rgba(88,166,255,.06)', showlegend: false, hoverinfo:'skip' },
-    { x: tr.years, y: tr.p25, type: 'scatter', mode: 'lines', line: {width:0}, fill: 'tonexty', fillcolor: 'rgba(88,166,255,.12)', showlegend: false, hoverinfo:'skip' },
-    { x: tr.years, y: tr.p10, type: 'scatter', mode: 'lines', line: {width:0}, fill: 'tonexty', fillcolor: 'rgba(88,166,255,.18)', showlegend: false, hoverinfo:'skip' },
-    { x: tr.years, y: tr.median, type: 'scatter', mode: 'lines', name: t.ch_legend_median, line: { color: '#58a6ff', width: 2.5 } },
-    { x: [tr.years[0], tr.years[tr.years.length - 1]], y: [tr.agiThreshold, tr.agiThreshold], type: 'scatter', mode: 'lines', name: t.ch_legend_agi, line: { color: '#f0883e', dash: 'dot' } },
-    { x: [tr.years[0], tr.years[tr.years.length - 1]], y: [tr.asiThreshold, tr.asiThreshold], type: 'scatter', mode: 'lines', name: t.ch_legend_asi, line: { color: '#ef4444', dash: 'dot' } }
-  ], { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel }, range: [2026, 2050] }, yaxis: { ...LAYOUT_BASE.yaxis, type: 'log', range: [0, 2.0] } }, PLOT_CFG);
-}
 function plotCumulative(c) {
   const t = LANG[window._lang || 'ru'];
   Plotly.newPlot('c3', [
@@ -646,59 +632,8 @@ function plotCumulative(c) {
     { x: c.x, y: c.asi, type: 'scatter', mode: 'lines+markers', name: t.ch3_pasi, line: { color: '#ef4444' }, fill: 'tozeroy', fillcolor: 'rgba(239,68,68,.08)' }
   ], { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch3_xlabel } }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch3_ylabel }, range: [0, 105] } }, PLOT_CFG);
 }
-function plotEntropyGauge(tracker) {
-  const w = tracker.weights;
-  // Shannon entropy: H = -sum(w_i * log(w_i))
-  let H = 0;
-  for (let i = 0; i < w.length; i++) {
-    if (w[i] > 0) H -= w[i] * Math.log(w[i]);
-  }
-  // Normalize: max entropy = log(N), so H_norm = H / log(N) * 100
-  const Hmax = Math.log(w.length);
-  const pct = Math.min(100, (H / Hmax) * 100);
 
-  const t = LANG[window._lang || 'ru'];
-  const zone = pct <= 30 ? 'green' : pct <= 70 ? 'yellow' : 'red';
-  const zoneText = pct <= 30 ? (t.entropy_consensus || 'Консенсус')
-                  : pct <= 70 ? (t.entropy_moderate || 'Умеренная неопределённость')
-                  : (t.entropy_confusion || 'Модель в замешательстве');
-
-  const el = document.getElementById('c4');
-  el.innerHTML = '';
-
-  // Draw gauge with SVG
-  const size = 220, cx = size / 2, cy = size / 2 + 10, r = 80;
-  const startAngle = -210, endAngle = 30; // 240 degree arc
-  const angle = startAngle + (endAngle - startAngle) * pct / 100;
-
-  function arcPath(a1, a2, r) {
-    const toRad = a => a * Math.PI / 180;
-    const x1 = cx + r * Math.cos(toRad(a1)), y1 = cy + r * Math.sin(toRad(a1));
-    const x2 = cx + r * Math.cos(toRad(a2)), y2 = cy + r * Math.sin(toRad(a2));
-    const large = a2 - a1 > 180 ? 1 : 0;
-    return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
-  }
-
-  // Color zones: green 0-30, yellow 30-70, red 70-100
-  const z1 = startAngle + (endAngle - startAngle) * 30 / 100;
-  const z2 = startAngle + (endAngle - startAngle) * 70 / 100;
-
-  const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-    <path d="${arcPath(startAngle, z1, r)}" fill="none" stroke="#22c55e" stroke-width="12" stroke-linecap="round" opacity=".25"/>
-    <path d="${arcPath(z1, z2, r)}" fill="none" stroke="#eab308" stroke-width="12" stroke-linecap="round" opacity=".25"/>
-    <path d="${arcPath(z2, endAngle, r)}" fill="none" stroke="#ef4444" stroke-width="12" stroke-linecap="round" opacity=".25"/>
-    <path d="${arcPath(startAngle, angle, r)}" fill="none" stroke="${zone==='green'?'#22c55e':zone==='yellow'?'#eab308':'#ef4444'}" stroke-width="12" stroke-linecap="round"/>
-    <text x="${cx}" y="${cy - 10}" text-anchor="middle" fill="#e8e8f0" font-size="28" font-weight="700" font-family="JetBrains Mono, monospace">${pct.toFixed(0)}%</text>
-    <text x="${cx}" y="${cy + 12}" text-anchor="middle" fill="#9898b0" font-size="11" font-family="Inter, sans-serif">${zoneText}</text>
-    <text x="${cx}" y="${cy + 28}" text-anchor="middle" fill="#666680" font-size="9" font-family="Inter, sans-serif">H = ${H.toFixed(2)} / ${Hmax.toFixed(2)}</text>
-  </svg>`;
-
-  el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:16px">${svg}
-    <div style="font-size:.68rem;color:#666680;text-align:center;max-width:240px;line-height:1.5">${t.entropy_desc || 'Энтропия показывает насколько частицы размазаны. Низкая = консенсус, высокая = данные противоречивы.'}</div>
-  </div>`;
-}
-
-// ===== NEW ADVANCED PLOT FUNCTIONS =====
+// ===== ADVANCED PLOT FUNCTIONS =====
 
 function plotSensitivityHeatmap(tracker) {
   const t = LANG[window._lang || 'ru'];
@@ -773,40 +708,6 @@ function plotDecomposition(tracker) {
   }, PLOT_CFG);
 }
 
-function plotDistributionCDF(agiYears) {
-  const t = LANG[window._lang || 'ru'];
-  const finite = agiYears.filter(isFinite).sort((a, b) => a - b);
-  if (finite.length === 0) return;
-
-  const cdfY = finite.map((_, i) => ((i + 1) / finite.length) * 100);
-  const CUR_Y = 2026.30;
-  const cdfX = finite.map(v => +(CUR_Y + v).toFixed(2));
-
-  // Also build histogram for bimodality check
-  const bins = [], binW = 1.0;
-  for (let x = 1; x <= 20; x += binW) bins.push(x);
-  const hist = new Array(bins.length).fill(0);
-  for (const v of finite) {
-    const idx = Math.min(Math.floor((v - 1) / binW), bins.length - 1);
-    if (idx >= 0) hist[idx]++;
-  }
-  const histLabels = bins.map(b => (CUR_Y + b + binW / 2).toFixed(1));
-
-  const yAxis2 = { ...LAYOUT_BASE.yaxis, title: { text: t.ch1_ylabel }, overlaying: 'y', side: 'right', range: [0, Math.max(...hist) * 1.2] };
-
-  Plotly.newPlot('c8', [
-    { x: cdfX, y: cdfY, type: 'scatter', mode: 'lines', name: 'CDF AGI', line: { color: '#f0883e', width: 2.5 }, fill: 'tozeroy', fillcolor: 'rgba(240,136,62,.06)', yaxis: 'y' },
-    { x: histLabels, y: hist, type: 'bar', name: 'Распределение', marker: { color: 'rgba(167,139,250,0.4)' }, yaxis: 'y2', opacity: 0.6 },
-  ], {
-    ...LAYOUT_BASE,
-    xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch3_xlabel } },
-    yaxis: { title: { text: 'CDF %' }, range: [0, 105] },
-    yaxis2: { title: { text: t.ch1_ylabel }, overlaying: 'y', side: 'right', showgrid: false },
-    legend: { ...LAYOUT_BASE.legend, orientation: 'h', y: -0.15 },
-    margin: { ...LAYOUT_BASE.margin, r: 52 },
-  }, PLOT_CFG);
-}
-
 function plotParadigmShifts(tracker) {
   const t = LANG[window._lang || 'ru'];
   const shiftYears = tracker.runParadigmShiftTimeline(500);
@@ -848,22 +749,17 @@ const LANG = {
     chart5:'5. Карта чувствительности (Intel x Agentic)',
     chart6:'6. Веер сценариев (Multi-Run Overlay)',
     chart7:'7. Вклад компонент (Stacked Area)',
-    chart8:'8. Распределение года AGI (CDF)',
     chart9:'9. Таймлайн смены парадигм',
     tip5:'Тепловая карта: оси — параметры Intelligence и Agentic последнего наблюдения. Цвет — медианный год AGI. Показывает, какой параметр доминирует в прогнозе.',
     tip6:'30 случайных прогонов из апостериорного распределения, наложенных полупрозрачно. Показывает разброс возможных путей к сингулярности.',
     tip7:'Разбивка capability на составляющие: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Показывает, что двигает прогресс.',
-    tip8:'Кумулятивное распределение года достижения AGI по всем прогонам. Бимодальность = два кластера сценариев. Крутой подъём = модель уверена.',
     tip9:'Вертикальные маркеры — моменты, когда в каждом прогоне сработала смена парадигмы. Плотность маркеров = вероятность сдвига в данный год.',
   },
   en: {
     run_btn:'Run Forecast', sb_agi:'AGI median', sb_asi:'ASI median',
-    ch_legend_median:'Median', ch_legend_agi:'AGI (10)', ch_legend_asi:'ASI (100)',
-    ch1_xlabel:'Year', ch1_ylabel:'Runs', ch2_xlabel:'Year',
+    ch1_xlabel:'Year', ch1_ylabel:'Runs',
     ch3_xlabel:'Year', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
-    ch4_label_base:'Base', fY_suffix:' yrs', fY_gt:'> 40 yrs',
-    entropy_consensus:'Consensus', entropy_moderate:'Moderate uncertainty', entropy_confusion:'Model confused',
-    entropy_desc:'Entropy shows how spread particles are. Low = consensus, high = contradictory data.',
+    fY_suffix:' yrs', fY_gt:'> 40 yrs',
     // Advanced charts i18n
     ch5_label:'Years to AGI', ch5_colorbar:'Years to AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score',
     ch7_ylabel:'Cumulative contribution (log FLOPs)',
@@ -871,12 +767,10 @@ const LANG = {
     chart5:'5. Sensitivity Heatmap (Intel x Agentic)',
     chart6:'6. Scenario Fan (Multi-Run Overlay)',
     chart7:'7. Component Decomposition (Stacked Area)',
-    chart8:'8. AGI Year Distribution (CDF)',
     chart9:'9. Paradigm Shift Timeline',
     tip5:'Heatmap: axes are Intelligence and Agentic scores of the last observation. Color = median AGI year. Shows which parameter dominates the forecast.',
     tip6:'30 random runs from the posterior distribution, overlaid semi-transparently. Shows the spread of possible paths to singularity.',
     tip7:'Breakdown of capability into components: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Shows what drives progress.',
-    tip8:'Cumulative distribution of AGI achievement year across all runs. Bimodality = two scenario clusters. Steep rise = model is confident.',
     tip9:'Vertical markers — moments when paradigm shift triggered in each run. Marker density = probability of shift in that year.',
   }
 };

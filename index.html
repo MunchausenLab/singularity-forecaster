@@ -232,28 +232,12 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     <div class="chart-container" id="c1"></div>
   </div>
   <div class="card">
-    <span class="card-tag" data-i18n="tag2">Динамика</span>
-    <div class="card-header">
-      <h3 data-i18n="chart2">2. Рост вероятности во времени</h3>
-      <span class="tip">?<span class="tip-text" data-i18n="tip2">Медианная траектория capability. Синяя зона (10–90%) — диапазон исходов: если зона широкая, модель говорит «может быть через 2, может через 20 лет». Пунктиры — пороги AGI (10) и ASI (1000).</span></span>
-    </div>
-    <div class="chart-container" id="c2"></div>
-  </div>
-  <div class="card">
     <span class="card-tag" data-i18n="tag3">Кумулятивная</span>
     <div class="card-header">
       <h3 data-i18n="chart3">3. Накопленная вероятность AGI / ASI</h3>
-      <span class="tip">?<span class="tip-text" data-i18n="tip3">P(AGI ≤ X) — шанс, что AGI появится не позднее, чем через X лет. Если кривая круто поднимается — быстрый переход от «почти нет» к «почти точно». Плоская часть — затор (data wall, регуляция, энергетика).</span></span>
+      <span class="tip">?<span class="tip-text" data-i18n="tip3">P(AGI <= X) — шанс, что AGI появится не позднее, чем через X лет. Если кривая круто поднимается — быстрый переход от «почти нет» к «почти точно». Плоская часть — затор (data wall, регуляция, энергетика).</span></span>
     </div>
     <div class="chart-container" id="c3"></div>
-  </div>
-  <div class="card">
-    <span class="card-tag" style="background:rgba(167,139,250,.15);color:var(--purple)">Уверенность модели</span>
-    <div class="card-header">
-      <h3>4. Спидометр Энтропии — Model Confidence</h3>
-      <span class="tip">?<span class="tip-text">Показывает насколько частицы размазаны. Зелёная зона = консенсус, красная = данные противоречивы, нужны новые наблюдения.</span></span>
-    </div>
-    <div class="chart-container" id="c4" style="display:flex;align-items:center;justify-content:center"></div>
   </div>
 </div>
 
@@ -282,14 +266,6 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
       <span class="tip">?<span class="tip-text" data-i18n="tip7">Разбивка capability на составляющие: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Показывает, что двигает прогресс.</span></span>
     </div>
     <div class="chart-container" id="c7"></div>
-  </div>
-  <div class="card">
-    <span class="card-tag" style="background:rgba(239,68,68,.15);color:var(--red)">Распределение</span>
-    <div class="card-header">
-      <h3 data-i18n="chart8">8. Распределение года AGI (CDF)</h3>
-      <span class="tip">?<span class="tip-text" data-i18n="tip8">Кумулятивное распределение года достижения AGI по всем прогонам. Бимодальность = два кластера сценариев. Крутой подъём = модель уверена.</span></span>
-    </div>
-    <div class="chart-container" id="c8"></div>
   </div>
   <div class="card" style="grid-column:1/-1">
     <span class="card-tag" style="background:rgba(167,139,250,.15);color:var(--purple)">Парадигмы</span>
