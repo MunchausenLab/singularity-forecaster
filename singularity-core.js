@@ -209,6 +209,9 @@ class BayesianTracker {
       let agiY = null, asiY = null;
       let plotIdx = 0;
       let isWinter = false;
+      let dataExhaustionHit = false;
+      let gpuBubbleBurst = false;
+      let alignmentIncidentCooldown = 0;
 
       for (let step = 0; step < maxSteps; step++) {
         const currentYear = this.cfg.BASE_YEAR + step * dt;
@@ -238,6 +241,34 @@ class BayesianTracker {
             ceilingReasoning *= this.cfg.SCALING_LAW.shift_multiplier;
             baseLog -= 0.5; // compute overhang release
           }
+        }
+
+        // --- ШОКИ: черные лебеди и предсказуемые кризисы ---
+
+        // Шок 1: Исчерпание качественных данных (Data Wall)
+        if (!dataExhaustionHit && currentYear > 2026.5 && Math.random() < 0.15 * dt) {
+          dataExhaustionHit = true;
+        }
+
+        // Шок 2: Инцидент безопасности / Регуляторный бан (Alignment Incident)
+        if (alignmentIncidentCooldown <= 0 && agency > 6.0 && Math.random() < (agency * 0.01) * dt) {
+          alignmentIncidentCooldown = 1.5; // Бан на масштабирование на 1.5 года
+        }
+
+        // Шок 3: Схлопывание GPU-пузыря
+        if (!gpuBubbleBurst && currentYear > 2027.0 && agency < 4.0 && Math.random() < 0.20 * dt) {
+          gpuBubbleBurst = true;
+          flopsLog -= 0.5; // Списание устаревших капитальных вложений / банкротства
+        }
+
+        // Применение эффектов шоков
+        let shockDamping = 1.0;
+        if (alignmentIncidentCooldown > 0) {
+          alignmentIncidentCooldown -= dt;
+          shockDamping = 0.0; // Полная заморозка крупных тренировок
+        }
+        if (gpuBubbleBurst) {
+          shockDamping *= 0.2; // Инвестиции рухнули
         }
         
         if (currentYear >= this.cfg.CURRENT_YEAR && plotIdx < plotSteps) {
@@ -301,8 +332,9 @@ class BayesianTracker {
         // Ограничитель скорости RSI (физическое время на обучение моделей)
         rsi = Math.min(rsi, 1.5);
         
-        flopsLog += hwK * damping * dt;
-        algoLog += (algoK * (isWinter ? 0.4 : 1.0) * damping + rsi) * dt;
+        const effectiveAlgoK = algoK * (dataExhaustionHit ? 0.5 : 1.0);
+        flopsLog += hwK * damping * shockDamping * dt;
+        algoLog += (effectiveAlgoK * (isWinter ? 0.4 : 1.0) * damping * shockDamping + rsi) * dt;
       }
       
       agiYears.push(agiY !== null ? agiY - this.cfg.CURRENT_YEAR : Infinity);
