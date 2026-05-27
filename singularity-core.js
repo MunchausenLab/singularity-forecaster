@@ -752,6 +752,7 @@ const LANG = {
     swarm_desc:'Интерактивная визуализация байесовского обучения. Режим «Обучение» показывает как наблюдения убивают слабые гипотезы. Режим «Прогноз» разворачивает выжившие гипотезы в предсказания AGI/ASI.',
     swarm_play:'Запуск', swarm_reset:'Сброс', swarm_hint:'Нажмите «Запуск» или перетаскивайте ползунок',
     swarm_mode_learn:'Обучение', swarm_mode_forecast:'Прогноз',
+    swarm_play_forecast:'Анимация',
     forecast_xaxis:'Год AGI', forecast_yaxis:'Удвоение HW (мес)',
     forecast_pagi:'P(AGI до 2068)', forecast_median:'Медиана',
     forecast_overlay:'AGI ≤', forecast_overlay_desc:'Показаны гипотезы с AGI до',
@@ -820,6 +821,7 @@ const LANG = {
     swarm_desc:'Interactive visualization of Bayesian learning. "Learning" mode shows how observations kill weak hypotheses. "Forecast" mode unfolds surviving hypotheses into AGI/ASI predictions.',
     swarm_play:'Play', swarm_reset:'Reset', swarm_hint:'Press Play or drag the slider',
     swarm_mode_learn:'Learning', swarm_mode_forecast:'Forecast',
+    swarm_play_forecast:'Animate',
     forecast_xaxis:'AGI Year', forecast_yaxis:'HW Doubling (mo)',
     forecast_pagi:'P(AGI by 2068)', forecast_median:'Median',
     forecast_overlay:'AGI ≤', forecast_overlay_desc:'Showing hypotheses with AGI by',
@@ -828,9 +830,10 @@ const LANG = {
 
 // ===== PARTICLE SWARM ANIMATION =====
 // ===== PARTICLE SWARM v3 =====
-let swarm = { mode:'learn', obsIdx:0, tracker:null, particles:[], weights:[], animating:false, rafId:null, agiYears:null, forecastSliderMax:0 };
+let swarm = { mode:'learn', obsIdx:0, tracker:null, particles:[], weights:[], animating:false, rafId:null, agiYears:null, forecastSliderMax:0, forecastAnimating:false, forecastRafId:null };
 
 // Pre-compute AGI year for every particle (expensive, done once per tracker)
+// Uses same logic as runMonteCarloForecast but deterministic (no paradigm shift randomness)
 function swarmComputeAGIYears(tracker) {
   const cfg = tracker.cfg;
   const dt = 1/12, maxYear = 2068;
@@ -839,15 +842,24 @@ function swarmComputeAGIYears(tracker) {
   for (let i = 0; i < tracker.particles.length; i++) {
     const tp = tracker.particles[i];
     let flopsLog = cfg.BASE_LOG_FLOPS, algoLog = 0;
-    const baseLog = flopsLog;
+    let baseLog = flopsLog;
+    let ceilingReasoning = cfg.DIMENSIONS.reasoning.ceiling;
+    let ceilingAgency = tp.agency_ceiling;
     const hwK = Math.log(2) / Math.max(1.0, tp.hw_months / 12.0);
     const algoK = Math.log(2) / Math.max(1.0, tp.algo_months / 12.0);
-    let agiYear = 0; // 0 means never
+    let agiYear = 0;
     for (let step = 0; step < totalSteps; step++) {
       const y = cfg.BASE_YEAR + step * dt;
+      // Deterministic paradigm shift: expected value instead of random
+      if (y > cfg.CURRENT_YEAR) {
+        const pShift = cfg.SCALING_LAW.paradigm_shift_prob * dt;
+        ceilingAgency *= (1.0 + pShift * (cfg.SCALING_LAW.shift_multiplier - 1.0));
+        ceilingReasoning *= (1.0 + pShift * (cfg.SCALING_LAW.shift_multiplier - 1.0));
+        baseLog -= 0.5 * pShift;
+      }
       const logDiff = flopsLog + algoLog - baseLog;
-      const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cfg.DIMENSIONS.reasoning.ceiling);
-      const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, tp.agency_ceiling);
+      const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, ceilingReasoning);
+      const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, ceilingAgency);
       const reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
       const agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
       const cap = Math.min(reasoning, agency);
@@ -857,8 +869,14 @@ function swarmComputeAGIYears(tracker) {
         const gap = reasoning - agency;
         if (gap > 2.0) damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (gap - 2.0));
       }
+      // RSI: recursive self-improvement when cap >= 5
+      let rsi = 0;
+      if (cap >= 5.0) {
+        const progress = Math.max(0, Math.min(1.0, (cap - 5.0) / (40.0 - 5.0)));
+        rsi = 0.08 * progress * Math.log(1.0 + cap);
+      }
       flopsLog += hwK * damping * dt;
-      algoLog += algoK * damping * dt;
+      algoLog += (algoK * damping + rsi) * dt;
     }
     years[i] = agiYear;
   }
@@ -892,13 +910,15 @@ function swarmSetMode(m) {
   document.getElementById('swarmModeLearn').classList.toggle('active', m === 'learn');
   document.getElementById('swarmModeForecast').classList.toggle('active', m === 'forecast');
   const slider = document.getElementById('swarmSlider');
+  const labels = document.getElementById('swarmSliderLabels');
   if (m === 'forecast') {
-    // compute AGI years, set slider to AGI year range
     if (!swarm.agiYears) swarm.agiYears = swarmComputeAGIYears(swarm.tracker);
-    if (slider) { slider.min = 2026; slider.max = 2068; slider.step = 1; slider.value = 2068; }
+    if (slider) { slider.min = 2028; slider.max = 2068; slider.step = 1; slider.value = 2068; }
     swarm.forecastSliderMax = 2068;
+    if (labels) labels.innerHTML = '<span>2028</span><span></span><span>2038</span><span></span><span>2048</span><span></span><span>2058</span><span>2068</span>';
   } else {
     if (slider) { slider.min = 0; slider.max = AA_FRONTIER_DATA.length; slider.step = 1; slider.value = swarm.obsIdx; }
+    if (labels) labels.innerHTML = '<span>2023</span><span></span><span>2024</span><span></span><span>2025</span><span></span><span>2026</span><span>2026.5</span>';
   }
   swarmDraw();
 }
@@ -984,7 +1004,7 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
   if (!swarm.agiYears) swarm.agiYears = swarmComputeAGIYears(swarm.tracker);
   const years = swarm.agiYears;
   const cutoff = swarm.forecastSliderMax || 2068;
-  const xMin = 2026, xMax = 2068;
+  const xMin = 2028, xMax = 2068;
   const yMin = 1, yMax = 24;
   const cfg = swarm.tracker.cfg;
 
@@ -1109,6 +1129,8 @@ function swarmDrawOverlay(ctx, w, h, pad) {
     // forecast mode: slider shows AGI year cutoff
     if (slider) { slider.style.display = ''; slider.value = swarm.forecastSliderMax || 2068; }
     if (playBtn) playBtn.style.display = 'none';
+    const playFBtn = document.getElementById('swarmPlayForecastBtn');
+    if (playFBtn) playFBtn.style.display = '';
     if (hint) hint.style.display = 'none';
     if (ov) {
       const L = LANG[window._lang||'ru'];
@@ -1122,6 +1144,8 @@ function swarmDrawOverlay(ctx, w, h, pad) {
     // learn mode: slider shows observation index
     if (slider) { slider.style.display = ''; slider.value = swarm.obsIdx; }
     if (playBtn) playBtn.style.display = '';
+    const playFBtn2 = document.getElementById('swarmPlayForecastBtn');
+    if (playFBtn2) playFBtn2.style.display = 'none';
     if (hint) hint.style.display = '';
     if (swarm.obsIdx > 0 && swarm.obsIdx <= AA_FRONTIER_DATA.length) {
       const obs = AA_FRONTIER_DATA[swarm.obsIdx - 1];
@@ -1150,10 +1174,37 @@ function swarmPlay() {
   step();
 }
 
+function swarmPlayForecast() {
+  if (swarm.forecastAnimating) {
+    swarm.forecastAnimating = false;
+    clearTimeout(swarm.forecastRafId);
+    document.getElementById('swarmPlayForecastBtn').innerHTML = '<span>' + (LANG[window._lang||'ru'].swarm_play_forecast||'Анимация') + '</span>';
+    return;
+  }
+  swarm.forecastAnimating = true;
+  document.getElementById('swarmPlayForecastBtn').innerHTML = '<span>⏸</span>';
+  let year = 2028;
+  const step = () => {
+    if (!swarm.forecastAnimating || year > 2068) {
+      swarm.forecastAnimating = false;
+      document.getElementById('swarmPlayForecastBtn').innerHTML = '<span>' + (LANG[window._lang||'ru'].swarm_play_forecast||'Анимация') + '</span>';
+      return;
+    }
+    swarm.forecastSliderMax = year;
+    swarmDraw();
+    year++;
+    swarm.forecastRafId = setTimeout(step, 150);
+  };
+  step();
+}
+
 function swarmReset() {
   swarm.animating = false; clearTimeout(swarm.rafId);
+  swarm.forecastAnimating = false; clearTimeout(swarm.forecastRafId);
   swarm.obsIdx = 0; swarmInit();
   document.getElementById('swarmPlayBtn').innerHTML = '<span>' + (LANG[window._lang||'ru'].swarm_play||'Запуск') + '</span>';
+  const playFBtn = document.getElementById('swarmPlayForecastBtn');
+  if (playFBtn) playFBtn.innerHTML = '<span>' + (LANG[window._lang||'ru'].swarm_play_forecast||'Анимация') + '</span>';
   document.getElementById('swarmOverlay').style.opacity = '0';
 }
 

@@ -288,12 +288,13 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     </div>
     <div style="margin-top:12px">
       <input type="range" id="swarmSlider" min="0" max="7" step="1" value="0" style="width:100%;accent-color:var(--accent)" oninput="swarmOnSlider(this.value)">
-      <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--text-muted);font-family:var(--mono);margin-top:2px">
-        <span>2023.0</span><span>2023.5</span><span>2024.0</span><span>2024.5</span><span>2025.0</span><span>2025.5</span><span>2026.0</span><span>2026.5</span>
+      <div id="swarmSliderLabels" style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--text-muted);font-family:var(--mono);margin-top:2px">
+        <span>2023</span><span></span><span>2024</span><span></span><span>2025</span><span></span><span>2026</span><span>2026.5</span>
       </div>
     </div>
     <div style="display:flex;gap:12px;margin-top:12px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary btn-sm" id="swarmPlayBtn" onclick="swarmPlay()"><span data-i18n="swarm_play">Запуск</span></button>
+      <button class="btn btn-primary btn-sm" id="swarmPlayForecastBtn" onclick="swarmPlayForecast()" style="display:none"><span data-i18n="swarm_play_forecast">Анимация</span></button>
       <button class="btn btn-secondary btn-sm" onclick="swarmReset()"><span data-i18n="swarm_reset">Сброс</span></button>
       <span id="swarmHint" style="font-size:.7rem;color:var(--text-muted)" data-i18n="swarm_hint">Нажмите «Запуск» или перетаскивайте ползунок</span>
     </div>
