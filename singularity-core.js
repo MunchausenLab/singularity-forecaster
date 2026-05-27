@@ -661,7 +661,10 @@ async function runSimulation() {
       },
     };
     updateUI(currentResults);
-    if (typeof liveSwarm !== 'undefined') liveSwarm.tracker = tracker;
+    if (typeof liveSwarm !== 'undefined') {
+      liveSwarm.tracker = tracker;
+      liveSwarm.lastData = { agiYears: runData.agiYears, asiYears: runData.asiYears, n: n };
+    }
     if (typeof swarm !== 'undefined' && swarm) swarm.tracker = tracker;
   } finally {
     simulationRunning = false; btn.disabled = false; overlay.classList.remove('show');
@@ -1406,7 +1409,7 @@ function swarmReset() {
 }
 
 // ===== LIVE SWARM: AGI (blue) + ASI (red) side by side =====
-let liveSwarm = { tracker:null, timerAGI:null, timerASI:null };
+let liveSwarm = { tracker:null, timerAGI:null, timerASI:null, lastData:null };
 
 function liveSwarmInit() {
   // Init both canvases
@@ -1451,16 +1454,25 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
   function yearToX(yr) { return pad + ((yr - xMin) / (xMax - xMin)) * pw; }
   function hwToY(hw) { return h - pad - ((hw - yMin) / (yMax - yMin)) * ph; }
 
-  // Run fresh MC
-  const mc = liveSwarm.tracker.runMonteCarloForecast(2000);
-  const cfg = liveSwarm.tracker.cfg;
-  const curYear = cfg.CURRENT_YEAR;
+// Get MC data: use precomputed from main simulation if available, else run fresh
+  let yearData, curYear;
+  if (liveSwarm.lastData && liveSwarm.lastData.n > 0) {
+    // Use data from main simulation run (3000 runs, same tracker)
+    const cfg = liveSwarm.tracker.cfg;
+    curYear = cfg.CURRENT_YEAR;
+    yearData = isASI ? liveSwarm.lastData.asiYears : liveSwarm.lastData.agiYears;
+  } else {
+    // Fallback: run fresh MC (only before first simulation completes)
+    const mc = liveSwarm.tracker.runMonteCarloForecast(500);
+    const cfg = liveSwarm.tracker.cfg;
+    curYear = cfg.CURRENT_YEAR;
+    yearData = isASI ? mc.asiYears : mc.agiYears;
+  }
   const n = liveSwarm.tracker.n;
   const cumw = new Float64Array(n);
   cumw[0] = liveSwarm.tracker.weights[0];
   for (let i = 1; i < n; i++) cumw[i] = cumw[i-1] + liveSwarm.tracker.weights[i];
 
-  const yearData = isASI ? mc.asiYears : mc.agiYears;
   const pts = [];
   let totalW = 0;
   for (let run = 0; run < yearData.length; run++) {
@@ -1474,7 +1486,6 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
       totalW++;
     }
   }
-  console.log('LiveSwarm', canvasId, 'totalW:', totalW, 'yearData.length:', yearData.length);
   if (totalW === 0) return;
 
   // Color function: blue gradient for AGI, red gradient for ASI
