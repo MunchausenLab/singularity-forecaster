@@ -28,7 +28,8 @@ function createV3Config() {
       max_bonus_agency: 1.5,
       saturation_cap: 5.0
     },
-    SCALING_LAW: { paradigm_shift_prob: 0.20, shift_multiplier: 3.0 },
+    SCALING_LAW: { paradigm_shift_prob: 0.20, shift_multiplier: 3.0,
+                   endo_base: 0.05, endo_pressure: 0.8, endo_exhaust: 0.5 },
     BOTTLENECKS: { energy_wall_start: 2026.0, energy_damping: 0.10, econ_wall_start: 2026.5, econ_damping: 0.15 },
   };
 }
@@ -177,21 +178,32 @@ class BayesianTracker {
       for (let step = 0; step < maxSteps; step++) {
         const currentYear = this.cfg.BASE_YEAR + step * dt;
         
-        // Смена парадигмы теперь поднимает оба потолка!
-        if (currentYear > this.cfg.CURRENT_YEAR && Math.random() < this.cfg.SCALING_LAW.paradigm_shift_prob * dt) {
-          ceilingAgency *= this.cfg.SCALING_LAW.shift_multiplier; 
-          ceilingReasoning *= this.cfg.SCALING_LAW.shift_multiplier; // <- Добавлено
-          baseLog -= 0.5;
-        }
-        
         const logDiff = flopsLog + algoLog - baseLog;
         const rawR = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.reasoning.slope, ceilingReasoning);
         const rawA = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.agency.slope, ceilingAgency);
-        
+
         const reasoning = v3ApplyInference(rawR, this.cfg.INFERENCE_SCALING.max_bonus_reasoning, this.cfg.INFERENCE_SCALING.saturation_cap);
         const agency = v3ApplyInference(rawA, this.cfg.INFERENCE_SCALING.max_bonus_agency, this.cfg.INFERENCE_SCALING.saturation_cap);
-        
+
         const cap = Math.min(reasoning, agency);
+
+        // Эндогенная смена парадигмы: вероятность зависит от saturation и research pressure
+        if (currentYear > this.cfg.CURRENT_YEAR) {
+          // Насколько текущий интеллект близок к потолку (0..1+)
+          const satR = ceilingReasoning > 0 ? reasoning / ceilingReasoning : 0;
+          const satA = ceilingAgency > 0 ? agency / ceilingAgency : 0;
+          const saturation = Math.max(satR, satA);
+          // Давление исследований: чем умнее модели, тем быще ищут новые архитектуры
+          const researchPressure = Math.min(cap / 20.0, 1.0);
+          // Базовая вероятность + давление от saturation, но exhaustion если давно не было прорыва
+          const shiftProb = this.cfg.SCALING_LAW.endo_base
+            + this.cfg.SCALING_LAW.endo_pressure * saturation * researchPressure;
+          if (Math.random() < shiftProb * dt) {
+            ceilingAgency *= this.cfg.SCALING_LAW.shift_multiplier;
+            ceilingReasoning *= this.cfg.SCALING_LAW.shift_multiplier;
+            baseLog -= 0.5; // compute overhang release
+          }
+        }
         
         if (currentYear >= this.cfg.CURRENT_YEAR && plotIdx < plotSteps) {
             trajYears[plotIdx] = currentYear;
