@@ -833,31 +833,27 @@ const LANG = {
 let swarm = { mode:'learn', obsIdx:0, tracker:null, particles:[], weights:[], animating:false, rafId:null, agiYears:null, forecastSliderMax:0, forecastAnimating:false, forecastRafId:null };
 
 // Pre-compute AGI years using the same MC forecast as the main charts
-// Returns array of {agiYear, hw_months, agency_ceiling} for each MC run
+// Returns array of {agiYear, hw_months} for each MC run
+// Note: runMonteCarloForecast returns years relative to CURRENT_YEAR (e.g. 3.0 = 2029.30)
+// We convert back to absolute year
 function swarmComputeAGIYears(tracker) {
   const mc = tracker.runMonteCarloForecast(500);
-  // Build scatter data from MC runs: we need hw/agency for each run
-  // MC samples particles via cumw — we can't easily get per-run params
-  // Instead: for each MC run, find which particle was sampled and use its params
   const cfg = tracker.cfg;
+  const curYear = cfg.CURRENT_YEAR;
   const cumw = new Float64Array(tracker.n);
   cumw[0] = tracker.weights[0];
   for (let i = 1; i < tracker.n; i++) cumw[i] = cumw[i-1] + tracker.weights[i];
 
   const results = [];
   for (let run = 0; run < mc.agiYears.length; run++) {
-    // Find which particle index this MC run sampled
-    // We can't replay the exact random choice, so approximate:
-    // assign each MC run to the nearest weighted particle
-    const u = (run + 0.5) / mc.agiYears.length; // uniform [0,1]
+    const u = (run + 0.5) / mc.agiYears.length;
     let idx = 0;
     while (idx < tracker.n - 1 && cumw[idx] < u) idx++;
     const p = tracker.particles[idx];
     results.push({
-      agiYear: mc.agiYears[run],
+      agiYear: mc.agiYears[run] + curYear, // convert relative -> absolute year
       hw: p.hw_months,
-      agency: p.agency_ceiling,
-      w: 1.0 / mc.agiYears.length // equal weight for MC runs
+      w: 1.0 / mc.agiYears.length
     });
   }
   return results;
@@ -892,12 +888,18 @@ function swarmSetMode(m) {
   const slider = document.getElementById('swarmSlider');
   const labels = document.getElementById('swarmSliderLabels');
   if (m === 'forecast') {
-    // Use the same tracker as the main forecast (v3Tracker), fallback to v3GetTracker()
-    swarm.tracker = (typeof v3Tracker !== 'undefined' && v3Tracker) ? v3Tracker : (typeof v3GetTracker === 'function' ? v3GetTracker() : swarmBuildTracker(swarm.obsIdx));
+    // Use the same tracker as the main forecast (v3Tracker), fallback to full AA data
+    if (typeof v3Tracker !== 'undefined' && v3Tracker) {
+      swarm.tracker = v3Tracker;
+    } else if (typeof v3GetTracker === 'function') {
+      swarm.tracker = v3GetTracker();
+    } else {
+      swarm.tracker = swarmBuildTracker(AA_FRONTIER_DATA.length);
+    }
     swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
     swarm.weights = Array.from(swarm.tracker.weights);
-    swarm.agiYears = null; // force recompute for this tracker
-    if (!swarm.agiYears) swarm.agiYears = swarmComputeAGIYears(swarm.tracker);
+    swarm.agiYears = null;
+    swarm.agiYears = swarmComputeAGIYears(swarm.tracker);
     if (slider) { slider.min = 2028; slider.max = 2068; slider.step = 1; slider.value = 2068; }
     swarm.forecastSliderMax = 2068;
     if (labels) labels.innerHTML = '<span>2028</span><span></span><span>2038</span><span></span><span>2048</span><span></span><span>2058</span><span>2068</span>';
