@@ -1452,7 +1452,7 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
   function hwToY(hw) { return h - pad - ((hw - yMin) / (yMax - yMin)) * ph; }
 
   // Run fresh MC
-  const mc = liveSwarm.tracker.runMonteCarloForecast(500);
+  const mc = liveSwarm.tracker.runMonteCarloForecast(2000);
   const cfg = liveSwarm.tracker.cfg;
   const curYear = cfg.CURRENT_YEAR;
   const n = liveSwarm.tracker.n;
