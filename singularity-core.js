@@ -187,8 +187,8 @@ class BayesianTracker {
 
   runMonteCarloForecast(nRuns) {
     const agiYears = [], asiYears = []; 
-    const maxSteps = 12 * 45, dt = 1.0 / 12.0; 
-    const plotSteps = 40 * 12; 
+const maxSteps = 12 * 100, dt = 1.0 / 12.0;
+    const plotSteps = 80 * 12;
     const trajYears = new Float64Array(plotSteps);
     const trajCaps = Array.from({length: plotSteps}, () => []);
 
@@ -802,7 +802,7 @@ function plotScenarioFan(tracker) {
   }));
 
   // Add AGI/ASI lines
-  const yrRange = [2026, 2050];
+  const yrRange = [2026, 2080];
   traces.push(
     { x: yrRange, y: [10, 10], type: 'scatter', mode: 'lines', name: t.ch_legend_agi, line: { color: '#f0883e', dash: 'dot', width: 1 } },
     { x: yrRange, y: [20, 20], type: 'scatter', mode: 'lines', name: t.ch_legend_asi, line: { color: '#ef4444', dash: 'dot', width: 1 } }
@@ -880,7 +880,7 @@ const LANG = {
     arch_bottlenecks_title:'Бутылочные горлышки',
     arch_bottlenecks_desc:'Экономическая стена: если Reasoning обгоняет Agency более чем на 2.0, инвестиции падают. Энергетическая стена: с 2026 года дефицит инфраструктуры тормозит рост compute.',
     arch_mc_title:'Monte Carlo прогноз',
-    arch_mc_desc:'3000 прогонов из апостериорного распределения. Каждый прогон — симуляция от 2023 до 2068 года с месячным шагом. Результат: распределение лет до AGI (cap >= 10) и ASI (cap >= 20).',
+    arch_mc_desc:'3000 прогонов из апостериорного распределения. Каждый прогон — симуляция от 2023 до 2123 года с месячным шагом. Результат: распределение лет до AGI (cap >= 10) и ASI (cap >= 20).',
     defs_intro:'В модели v3 используются строгие операциональные определения на основе двухмерной шкалы (Reasoning, Agency). Шкала логарифмическая: GPT-4 (конец 2023) ~ 3.0 по Reasoning и ~0.2 по Agency, текущие модели середины 2026 ~ 6.8 по Reasoning и ~7.2 по Agency. AGI = 10.0, ASI = 20.0.',
     agi_def_title:'AGI — Artificial General Intelligence',
     agi_def_score:'min(Reasoning, Agency) = 10.0',
@@ -955,7 +955,7 @@ const LANG = {
     arch_bottlenecks_title:'Bottlenecks',
     arch_bottlenecks_desc:'Economic wall: if Reasoning leads Agency by more than 2.0, investment drops. Energy wall: from 2026, infrastructure deficit slows compute growth.',
     arch_mc_title:'Monte Carlo Forecast',
-    arch_mc_desc:'3000 runs from the posterior distribution. Each run simulates 2023 to 2068 at monthly resolution. Result: distribution of years to AGI (cap >= 10) and ASI (cap >= 15).',
+    arch_mc_desc:'3000 runs from the posterior distribution. Each run simulates 2023 to 2123 at monthly resolution. Result: distribution of years to AGI (cap >= 10) and ASI (cap >= 20).',
     defs_intro:'The v3 model uses strict operational definitions based on a two-dimensional scale (Reasoning, Agency). The scale is logarithmic: GPT-4 (late 2023) ~ 3.0 in Reasoning and ~0.2 in Agency, current mid-2026 models ~ 6.8 in Reasoning and ~7.2 in Agency. AGI = 10.0, ASI = 20.0.',
     agi_def_title:'AGI — Artificial General Intelligence',
     agi_def_score:'min(Reasoning, Agency) = 10.0',
@@ -1582,7 +1582,7 @@ const ehData = {
   years: [2026, 2028, 2030, 2032, 2035, 2040, 2045, 2050, 2055, 2060, 2068],
 };
 
-const EH_YEARS = [2026, 2028, 2030, 2032, 2035, 2040, 2045, 2050, 2055, 2060, 2068];
+const EH_YEARS = [2026, 2028, 2030, 2032, 2035, 2040, 2045, 2050, 2055, 2060, 2070, 2080];
 
 function yearToRadius(year, maxR) {
   // 2026 -> 20px (center), 2068 -> maxR
