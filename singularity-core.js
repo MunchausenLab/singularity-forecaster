@@ -756,7 +756,7 @@ const LANG = {
     forecast_xaxis:'Год AGI', forecast_yaxis:'Удвоение HW (мес)',
     forecast_pagi:'P(AGI до 2068)', forecast_median:'Медиана AGI',
     forecast_overlay:'AGI ≤', forecast_overlay_desc:'Показаны гипотезы с AGI до',
-    live_swarm_title:'∞ Живой рой', live_swarm_desc:'Каждые 0.5 сек рой перерисовывается из нового прогона Monte Carlo. Частицы мерцают — видно неопределённость в реальном времени.',
+    live_swarm_title:'Симуляция в реальном времени', live_swarm_desc:'Каждые 0.5 сек рой перерисовывается из нового прогона Monte Carlo.',
     swarm_play_forecast:'Анимация',
   },
   en: {
@@ -826,7 +826,7 @@ const LANG = {
     forecast_xaxis:'AGI Year', forecast_yaxis:'HW Doubling (mo)',
     forecast_pagi:'P(AGI by 2068)', forecast_median:'AGI Median',
     forecast_overlay:'AGI ≤', forecast_overlay_desc:'Showing hypotheses with AGI by',
-    live_swarm_title:'∞ Live Swarm', live_swarm_desc:'Every 0.5s the swarm redraws from a new Monte Carlo run. Particles flicker — uncertainty in real time.',
+    live_swarm_title:'Real-time Simulation', live_swarm_desc:'Every 0.5s the swarm redraws from a new Monte Carlo run.',
   }
 };
 
@@ -901,15 +901,15 @@ function swarmSetMode(m) {
     const mcData = swarmComputeAGIYears(swarm.tracker);
     swarm.agiYears = mcData.agi;
     swarm.asiYears = mcData.asi;
-    if (slider) { slider.min = 2028; slider.max = 2068; slider.step = 1; slider.value = 2068; }
+    if (slider) { slider.min = 2020; slider.max = 2068; slider.step = 1; slider.value = 2068; }
     swarm.forecastSliderMax = 2068;
-    if (labels) labels.innerHTML = '<span>2028</span><span></span><span>2038</span><span></span><span>2048</span><span></span><span>2058</span><span>2068</span>';
+    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2038</span><span></span><span>2048</span><span></span><span>2058</span><span>2068</span>';
   } else {
     swarm.tracker = swarmBuildTracker(swarm.obsIdx);
     swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
     swarm.weights = Array.from(swarm.tracker.weights);
     if (slider) { slider.min = 0; slider.max = AA_FRONTIER_DATA.length; slider.step = 1; slider.value = swarm.obsIdx; }
-    if (labels) labels.innerHTML = '<span>2023</span><span></span><span>2024</span><span></span><span>2025</span><span></span><span>2026</span><span>2026.5</span>';
+    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2024</span><span></span><span>2025</span><span></span><span>2026</span><span>2026.5</span>';
   }
   swarmDraw();
 }
@@ -921,13 +921,13 @@ function swarmSetTarget(target) {
   const slider = document.getElementById('swarmSlider');
   const labels = document.getElementById('swarmSliderLabels');
   if (swarm.showASI) {
-    if (slider) { slider.min = 2030; slider.max = 2068; slider.value = 2068; }
+    if (slider) { slider.min = 2020; slider.max = 2068; slider.value = 2068; }
     swarm.forecastSliderMax = 2068;
-    if (labels) labels.innerHTML = '<span>2030</span><span></span><span>2040</span><span></span><span>2050</span><span></span><span>2060</span><span>2068</span>';
+    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2040</span><span></span><span>2050</span><span></span><span>2060</span><span>2068</span>';
   } else {
-    if (slider) { slider.min = 2028; slider.max = 2068; slider.value = 2068; }
+    if (slider) { slider.min = 2020; slider.max = 2068; slider.value = 2068; }
     swarm.forecastSliderMax = 2068;
-    if (labels) labels.innerHTML = '<span>2028</span><span></span><span>2038</span><span></span><span>2048</span><span></span><span>2058</span><span>2068</span>';
+    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2038</span><span></span><span>2048</span><span></span><span>2058</span><span>2068</span>';
   }
   swarmDraw();
 }
@@ -1017,7 +1017,7 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
   }
   const years = swarm.showASI ? swarm.asiYears : swarm.agiYears;
   const cutoff = swarm.forecastSliderMax || 2068;
-  const xMin = swarm.showASI ? 2030 : 2028;
+  const xMin = 2020;
   const xMax = 2068;
   const yMin = 1, yMax = 24;
   const cfg = swarm.tracker.cfg;
@@ -1032,7 +1032,7 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
   ctx.setLineDash([]);
 
   // grid
-  for (let yr = 2030; yr <= 2065; yr += 5) {
+  for (let yr = 2020; yr <= 2065; yr += 5) {
     const x = yearToX(yr);
     ctx.strokeStyle = '#1a1a2a'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, h - pad); ctx.stroke();
@@ -1128,7 +1128,7 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
   grad.addColorStop(0, agiColor(0)); grad.addColorStop(0.5, agiColor(0.5)); grad.addColorStop(1, agiColor(1));
   ctx.fillStyle = grad; ctx.globalAlpha = 0.7; ctx.fillRect(lx, ly, lw, lh); ctx.globalAlpha = 1;
   ctx.fillStyle = '#666680'; ctx.font = '8px JetBrains Mono, monospace'; ctx.textAlign = 'left';
-  ctx.fillText('2030', lx, ly + lh + 10);
+  ctx.fillText('2020', lx, ly + lh + 10);
   ctx.textAlign = 'right'; ctx.fillText('2065', lx + lw, ly + lh + 10);
 }
 
@@ -1197,7 +1197,7 @@ function swarmPlay() {
     document.getElementById('swarmPlayBtn').querySelector('span').textContent = '⏸';
     // Reset ASI animation too
     if (swarm.asiAnimating) { swarm.asiAnimating = false; clearTimeout(swarm.asiRafId); }
-    let year = 2028;
+    let year = 2020;
     const step = () => {
       if (!swarm.forecastAnimating || year > 2068) {
         swarm.forecastAnimating = false;
@@ -1286,7 +1286,7 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
 
   // X range depends on AGI vs ASI
   const isASI = (colorMode === 'asi');
-  const xMin = isASI ? 2030 : 2028;
+  const xMin = 2020;
   const xMax = 2068;
   const yMin = 1, yMax = 24;
 
@@ -1351,7 +1351,7 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
 
   // Grid
   ctx.strokeStyle = '#1a1a2a'; ctx.lineWidth = 1;
-  for (let yr = 2030; yr <= 2065; yr += 5) {
+  for (let yr = 2020; yr <= 2065; yr += 5) {
     const x = yearToX(yr);
     ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, h - pad); ctx.stroke();
     ctx.fillStyle = '#444460'; ctx.font = '8px JetBrains Mono, monospace'; ctx.textAlign = 'center';
