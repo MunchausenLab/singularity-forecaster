@@ -444,9 +444,6 @@ function v3ResetTracker() {
 }
 
 function v3UpdateUI(tracker) {
-  const obsDiv = document.getElementById('v3Observations');
-  const allObs = AA_FRONTIER_DATA.map(d => ({...d, source: 'AA'})).concat(v3Observations.map(o => ({ ...o, source: 'user' })));
-  obsDiv.innerHTML = allObs.map(o => `<span style="margin-right:12px;${o.source === 'user' ? 'color:var(--accent)' : ''}">${o.year.toFixed(2)}: I=${o.intel.toFixed(0)}, A=${o.agentic.toFixed(1)}${o.event ? ' ('+o.event+')' : ''}</span>`).join('');
   const s = tracker.getSummary();
   const ess = 1.0 / tracker.weights.reduce((a, b) => a + b * b, 0);
   document.getElementById('v3Params').textContent = `Апостериор (Байес): Удвоение HW = ${s.hwMonths.toFixed(1)} мес | Удвоение Algo = ${s.algoMonths.toFixed(1)} мес | Потолок Agency = ${s.agencyCeiling.toFixed(2)} | ESS: ${ess.toFixed(0)}`;
@@ -526,6 +523,8 @@ async function runSimulation() {
       },
     };
     updateUI(currentResults);
+    if (typeof liveSwarm !== 'undefined') liveSwarm.tracker = tracker;
+    if (typeof swarm !== 'undefined' && swarm) swarm.tracker = tracker;
   } finally {
     simulationRunning = false; btn.disabled = false; overlay.classList.remove('show');
   }
@@ -534,9 +533,15 @@ async function runSimulation() {
 function updateUI(r) {
   const s = r.summary, fmt = yearsText;
   setVal('vAGI', fmt(s.agiMedian), 'agiyears'); setVal('vASI', fmt(s.asiMedian), 'asiyears');
-  setVal('v29', s.pAgi2029.toFixed(1) + '%'); setVal('v33', s.pAgi2033.toFixed(1) + '%'); setVal('v40', s.pAgi2040.toFixed(1) + '%');
-  setVal('v35', s.pAsi2035.toFixed(1) + '%'); setVal('v45', s.pAsi2045.toFixed(1) + '%');
-  colorProb('v29', s.pAgi2029); colorProb('v33', s.pAgi2033); colorProb('v40', s.pAgi2040);
+  const tracker = v3GetTracker();
+  if (tracker) {
+    const sum = tracker.getSummary();
+    const ess = 1.0 / tracker.weights.reduce((a, b) => a + b * b, 0);
+    setVal('vHW', sum.hwMonths.toFixed(1) + ' мес');
+    setVal('vAlgo', sum.algoMonths.toFixed(1) + ' мес');
+    setVal('vAgency', sum.agencyCeiling.toFixed(2));
+    setVal('vESS', ess.toFixed(0));
+  }
   plotHistogram(r.histogram); plotCumulative(r.cumulative);
   // Advanced charts (async-like, yield between heavy plots)
   requestAnimationFrame(() => {
@@ -695,11 +700,12 @@ const LANG = {
     sb_agi:'AGI медиана', sb_asi:'ASI медиана',
     sb_pagi_2029:'P(AGI · 2029)', sb_pagi_2033:'P(AGI · 2033)', sb_pagi_2040:'P(AGI · 2040)',
     sb_pasi_2035:'P(ASI · 2035)', sb_pasi_2045:'P(ASI · 2045)',
+    sb_hw:'Удвоение HW', sb_algo:'Удвоение Algo', sb_agency:'Потолок Agency', sb_ess:'ESS',
     // Controls
     ctrl_simulations:'Симуляции (N)', ctrl_obs_year:'Год наблюдения',
     ctrl_intelligence:'Интеллект (AA)', ctrl_agentic:'Агентность (AA)',
     ctrl_add:'Добавить', ctrl_reset:'Сбросить',
-    run_btn:'Запустить прогноз',
+    run_btn:'Запустить симуляцию',
     // Charts
     tag1:'Вероятностный анализ', tag3:'Кумулятивная',
     tag5:'Чувствительность', tag6:'Сценарии', tag7:'Декомпозиция',
@@ -769,11 +775,12 @@ const LANG = {
     sb_agi:'AGI median', sb_asi:'ASI median',
     sb_pagi_2029:'P(AGI · 2029)', sb_pagi_2033:'P(AGI · 2033)', sb_pagi_2040:'P(AGI · 2040)',
     sb_pasi_2035:'P(ASI · 2035)', sb_pasi_2045:'P(ASI · 2045)',
+    sb_hw:'HW Doubling', sb_algo:'Algo Doubling', sb_agency:'Agency Ceiling', sb_ess:'ESS',
     // Controls
     ctrl_simulations:'Simulations (N)', ctrl_obs_year:'Observation Year',
     ctrl_intelligence:'Intelligence (AA)', ctrl_agentic:'Agentic (AA)',
     ctrl_add:'Add', ctrl_reset:'Reset',
-    run_btn:'Run Forecast',
+    run_btn:'Run Simulation',
     // Charts
     tag1:'Probabilistic Analysis', tag3:'Cumulative',
     tag5:'Sensitivity', tag6:'Scenarios', tag7:'Decomposition',
@@ -1654,6 +1661,7 @@ window.addEventListener('load', () => {
   const tracker = v3GetTracker();
   v3UpdateUI(tracker);
 });
+window.addEventListener('load', () => { setTimeout(runSimulation, 800); });
 
 function v3QuickWarning() {
   const t = v3Tracker || v3GetTracker();

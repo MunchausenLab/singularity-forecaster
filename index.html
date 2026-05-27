@@ -167,24 +167,20 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     <div class="status-label" data-i18n="sb_asi">ASI медиана</div>
   </div>
   <div class="status-item">
-    <div class="status-value probability" id="v29">—</div>
-    <div class="status-label" data-i18n="sb_pagi_2029">P(AGI · 2029)</div>
+    <div class="status-value" id="vHW">—</div>
+    <div class="status-label" data-i18n="sb_hw">Удвоение HW</div>
   </div>
   <div class="status-item">
-    <div class="status-value probability" id="v33">—</div>
-    <div class="status-label" data-i18n="sb_pagi_2033">P(AGI · 2033)</div>
+    <div class="status-value" id="vAlgo">—</div>
+    <div class="status-label" data-i18n="sb_algo">Удвоение Algo</div>
   </div>
   <div class="status-item">
-    <div class="status-value probability" id="v40">—</div>
-    <div class="status-label" data-i18n="sb_pagi_2040">P(AGI · 2040)</div>
+    <div class="status-value orange" id="vAgency">—</div>
+    <div class="status-label" data-i18n="sb_agency">Потолок Agency</div>
   </div>
   <div class="status-item">
-    <div class="status-value probability" id="v35">—</div>
-    <div class="status-label" data-i18n="sb_pasi_2035">P(ASI · 2035)</div>
-  </div>
-  <div class="status-item">
-    <div class="status-value probability" id="v45">—</div>
-    <div class="status-label" data-i18n="sb_pasi_2045">P(ASI · 2045)</div>
+    <div class="status-value" id="vESS">—</div>
+    <div class="status-label" data-i18n="sb_ess">ESS</div>
   </div>
 </div>
 
@@ -209,15 +205,14 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   </div>
   <button class="btn btn-secondary btn-sm" data-i18n="ctrl_add" onclick="v3AddObservation()">+ Добавить</button>
   <button class="btn btn-primary" id="runBtn" onclick="runSimulation()">
-    ▶ <span data-i18n="run_btn">Запустить прогноз</span>
+    ▶ <span data-i18n="run_btn">Запустить симуляцию</span>
   </button>
   <button class="btn btn-secondary btn-sm" data-i18n="ctrl_reset" onclick="v3ResetTracker()">Сбросить</button>
 </div>
 
-<!-- ===== v3 OBSERVATIONS ===== -->
+<!-- ===== v3 PARAMS ===== -->
 <div id="v3Panel" style="display:block;background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:10px 32px">
-  <div id="v3Observations" style="font-size:.72rem;color:var(--text-secondary)"></div>
-  <div id="v3Params" style="margin-top:4px;font-size:.72rem;color:var(--text-muted)"></div>
+  <div id="v3Params" style="font-size:.72rem;color:var(--text-muted)"></div>
   <div id="v3Warning" style="margin-top:4px;font-size:.72rem;color:var(--orange);display:none"></div>
   <div id="v3NoAgi" style="margin-top:4px;font-size:.7rem;color:var(--text-muted)"></div>
 </div>
