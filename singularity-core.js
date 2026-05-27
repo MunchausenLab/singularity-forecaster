@@ -174,6 +174,7 @@ class BayesianTracker {
       
       let agiY = null, asiY = null;
       let plotIdx = 0;
+      let isWinter = false;
 
       for (let step = 0; step < maxSteps; step++) {
         const currentYear = this.cfg.BASE_YEAR + step * dt;
@@ -220,10 +221,29 @@ class BayesianTracker {
         }
         
         let damping = 1.0;
-        if (currentYear > this.cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
-          damping *= Math.exp(-this.cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
+
+        // Проверка на лопнувший пузырь (AI Winter)
+        if (!isWinter && currentYear > 2026.5) {
+          const hypeGap = reasoning - agency;
+          if (hypeGap > 4.0 && Math.random() < 0.10 * dt) {
+            isWinter = true;
+          }
         }
-        
+
+        if (isWinter) {
+          // Зима ИИ: инвестиции в железо падают, алгоритмы развиваются медленнее
+          damping = 0.1;
+          // Выход из зимы: если RSI дотянет agency до reasoning
+          if (agency >= reasoning - 1.0) {
+            isWinter = false;
+          }
+        } else {
+          // Мягкое экономическое горлышко (оригинальный код)
+          if (currentYear > this.cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
+            damping *= Math.exp(-this.cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
+          }
+        }
+
         // Стадийный RSI: дискретные уровни с порогами reasoning + agency
         let rsi = 0;
 
@@ -248,7 +268,7 @@ class BayesianTracker {
         rsi = Math.min(rsi, 1.5);
         
         flopsLog += hwK * damping * dt;
-        algoLog += (algoK * damping + rsi) * dt; // Добавляем RSI к росту алгоритмов
+        algoLog += (algoK * (isWinter ? 0.4 : 1.0) * damping + rsi) * dt;
       }
       
       agiYears.push(agiY !== null ? agiY - this.cfg.CURRENT_YEAR : Infinity);
