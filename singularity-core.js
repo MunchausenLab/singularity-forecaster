@@ -224,13 +224,28 @@ class BayesianTracker {
           damping *= Math.exp(-this.cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
         }
         
-        // ИСПРАВЛЕНИЕ 2: Включен RSI (Recursive Self-Improvement)
-        // Включается, когда агентность пробивает 5.0
+        // Стадийный RSI: дискретные уровни с порогами reasoning + agency
         let rsi = 0;
-        if (cap >= 5.0) {
-          const progress = Math.max(0, Math.min(1.0, (cap - 5.0) / (40.0 - 5.0)));
-          rsi = 0.08 * progress * Math.log(1.0 + cap);
+
+        // Уровень 1: Tool-assisted optimization (написание кода, рефакторинг)
+        if (reasoning >= 6.0 && agency >= 4.0) {
+          rsi += 0.02 * Math.log(1.0 + reasoning);
         }
+
+        // Уровень 2: Automated research loops (автономный запуск экспериментов)
+        // Требует высокой агентности!
+        if (reasoning >= 8.0 && agency >= 8.0) {
+          rsi += 0.05 * Math.log(1.0 + cap);
+        }
+
+        // Уровень 3: Architecture Search & Hardware Co-design (преддверие ASI)
+        // Требует уровня AGI
+        if (cap >= this.cfg.THRESHOLDS.agi) {
+          rsi += 0.15 * Math.pow(cap - this.cfg.THRESHOLDS.agi, 1.2);
+        }
+
+        // Ограничитель скорости RSI (физическое время на обучение моделей)
+        rsi = Math.min(rsi, 1.5);
         
         flopsLog += hwK * damping * dt;
         algoLog += (algoK * damping + rsi) * dt; // Добавляем RSI к росту алгоритмов
