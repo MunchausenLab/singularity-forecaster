@@ -1153,9 +1153,9 @@ function swarmDrawOverlay(ctx, w, h, pad) {
     if (targetToggle) targetToggle.style.display = '';
     if (hint) hint.style.display = 'none';
     if (ov) {
-      const L = LANG[window._lang||'ru'];
       const target = swarm.showASI ? 'ASI' : 'AGI';
-      ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">${target} ≤ ${cutoff}</div><div style="font-size:.68rem;color:#9898b0">Показаны гипотезы с ${target} до ${cutoff}</div>`;
+      const fc = swarm.forecastSliderMax || 2068;
+      ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">${target} ≤ ${fc}</div><div style="font-size:.68rem;color:#9898b0">Показаны гипотезы с ${target} до ${fc}</div>`;
       ov.style.opacity = '1';
     }
     if (leg) {
