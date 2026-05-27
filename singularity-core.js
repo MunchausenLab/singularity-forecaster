@@ -229,6 +229,9 @@ class BayesianTracker {
 
         const cap = Math.min(reasoning, agency);
 
+        // --- damping: базовый мультипликатор скорости ---
+        let damping = 1.0;
+
         // Архитектурный сброс: J-кривая вместо магии ×3
         // Новая архитектура сначала хуже настроенного Трансформера (шаг назад перед двумя вперед)
         if (!p.inNewParadigm && currentYear > 2026.5) {
@@ -294,8 +297,6 @@ class BayesianTracker {
             asiY = currentYear;
             break; // Остановка только на ASI
         }
-        
-        let damping = 1.0;
 
         // Проверка на лопнувший пузырь (AI Winter)
         if (!isWinter && currentYear > 2026.5) {
