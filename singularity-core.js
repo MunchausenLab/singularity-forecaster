@@ -52,7 +52,7 @@ function createV3Config() {
     BASE_YEAR: 2023.0,          // Якорь (уровень GPT-4)
     BASE_LOG_FLOPS: 24.5,       // Начальные FLOPs в 2023
     CURRENT_YEAR: 2026.30,      // Откуда рисуем графики прогноза
-    THRESHOLDS: { agi: 10.0, asi: 100.0 },
+    THRESHOLDS: { agi: 10.0, asi: 50.0 },
     DIMENSIONS: {
       reasoning: { slope: 0.35, ceiling: 15.0 }, // Откалибровано под рост до 65 баллов
       agency:    { slope: 0.25 }, // Потолок определяет частица
@@ -380,7 +380,7 @@ class BayesianTracker {
     }
     return {
         agiYears, asiYears,
-        trajectory: { years: yrs, median: med, p10: p10a, p25: p25a, p75: p75a, p90: p90a, agiThreshold: 10, asiThreshold: 100 }
+        trajectory: { years: yrs, median: med, p10: p10a, p25: p25a, p75: p75a, p90: p90a, agiThreshold: 10, asiThreshold: 50 }
     };
   }
 
@@ -802,7 +802,7 @@ function plotScenarioFan(tracker) {
   const yrRange = [2026, 2050];
   traces.push(
     { x: yrRange, y: [10, 10], type: 'scatter', mode: 'lines', name: t.ch_legend_agi, line: { color: '#f0883e', dash: 'dot', width: 1 } },
-    { x: yrRange, y: [100, 100], type: 'scatter', mode: 'lines', name: t.ch_legend_asi, line: { color: '#ef4444', dash: 'dot', width: 1 } }
+    { x: yrRange, y: [50, 50], type: 'scatter', mode: 'lines', name: t.ch_legend_asi, line: { color: '#ef4444', dash: 'dot', width: 1 } }
   );
 
   Plotly.newPlot('c6', traces, {
