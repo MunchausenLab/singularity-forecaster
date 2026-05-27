@@ -756,8 +756,12 @@ const LANG = {
     forecast_xaxis:'Год AGI', forecast_yaxis:'Удвоение HW (мес)',
     forecast_pagi:'P(AGI до 2068)', forecast_median:'Медиана AGI',
     forecast_overlay:'AGI ≤', forecast_overlay_desc:'Показаны гипотезы с AGI до',
-    live_swarm_title:'Симуляция в реальном времени', live_swarm_desc:'Каждые 0.5 сек рой перерисовывается из нового прогона Monte Carlo.',
+    live_swarm_title:'Симуляция в реальном времени', live_swarm_desc:'Каждые 0.25 сек рой перерисовывается из нового прогона Monte Carlo.',
     swarm_play_forecast:'Анимация',
+    // Event Horizon
+    eh_title:'Визуализация: «Сфера Сингулярности»',
+    eh_desc:'Каждая частица — один прогон Monte Carlo. Вылетает из центра (2026) и застывает на орбите своего года AGI. Плотные кольца = высокая вероятность. Оранжевые орбиты — AGI, красные — ASI.',
+    eh_play:'Запуск', eh_reset:'Сброс',
   },
   en: {
     hdr_title:'Singularity Forecaster', hdr_sub:'v3 Bayesian Tracker',
@@ -826,7 +830,11 @@ const LANG = {
     forecast_xaxis:'AGI Year', forecast_yaxis:'HW Doubling (mo)',
     forecast_pagi:'P(AGI by 2068)', forecast_median:'AGI Median',
     forecast_overlay:'AGI ≤', forecast_overlay_desc:'Showing hypotheses with AGI by',
-    live_swarm_title:'Real-time Simulation', live_swarm_desc:'Every 0.5s the swarm redraws from a new Monte Carlo run.',
+    live_swarm_title:'Real-time Simulation', live_swarm_desc:'Every 0.25s the swarm redraws from a new Monte Carlo run.',
+    // Event Horizon
+    eh_title:'Visualization: "Sphere of Singularity"',
+    eh_desc:'Each particle is one Monte Carlo run. Flies from center (2026) and freezes at its AGI year orbit. Dense rings = high probability. Orange orbits — AGI, red — ASI.',
+    eh_play:'Play', eh_reset:'Reset',
   }
 };
 
@@ -1019,7 +1027,7 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
   const cutoff = swarm.forecastSliderMax || 2068;
   const xMin = 2020;
   const xMax = 2068;
-  const yMin = 1, yMax = 24;
+  const yMin = 16, yMax = 24;
   const cfg = swarm.tracker.cfg;
 
   function yearToX(yr) { return pad + ((yr - xMin) / (xMax - xMin)) * pw; }
@@ -1040,7 +1048,7 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
     ctx.font = '9px JetBrains Mono, monospace'; ctx.textAlign = 'center';
     ctx.fillText(yr.toString(), x, h - pad + 12);
   }
-  for (let hw = 2; hw <= 22; hw += 4) {
+  for (let hw = 16; hw <= 24; hw += 4) {
     const y = hwToY(hw);
     ctx.strokeStyle = '#1a1a2a'; ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w - pad, y); ctx.stroke();
     ctx.fillStyle = '#444460'; ctx.textAlign = 'right';
@@ -1288,7 +1296,7 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
   const isASI = (colorMode === 'asi');
   const xMin = 2020;
   const xMax = 2068;
-  const yMin = 1, yMax = 24;
+  const yMin = 16, yMax = 24;
 
   function yearToX(yr) { return pad + ((yr - xMin) / (xMax - xMin)) * pw; }
   function hwToY(hw) { return h - pad - ((hw - yMin) / (yMax - yMin)) * ph; }
@@ -1357,7 +1365,7 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
     ctx.fillStyle = '#444460'; ctx.font = '8px JetBrains Mono, monospace'; ctx.textAlign = 'center';
     ctx.fillText(yr.toString(), x, h - pad + 10);
   }
-  for (let hw = 4; hw <= 22; hw += 4) {
+  for (let hw = 16; hw <= 24; hw += 4) {
     const y = hwToY(hw);
     ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w - pad, y); ctx.stroke();
     ctx.fillStyle = '#333350'; ctx.textAlign = 'right';
@@ -1390,12 +1398,234 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
 
 function liveSwarmTickAGI() {
   drawLiveSwarm('liveSwarmAGI', 'liveSwarmAGIStats', 'agiYears', 'agi');
-  liveSwarm.timerAGI = setTimeout(liveSwarmTickAGI, 500);
+  liveSwarm.timerAGI = setTimeout(liveSwarmTickAGI, 250);
 }
 
 function liveSwarmTickASI() {
   drawLiveSwarm('liveSwarmASI', 'liveSwarmASIStats', 'asiYears', 'asi');
-  liveSwarm.timerASI = setTimeout(liveSwarmTickASI, 500);
+  liveSwarm.timerASI = setTimeout(liveSwarmTickASI, 250);
+}
+
+// ===== EVENT HORIZON: Sphere of Singularity =====
+const ehData = {
+  particles: [],
+  nTarget: 1000,
+  launched: 0,
+  animId: null,
+  timerId: null,
+  running: false,
+  tracker: null,
+  radii: {},
+  stats: { agi: 0, asi: 0, total: 0 },
+  years: [2026, 2028, 2030, 2032, 2035, 2040, 2045, 2050, 2055, 2060, 2068],
+};
+
+const EH_YEARS = [2026, 2028, 2030, 2032, 2035, 2040, 2045, 2050, 2055, 2060, 2068];
+
+function yearToRadius(year, maxR) {
+  // 2026 -> 20px (center), 2068 -> maxR
+  const t = Math.max(0, Math.min(1, (year - 2026) / (2068 - 2026)));
+  return 20 + t * (maxR - 20);
+}
+
+function ehInitCanvas() {
+  const c = document.getElementById('eventHorizonCanvas');
+  if (!c) return;
+  const dpr = window.devicePixelRatio || 1;
+  c.width = c.offsetWidth * dpr;
+  c.height = c.offsetHeight * dpr;
+  const ctx = c.getContext('2d');
+  ctx.scale(dpr, dpr);
+}
+
+function ehDraw() {
+  const c = document.getElementById('eventHorizonCanvas');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const w = c.offsetWidth, h = c.offsetHeight;
+  const cx = w / 2, cy = h / 2;
+  const maxR = Math.min(w, h) / 2 - 20;
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#06060c';
+  ctx.fillRect(0, 0, w, h);
+
+  // Draw orbit rings for each year
+  const lang = window._lang || 'ru';
+  const t = LANG[lang];
+  for (const yr of EH_YEARS) {
+    const r = yearToRadius(yr, maxR);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = '#1a1a2a';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    // Year label
+    ctx.fillStyle = '#333350';
+    ctx.font = '9px JetBrains Mono, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(yr.toString(), cx + r + 4, cy + 3);
+  }
+
+  // Draw particles
+  for (const p of ehData.particles) {
+    const angle = p.angle;
+    const targetR = yearToRadius(p.targetYear, maxR);
+    const r = Math.min(p.r, targetR);
+    const x = cx + r * Math.cos(angle);
+    const y = cy + r * Math.sin(angle);
+
+    const frozen = p.r >= targetR - 1;
+    if (frozen) {
+      // Glow effect for settled particles
+      ctx.beginPath();
+      ctx.arc(x, y, p.glow, 0, Math.PI * 2);
+      ctx.fillStyle = p.color.replace('0.9', '0.15');
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = p.color;
+    ctx.fill();
+  }
+
+  // Center label
+  const cl = document.getElementById('ehCenterLabel');
+  if (cl) {
+    cl.textContent = '2026';
+  }
+
+  // Legend & stats
+  const statsEl = document.getElementById('ehStats');
+  const legendEl = document.getElementById('ehLegend');
+  const n = ehData.particles.length;
+  const agi = ehData.particles.filter(p => p.type === 'agi').length;
+  const asi = ehData.particles.filter(p => p.type === 'asi').length;
+  const pending = n - agi - asi;
+
+  if (statsEl) {
+    statsEl.textContent = `N=${n} | AGI=${agi} | ASI=${asi} | ${pending > 0 ? 'in flight +' + pending : ''}`;
+  }
+
+  if (legendEl) {
+    legendEl.innerHTML = `<span style="color:#f0883e">● AGI</span> достигнут &nbsp; <span style="color:#ef4444">● ASI</span> достигнут &nbsp; <span style="color:#555570">● в полёте</span>`;
+  }
+}
+
+function ehStep(dt) {
+  const c = document.getElementById('eventHorizonCanvas');
+  if (!c) return;
+  const w = c.offsetWidth, h = c.offsetHeight;
+  const maxR = Math.min(w, h) / 2 - 20;
+
+  // Move particles toward their target
+  for (const p of ehData.particles) {
+    if (p.r >= yearToRadius(p.targetYear, maxR) - 1) continue;
+    p.r += p.speed * dt;
+    // Slight spiral
+    p.angle += 0.02 * dt;
+  }
+
+  // Spawn new particles
+  if (ehData.launched < ehData.nTarget && ehData.spawnsLeft > 0) {
+    const spawnRate = 3; // particles per frame
+    for (let i = 0; i < spawnRate && ehData.launched < ehData.nTarget && ehData.spawnsLeft > 0; i++) {
+      // Pick next particle from precomputed data
+      const pt = ehData.spawns[ehData.spawnIdx];
+      ehData.spawnIdx++;
+      ehData.spawnsLeft--;
+
+      const isASI = pt.asiYear !== Infinity && isFinite(pt.asiYear);
+      const isAGI = pt.agiYear !== Infinity && isFinite(pt.agiYear);
+      let targetYear, type, color;
+
+      if (isASI) {
+        targetYear = pt.asiYear;
+        type = 'asi';
+        color = 'rgba(239,68,68,0.9)';
+      } else if (isAGI) {
+        targetYear = pt.agiYear;
+        type = 'agi';
+        color = 'rgba(240,136,62,0.9)';
+      } else {
+        // Never reached AGI -- drift to far orbit
+        targetYear = 2068;
+        type = 'never';
+        color = 'rgba(80,80,120,0.5)';
+      }
+
+      ehData.particles.push({
+        r: 0,
+        angle: Math.random() * Math.PI * 2,
+        speed: 8 + Math.random() * 12, // pixels per frame
+        targetYear: targetYear,
+        type: type,
+        color: color,
+        glow: 3 + Math.random() * 4,
+      });
+      ehData.launched++;
+    }
+  }
+
+  ehDraw();
+}
+
+function ehAnimate() {
+  if (!ehData.running) return;
+  ehStep(1);
+  ehData.animId = requestAnimationFrame(ehAnimate);
+}
+
+function eventHorizonPlay() {
+  if (ehData.running) return;
+  ehInitCanvas();
+
+  // Get tracker from liveSwarm or global
+  const tracker = (liveSwarm && liveSwarm.tracker) || (typeof v3Tracker !== 'undefined' ? v3Tracker : null);
+  if (!tracker) {
+    alert('Сначала запустите прогноз (кнопка «Запустить прогноз»)');
+    return;
+  }
+  ehData.tracker = tracker;
+
+  // Run MC forecast for particles
+  const mc = tracker.runMonteCarloForecast(ehData.nTarget);
+  const cfg = tracker.cfg;
+  const curYear = cfg.CURRENT_YEAR;
+  const n = tracker.n;
+  const cumw = new Float64Array(n);
+  cumw[0] = tracker.weights[0];
+  for (let i = 1; i < n; i++) cumw[i] = cumw[i-1] + tracker.weights[i];
+
+  ehData.spawns = [];
+  for (let run = 0; run < mc.agiYears.length; run++) {
+    const u = (run + 0.5) / mc.agiYears.length;
+    let idx = 0;
+    while (idx < n - 1 && cumw[idx] < u) idx++;
+    const agiAbs = isFinite(mc.agiYears[run]) ? mc.agiYears[run] + curYear : Infinity;
+    const asiAbs = isFinite(mc.asiYears[run]) ? mc.asiYears[run] + curYear : Infinity;
+    ehData.spawns.push({ agiYear: agiAbs, asiYear: asiAbs, idx: idx });
+  }
+
+  ehData.spawnIdx = 0;
+  ehData.spawnsLeft = ehData.spawns.length;
+  ehData.particles = [];
+  ehData.launched = 0;
+  ehData.running = true;
+  ehAnimate();
+}
+
+function eventHorizonReset() {
+  ehData.running = false;
+  if (ehData.animId) cancelAnimationFrame(ehData.animId);
+  if (ehData.timerId) clearTimeout(ehData.timerId);
+  ehData.particles = [];
+  ehData.launched = 0;
+  ehData.spawns = [];
+  ehData.spawnIdx = 0;
+  ehData.spawnsLeft = 0;
+  ehDraw();
 }
 
 window.addEventListener('load', () => { setTimeout(liveSwarmInit, 300); });
@@ -1415,6 +1645,7 @@ function setLang(lang) {
 }
 
 window.addEventListener('load', () => setLang('ru'));
+window.addEventListener('load', () => { setTimeout(ehInitCanvas, 200); setTimeout(ehDraw, 250); });
 window.addEventListener('load', () => {
   const tracker = v3GetTracker();
   v3UpdateUI(tracker);
