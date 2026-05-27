@@ -8,6 +8,40 @@ function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function percentile(arr, p) { const sorted = arr.slice().sort((a, b) => a - b); const idx = clamp(Math.floor(p / 100 * sorted.length), 0, sorted.length - 1); return sorted[idx]; }
 function cdf(list, x) { const c = list.filter(v => isFinite(v) && v <= x).length; return list.length ? (c / list.length) * 100 : 0; }
 
+// Перевод латентных переменных (reasoning, agency) в наблюдаемые бенчмарки
+// reasoning и agency в масштабе модели (0..~15 для reasoning, 0..~agency_ceiling для agency)
+// Нормализуем к шкале 0..10 для маппинга
+function mapToObservables(reasoning, agency, ceilingR, ceilingA) {
+    // Нормализация: AA-шкала 0..100 -> внутренняя шкала модели
+    // reasoning: AA/100 * 15 (ceiling по умолчанию), agency: AA/100 * agency_ceiling
+    const rNorm = ceilingR > 0 ? reasoning / ceilingR : 0;
+    const aNorm = ceilingA > 0 ? agency / ceilingA : 0;
+    // Прокси в шкалу 0..10 для формул бенчмарков
+    const r10 = rNorm * 10;
+    const a10 = aNorm * 10;
+
+    // SWE-bench: смесь reasoning (40%) и agency (60%)
+    const sweBench = 100 * sigmoid(0.4 * (r10 * 0.4 + a10 * 0.6) - 3.5);
+
+    // ARC-AGI: чистое reasoning
+    const arcAgi = 100 * sigmoid(0.6 * r10 - 4.0);
+
+    // Автономный горизонт (часы), экспоненциально от agency
+    const autonomousHorizonHours = 0.5 * Math.exp(0.5 * a10);
+
+    // Стоимость 1M токенов ($), падает с ростом reasoning
+    const costPerM = Math.max(0.01, 10.0 * Math.exp(-0.3 * r10));
+
+    return {
+        sweBench: sweBench.toFixed(1) + '%',
+        arcAgi: arcAgi.toFixed(1) + '%',
+        horizon: autonomousHorizonHours > 24
+            ? (autonomousHorizonHours / 24).toFixed(1) + ' дней'
+            : autonomousHorizonHours.toFixed(1) + ' часов',
+        cost: '$' + costPerM.toFixed(3)
+    };
+}
+
 // ============================================================================
 // v3.0 — BAYESIAN PARTICLE FILTER (Исправлено: Якорь на 2023 год + Inference)
 // ============================================================================
@@ -492,6 +526,7 @@ function v3ResetTracker() {
 
 function v3UpdateUI(tracker) {
   v3CheckWarning(tracker);
+  updateObsMetrics();
 }
 
 function v3CheckWarning(tracker) {
@@ -1710,4 +1745,32 @@ window.addEventListener('load', () => { setTimeout(runSimulation, 800); });
 function v3QuickWarning() {
   const t = v3Tracker || v3GetTracker();
   v3CheckWarning(t);
+  updateObsMetrics();
+}
+
+function updateObsMetrics() {
+  const intel = +document.getElementById('v3Intel').value || 0;
+  const agentic = +document.getElementById('v3Agentic').value || 0;
+
+  // AA-шкала 0..100 -> внутренняя шкала модели
+  // reasoning_ceiling = 15.0 (default), agency_ceiling = ~12 (aposteriori)
+  const ceilingR = 15.0;
+  const agencyCeiling = (v3Tracker && v3Tracker.getSummary)
+    ? v3Tracker.getSummary().agencyCeiling : 12.0;
+  // AA 0..100 -> model scale: divide by 100, multiply by ceiling
+  const reasoningModel = (intel / 100) * ceilingR;
+  const agencyModel = (agentic / 100) * agencyCeiling;
+
+  const m = mapToObservables(reasoningModel, agencyModel, ceilingR, agencyCeiling);
+
+  const el = document.getElementById('obsMetrics');
+  if (el) el.style.display = 'block';
+  const e1 = document.getElementById('omSWE');
+  const e2 = document.getElementById('omARC');
+  const e3 = document.getElementById('omHorizon');
+  const e4 = document.getElementById('omCost');
+  if (e1) e1.textContent = m.sweBench;
+  if (e2) e2.textContent = m.arcAgi;
+  if (e3) e3.textContent = m.horizon;
+  if (e4) e4.textContent = m.cost;
 }

@@ -210,6 +210,15 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <button class="btn btn-secondary btn-sm" data-i18n="ctrl_reset" onclick="v3ResetTracker()">Сбросить</button>
 </div>
 
+<!-- ===== OBSERVABLE METRICS ===== -->
+<div id="obsMetrics" style="display:none;background:var(--bg-card);border-bottom:1px solid var(--border);padding:10px 32px;font-size:.72rem;color:var(--text-secondary);font-family:var(--mono)">
+  <span style="color:var(--text-muted);margin-right:16px">Прогноз при текущих I/A:</span>
+  <span style="margin-right:16px">SWE-bench: <b id="omSWE" style="color:var(--accent)">—</b></span>
+  <span style="margin-right:16px">ARC-AGI: <b id="omARC" style="color:var(--accent)">—</b></span>
+  <span style="margin-right:16px">Автономность: <b id="omHorizon" style="color:var(--orange)">—</b></span>
+  <span>Стоимость 1M токенов: <b id="omCost" style="color:var(--green)">—</b></span>
+</div>
+
 <!-- ===== v3 PARAMS ===== -->
 <div id="v3Panel" style="display:block;background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:10px 32px">
   <div id="v3Params" style="font-size:.72rem;color:var(--text-muted)"></div>
