@@ -756,6 +756,7 @@ const LANG = {
     forecast_xaxis:'Год AGI', forecast_yaxis:'Удвоение HW (мес)',
     forecast_pagi:'P(AGI до 2068)', forecast_median:'Медиана AGI',
     forecast_overlay:'AGI ≤', forecast_overlay_desc:'Показаны гипотезы с AGI до',
+    live_swarm_title:'∞ Живой рой', live_swarm_desc:'Каждые 0.5 сек рой перерисовывается из нового прогона Monte Carlo. Частицы мерцают — видно неопределённость в реальном времени.',
     swarm_play_forecast:'Анимация',
   },
   en: {
@@ -825,6 +826,7 @@ const LANG = {
     forecast_xaxis:'AGI Year', forecast_yaxis:'HW Doubling (mo)',
     forecast_pagi:'P(AGI by 2068)', forecast_median:'AGI Median',
     forecast_overlay:'AGI ≤', forecast_overlay_desc:'Showing hypotheses with AGI by',
+    live_swarm_title:'∞ Live Swarm', live_swarm_desc:'Every 0.5s the swarm redraws from a new Monte Carlo run. Particles flicker — uncertainty in real time.',
   }
 };
 
@@ -1246,7 +1248,160 @@ function swarmReset() {
   document.getElementById('swarmOverlay').style.opacity = '0';
 }
 
-window.addEventListener('load', () => { setTimeout(swarmInit, 100); });
+
+// ===== LIVE SWARM (infinite flicker) =====
+let liveSwarm = { tracker:null, timer:null };
+
+function liveSwarmInit() {
+  const c = document.getElementById('liveSwarmCanvas');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  c.width = c.offsetWidth * dpr; c.height = c.offsetHeight * dpr;
+  ctx.scale(dpr, dpr);
+
+  // Use same tracker as main forecast
+  if (typeof v3Tracker !== 'undefined' && v3Tracker) {
+    liveSwarm.tracker = v3Tracker;
+  } else if (typeof v3GetTracker === 'function') {
+    liveSwarm.tracker = v3GetTracker();
+  } else {
+    liveSwarm.tracker = swarmBuildTracker(AA_FRONTIER_DATA.length);
+  }
+  liveSwarmTick();
+}
+
+function liveSwarmTick() {
+  const c = document.getElementById('liveSwarmCanvas');
+  if (!c || !liveSwarm.tracker) return;
+  const ctx = c.getContext('2d');
+  const w = c.offsetWidth, h = c.offsetHeight;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#0a0a0f'; ctx.fillRect(0, 0, w, h);
+
+  const pad = 40, pw = w - pad * 2, ph = h - pad * 2;
+  const xMin = 2028, xMax = 2068;
+  const yMin = 1, yMax = 24;
+
+  function yearToX(yr) { return pad + ((yr - xMin) / (xMax - xMin)) * pw; }
+  function hwToY(hw) { return h - pad - ((hw - yMin) / (yMax - yMin)) * ph; }
+
+  // Run a fresh MC forecast
+  const mc = liveSwarm.tracker.runMonteCarloForecast(500);
+  const cfg = liveSwarm.tracker.cfg;
+  const curYear = cfg.CURRENT_YEAR;
+
+  // Build weighted AGI year list
+  const n = liveSwarm.tracker.n;
+  const cumw = new Float64Array(n);
+  cumw[0] = liveSwarm.tracker.weights[0];
+  for (let i = 1; i < n; i++) cumw[i] = cumw[i-1] + liveSwarm.tracker.weights[i];
+
+  const pts = [];
+  let totalW = 0;
+  for (let run = 0; run < mc.agiYears.length; run++) {
+    const u = (run + 0.5) / mc.agiYears.length;
+    let idx = 0;
+    while (idx < n - 1 && cumw[idx] < u) idx++;
+    const p = liveSwarm.tracker.particles[idx];
+    const agiYr = mc.agiYears[run] + curYear;
+    if (isFinite(agiYr)) {
+      pts.push({ x: agiYr, y: p.hw_months });
+      totalW++;
+    }
+  }
+
+  if (totalW === 0) return;
+
+  // Color scale: blue (early) -> yellow -> red (late)
+  function agiColor(t) {
+    if (t < 0.5) {
+      const s = t * 2;
+      return `rgba(${Math.floor(88+s*168)},${Math.floor(166+s*54)},${Math.floor(255-s*155)},0.82)`;
+    } else {
+      const s = (t - 0.5) * 2;
+      return `rgba(255,${Math.floor(220-s*120)},${Math.floor(100-s*100)},0.82)`;
+    }
+  }
+
+  // Draw particles
+  for (let i = 0; i < pts.length; i++) {
+    const pt = pts[i];
+    const t = Math.max(0, Math.min(1, (pt.x - xMin) / (xMax - xMin)));
+    ctx.globalAlpha = 0.82;
+    ctx.fillStyle = agiColor(t);
+    // Small jitter for "alive" feel — sub-pixel noise via slight position dithering
+    const jx = (Math.random() - 0.5) * 1.5;
+    const jy = (Math.random() - 0.5) * 1.5;
+    ctx.beginPath();
+    ctx.arc(yearToX(pt.x) + jx, hwToY(pt.y) + jy, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1.0;
+
+  // Grid
+  ctx.strokeStyle = '#1a1a2a'; ctx.lineWidth = 1;
+  for (let yr = 2030; yr <= 2065; yr += 5) {
+    const x = yearToX(yr);
+    ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, h - pad); ctx.stroke();
+    ctx.fillStyle = '#444460'; ctx.font = '8px JetBrains Mono, monospace'; ctx.textAlign = 'center';
+    ctx.fillText(yr.toString(), x, h - pad + 10);
+  }
+  for (let hw = 4; hw <= 22; hw += 4) {
+    const y = hwToY(hw);
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w - pad, y); ctx.stroke();
+    ctx.fillStyle = '#333350'; ctx.textAlign = 'right';
+    ctx.fillText(hw.toString(), pad - 4, y + 3);
+  }
+
+  // Axis labels
+  const lang = window._lang || 'ru';
+  const xLabel = LANG[lang].forecast_xaxis || 'Год AGI';
+  const yLabel = LANG[lang].forecast_yaxis || 'Удвоение HW (мес)';
+  ctx.fillStyle = '#555570'; ctx.font = '10px Inter, sans-serif';
+  ctx.textAlign = 'center'; ctx.fillText(xLabel, w / 2, h - 4);
+  ctx.save(); ctx.translate(9, h / 2); ctx.rotate(-Math.PI / 2);
+  ctx.fillText(yLabel, 0, 0); ctx.restore();
+
+  // Stats: compute median AGI year
+  pts.sort((a, b) => a.x - b.x);
+  const half = totalW / 2;
+  let cum = 0, median = xMax;
+  for (const p of pts) { cum++; if (cum >= half) { median = p.x; break; } }
+  const pct10 = pts[Math.floor(totalW * 0.1)].x;
+  const pct90 = pts[Math.floor(totalW * 0.9)].x;
+
+  const stats = document.getElementById('liveSwarmStats');
+  if (stats) {
+    const mLabel = LANG[lang].forecast_median || 'Медиана AGI';
+    stats.innerHTML = `${mLabel}: <b>${median.toFixed(1)}</b><br>P10–P90: ${pct10.toFixed(0)}–${pct90.toFixed(0)}<br>N = ${totalW}`;
+  }
+
+  // Legend
+  const leg = document.getElementById('liveSwarmLegend');
+  if (leg) {
+    const gradId = 'liveSwarmGrad';
+    let grad = document.getElementById(gradId);
+    if (!grad) {
+      grad = document.createElement('canvas');
+      grad.id = gradId; grad.width = 100; grad.height = 8;
+      grad.style.display = 'none';
+      document.body.appendChild(grad);
+    }
+    const gctx = grad.getContext('2d');
+    const grad2 = gctx.createLinearGradient(0, 0, 100, 0);
+    grad2.addColorStop(0, agiColor(0)); grad2.addColorStop(0.5, agiColor(0.5)); grad2.addColorStop(1, agiColor(1));
+    gctx.clearRect(0, 0, 100, 8);
+    gctx.fillStyle = grad2; gctx.fillRect(0, 0, 100, 8);
+
+    leg.innerHTML = `<div style="width:100px;height:4px;background:${grad2};border-radius:2px;margin-bottom:3px;opacity:0.7"></div><span style="color:#444460">2028</span><span style="float:right;color:#444460">2068</span>`;
+  }
+
+  // Schedule next tick
+  liveSwarm.timer = setTimeout(liveSwarmTick, 500);
+}
+
+window.addEventListener('load', () => { setTimeout(swarmInit, 100); setTimeout(liveSwarmInit, 300); });
 
 function setLang(lang) {
   window._lang = lang;
