@@ -832,55 +832,35 @@ const LANG = {
 // ===== PARTICLE SWARM v3 =====
 let swarm = { mode:'learn', obsIdx:0, tracker:null, particles:[], weights:[], animating:false, rafId:null, agiYears:null, forecastSliderMax:0, forecastAnimating:false, forecastRafId:null };
 
-// Pre-compute AGI year for every particle (expensive, done once per tracker)
-// Uses same logic as runMonteCarloForecast but deterministic (no paradigm shift randomness)
+// Pre-compute AGI years using the same MC forecast as the main charts
+// Returns array of {agiYear, hw_months, agency_ceiling} for each MC run
 function swarmComputeAGIYears(tracker) {
+  const mc = tracker.runMonteCarloForecast(500);
+  // Build scatter data from MC runs: we need hw/agency for each run
+  // MC samples particles via cumw — we can't easily get per-run params
+  // Instead: for each MC run, find which particle was sampled and use its params
   const cfg = tracker.cfg;
-  const dt = 1/12, maxYear = 2068;
-  const totalSteps = Math.floor((maxYear - cfg.BASE_YEAR) * 12);
-  const years = new Float64Array(tracker.particles.length);
-  for (let i = 0; i < tracker.particles.length; i++) {
-    const tp = tracker.particles[i];
-    let flopsLog = cfg.BASE_LOG_FLOPS, algoLog = 0;
-    let baseLog = flopsLog;
-    let ceilingReasoning = cfg.DIMENSIONS.reasoning.ceiling;
-    let ceilingAgency = tp.agency_ceiling;
-    const hwK = Math.log(2) / Math.max(1.0, tp.hw_months / 12.0);
-    const algoK = Math.log(2) / Math.max(1.0, tp.algo_months / 12.0);
-    let agiYear = 0;
-    for (let step = 0; step < totalSteps; step++) {
-      const y = cfg.BASE_YEAR + step * dt;
-      // Deterministic paradigm shift: expected value instead of random
-      if (y > cfg.CURRENT_YEAR) {
-        const pShift = cfg.SCALING_LAW.paradigm_shift_prob * dt;
-        ceilingAgency *= (1.0 + pShift * (cfg.SCALING_LAW.shift_multiplier - 1.0));
-        ceilingReasoning *= (1.0 + pShift * (cfg.SCALING_LAW.shift_multiplier - 1.0));
-        baseLog -= 0.5 * pShift;
-      }
-      const logDiff = flopsLog + algoLog - baseLog;
-      const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, ceilingReasoning);
-      const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, ceilingAgency);
-      const reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
-      const agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
-      const cap = Math.min(reasoning, agency);
-      if (cap >= cfg.THRESHOLDS.agi && y > 2026.30) { agiYear = y; break; }
-      let damping = 1.0;
-      if (y > cfg.BOTTLENECKS.econ_wall_start) {
-        const gap = reasoning - agency;
-        if (gap > 2.0) damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (gap - 2.0));
-      }
-      // RSI: recursive self-improvement when cap >= 5
-      let rsi = 0;
-      if (cap >= 5.0) {
-        const progress = Math.max(0, Math.min(1.0, (cap - 5.0) / (40.0 - 5.0)));
-        rsi = 0.08 * progress * Math.log(1.0 + cap);
-      }
-      flopsLog += hwK * damping * dt;
-      algoLog += (algoK * damping + rsi) * dt;
-    }
-    years[i] = agiYear;
+  const cumw = new Float64Array(tracker.n);
+  cumw[0] = tracker.weights[0];
+  for (let i = 1; i < tracker.n; i++) cumw[i] = cumw[i-1] + tracker.weights[i];
+
+  const results = [];
+  for (let run = 0; run < mc.agiYears.length; run++) {
+    // Find which particle index this MC run sampled
+    // We can't replay the exact random choice, so approximate:
+    // assign each MC run to the nearest weighted particle
+    const u = (run + 0.5) / mc.agiYears.length; // uniform [0,1]
+    let idx = 0;
+    while (idx < tracker.n - 1 && cumw[idx] < u) idx++;
+    const p = tracker.particles[idx];
+    results.push({
+      agiYear: mc.agiYears[run],
+      hw: p.hw_months,
+      agency: p.agency_ceiling,
+      w: 1.0 / mc.agiYears.length // equal weight for MC runs
+    });
   }
-  return years;
+  return results;
 }
 
 function swarmBuildTracker(idx) {
@@ -912,11 +892,19 @@ function swarmSetMode(m) {
   const slider = document.getElementById('swarmSlider');
   const labels = document.getElementById('swarmSliderLabels');
   if (m === 'forecast') {
+    // Use the same tracker as the main forecast (v3Tracker), fallback to v3GetTracker()
+    swarm.tracker = (typeof v3Tracker !== 'undefined' && v3Tracker) ? v3Tracker : (typeof v3GetTracker === 'function' ? v3GetTracker() : swarmBuildTracker(swarm.obsIdx));
+    swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
+    swarm.weights = Array.from(swarm.tracker.weights);
+    swarm.agiYears = null; // force recompute for this tracker
     if (!swarm.agiYears) swarm.agiYears = swarmComputeAGIYears(swarm.tracker);
     if (slider) { slider.min = 2028; slider.max = 2068; slider.step = 1; slider.value = 2068; }
     swarm.forecastSliderMax = 2068;
     if (labels) labels.innerHTML = '<span>2028</span><span></span><span>2038</span><span></span><span>2048</span><span></span><span>2058</span><span>2068</span>';
   } else {
+    swarm.tracker = swarmBuildTracker(swarm.obsIdx);
+    swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
+    swarm.weights = Array.from(swarm.tracker.weights);
     if (slider) { slider.min = 0; slider.max = AA_FRONTIER_DATA.length; slider.step = 1; slider.value = swarm.obsIdx; }
     if (labels) labels.innerHTML = '<span>2023</span><span></span><span>2024</span><span></span><span>2025</span><span></span><span>2026</span><span>2026.5</span>';
   }
@@ -1037,12 +1025,12 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
   let totalW = 0, visW = 0;
   const visPts = [];
   for (let i = 0; i < years.length; i++) {
-    const wt = swarm.weights[i];
+    const pt = years[i];
+    const wt = pt.w;
     totalW += wt;
-    if (years[i] > 0 && years[i] <= cutoff) {
+    if (isFinite(pt.agiYear) && pt.agiYear <= cutoff) {
       visW += wt;
-      const tp = swarm.tracker.particles[i];
-      visPts.push({ x: years[i], y: tp.hw_months, w: wt });
+      visPts.push({ x: pt.agiYear, y: pt.hw, w: wt });
     }
   }
 
@@ -1057,24 +1045,24 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
     }
   }
 
-  // Draw all particles: visible colored, invisible grayed out
+  // Draw all MC runs: visible colored, invisible grayed out
   const maxW = visPts.length > 0 ? Math.max(...visPts.map(p => p.w), 1e-10) : 1;
   for (let i = 0; i < years.length; i++) {
-    const tp = swarm.tracker.particles[i];
-    const agiYr = years[i];
-    const r = 2 + (swarm.weights[i] / maxW) * 4;
-    if (agiYr > 0 && agiYr <= cutoff) {
+    const pt = years[i];
+    const agiYr = pt.agiYear;
+    const r = 2 + (pt.w / maxW) * 20;
+    if (isFinite(agiYr) && agiYr <= cutoff) {
       const t = Math.max(0, Math.min(1, (agiYr - xMin) / (xMax - xMin)));
       ctx.globalAlpha = 0.8;
       ctx.fillStyle = agiColor(t);
-    } else if (agiYr > cutoff) {
+    } else if (isFinite(agiYr)) {
       ctx.globalAlpha = 0.15;
       ctx.fillStyle = '#333350';
     } else {
-      ctx.globalAlpha = 0.1;
+      ctx.globalAlpha = 0.08;
       ctx.fillStyle = '#222230';
     }
-    ctx.beginPath(); ctx.arc(yearToX(agiYr || xMax), hwToY(tp.hw_months), r, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(yearToX(isFinite(agiYr) ? agiYr : xMax), hwToY(pt.hw), r, 0, Math.PI * 2); ctx.fill();
   }
   ctx.globalAlpha = 1.0;
 
