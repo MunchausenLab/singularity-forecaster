@@ -808,7 +808,7 @@ function plotScenarioFan(tracker) {
   Plotly.newPlot('c6', traces, {
     ...LAYOUT_BASE,
     xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel }, range: yrRange },
-    yaxis: { ...LAYOUT_BASE.yaxis, type: 'log', range: [0, 2.0], title: { text: 'Capability (log)' } },
+    yaxis: { ...LAYOUT_BASE.yaxis, type: 'log', range: [0.7, 1.7], title: { text: 'Capability (log)' } },
   }, PLOT_CFG);
 }
 
@@ -877,14 +877,14 @@ const LANG = {
     arch_bottlenecks_title:'Бутылочные горлышки',
     arch_bottlenecks_desc:'Экономическая стена: если Reasoning обгоняет Agency более чем на 2.0, инвестиции падают. Энергетическая стена: с 2026 года дефицит инфраструктуры тормозит рост compute.',
     arch_mc_title:'Monte Carlo прогноз',
-    arch_mc_desc:'3000 прогонов из апостериорного распределения. Каждый прогон — симуляция от 2023 до 2068 года с месячным шагом. Результат: распределение лет до AGI (cap >= 10) и ASI (cap >= 100).',
-    defs_intro:'В модели v3 используются строгие операциональные определения на основе двухмерной шкалы (Reasoning, Agency). Шкала логарифмическая: GPT-4 (конец 2023) ~ 3.0 по Reasoning и ~0.2 по Agency, текущие модели середины 2026 ~ 6.8 по Reasoning и ~7.2 по Agency. AGI = 10.0, ASI = 100.0.',
+    arch_mc_desc:'3000 прогонов из апостериорного распределения. Каждый прогон — симуляция от 2023 до 2068 года с месячным шагом. Результат: распределение лет до AGI (cap >= 10) и ASI (cap >= 25).',
+    defs_intro:'В модели v3 используются строгие операциональные определения на основе двухмерной шкалы (Reasoning, Agency). Шкала логарифмическая: GPT-4 (конец 2023) ~ 3.0 по Reasoning и ~0.2 по Agency, текущие модели середины 2026 ~ 6.8 по Reasoning и ~7.2 по Agency. AGI = 10.0, ASI = 25.0.',
     agi_def_title:'AGI — Artificial General Intelligence',
     agi_def_score:'min(Reasoning, Agency) = 10.0',
     agi_def_text1:'Автономный ИИ-исследователь уровня PhD. Демонстрирует истинное обобщение, способен к сложному планированию и надёжной работе (>99%). Может автономно проводить эксперименты, писать продакшен-код и находить ошибки в чужих статьях.',
     agi_def_text2:'Роль в модели: триггер для RSI и геополитической реакции. Без достаточного уровня Agency невозможен.',
     asi_def_title:'ASI — Artificial Superintelligence',
-    asi_def_score:'min(Reasoning, Agency) = 100.0',
+    asi_def_score:'min(Reasoning, Agency) = 25.0',
     asi_def_text1:'Фазовый переход. ИИ автономно сжимает десятилетия научного прогресса в месяцы. Разрыв между ASI и AGI сопоставим с разницей между академиком и первоклассником.',
     asi_def_text2:'Роль в модели: конец симуляции. За этой чертой прогнозы теряют смысл.',
     // Footer
@@ -952,14 +952,14 @@ const LANG = {
     arch_bottlenecks_title:'Bottlenecks',
     arch_bottlenecks_desc:'Economic wall: if Reasoning leads Agency by more than 2.0, investment drops. Energy wall: from 2026, infrastructure deficit slows compute growth.',
     arch_mc_title:'Monte Carlo Forecast',
-    arch_mc_desc:'3000 runs from the posterior distribution. Each run simulates 2023 to 2068 at monthly resolution. Result: distribution of years to AGI (cap >= 10) and ASI (cap >= 100).',
-    defs_intro:'The v3 model uses strict operational definitions based on a two-dimensional scale (Reasoning, Agency). The scale is logarithmic: GPT-4 (late 2023) ~ 3.0 in Reasoning and ~0.2 in Agency, current mid-2026 models ~ 6.8 in Reasoning and ~7.2 in Agency. AGI = 10.0, ASI = 100.0.',
+    arch_mc_desc:'3000 runs from the posterior distribution. Each run simulates 2023 to 2068 at monthly resolution. Result: distribution of years to AGI (cap >= 10) and ASI (cap >= 25).',
+    defs_intro:'The v3 model uses strict operational definitions based on a two-dimensional scale (Reasoning, Agency). The scale is logarithmic: GPT-4 (late 2023) ~ 3.0 in Reasoning and ~0.2 in Agency, current mid-2026 models ~ 6.8 in Reasoning and ~7.2 in Agency. AGI = 10.0, ASI = 25.0.',
     agi_def_title:'AGI — Artificial General Intelligence',
     agi_def_score:'min(Reasoning, Agency) = 10.0',
     agi_def_text1:'Autonomous AI researcher at PhD level. Demonstrates true generalization, capable of complex planning and reliable work (>99%). Can autonomously conduct experiments, write production code, and find errors in others\' papers.',
     agi_def_text2:'Role in model: trigger for RSI and geopolitical reaction. Impossible without sufficient Agency level.',
     asi_def_title:'ASI — Artificial Superintelligence',
-    asi_def_score:'min(Reasoning, Agency) = 100.0',
+    asi_def_score:'min(Reasoning, Agency) = 25.0',
     asi_def_text1:'Phase transition. AI autonomously compresses decades of scientific progress into months. The gap between ASI and AGI is comparable to the difference between an academician and a first-grader.',
     asi_def_text2:'Role in model: end of simulation. Beyond this threshold, predictions lose meaning.',
     // Footer
