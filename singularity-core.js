@@ -754,11 +754,11 @@ const LANG = {
     swarm_mode_learn:'Обучение', swarm_mode_forecast:'Прогноз',
     swarm_play_forecast:'Анимация',
     forecast_xaxis:'Год AGI', forecast_yaxis:'Удвоение HW (мес)',
-    forecast_pagi:'P(AGI до 2068)', forecast_median:'Медиана',
+    forecast_pagi:'P(AGI до 2068)', forecast_median:'Медиана AGI',
     forecast_overlay:'AGI ≤', forecast_overlay_desc:'Показаны гипотезы с AGI до',
+    swarm_play_forecast:'Анимация',
   },
   en: {
-    // Header
     hdr_title:'Singularity Forecaster', hdr_sub:'v3 Bayesian Tracker',
     // Status bar
     sb_agi:'AGI median', sb_asi:'ASI median',
@@ -823,19 +823,18 @@ const LANG = {
     swarm_mode_learn:'Learning', swarm_mode_forecast:'Forecast',
     swarm_play_forecast:'Animate',
     forecast_xaxis:'AGI Year', forecast_yaxis:'HW Doubling (mo)',
-    forecast_pagi:'P(AGI by 2068)', forecast_median:'Median',
+    forecast_pagi:'P(AGI by 2068)', forecast_median:'AGI Median',
     forecast_overlay:'AGI ≤', forecast_overlay_desc:'Showing hypotheses with AGI by',
   }
 };
 
 // ===== PARTICLE SWARM ANIMATION =====
 // ===== PARTICLE SWARM v3 =====
-let swarm = { mode:'learn', obsIdx:0, tracker:null, particles:[], weights:[], animating:false, rafId:null, agiYears:null, forecastSliderMax:0, forecastAnimating:false, forecastRafId:null };
+let swarm = { mode:'learn', obsIdx:0, tracker:null, particles:[], weights:[], animating:false, rafId:null, agiYears:null, asiYears:null, forecastSliderMax:0, forecastAnimating:false, forecastRafId:null, asiAnimating:false, asiRafId:null, showASI:false };
 
-// Pre-compute AGI years using the same MC forecast as the main charts
-// Returns array of {agiYear, hw_months} for each MC run
-// Note: runMonteCarloForecast returns years relative to CURRENT_YEAR (e.g. 3.0 = 2029.30)
-// We convert back to absolute year
+// Pre-compute AGI and ASI years using the same MC forecast as the main charts
+// Returns { agiYears: [{agiYear, hw, w}], asiYears: [{asiYear, hw, w}] }
+// Note: runMonteCarloForecast returns years relative to CURRENT_YEAR
 function swarmComputeAGIYears(tracker) {
   const mc = tracker.runMonteCarloForecast(500);
   const cfg = tracker.cfg;
@@ -844,19 +843,16 @@ function swarmComputeAGIYears(tracker) {
   cumw[0] = tracker.weights[0];
   for (let i = 1; i < tracker.n; i++) cumw[i] = cumw[i-1] + tracker.weights[i];
 
-  const results = [];
+  const agiResults = [], asiResults = [];
   for (let run = 0; run < mc.agiYears.length; run++) {
     const u = (run + 0.5) / mc.agiYears.length;
     let idx = 0;
     while (idx < tracker.n - 1 && cumw[idx] < u) idx++;
     const p = tracker.particles[idx];
-    results.push({
-      agiYear: mc.agiYears[run] + curYear, // convert relative -> absolute year
-      hw: p.hw_months,
-      w: 1.0 / mc.agiYears.length
-    });
+    agiResults.push({ year: mc.agiYears[run] + curYear, hw: p.hw_months, w: 1.0 / mc.agiYears.length });
+    asiResults.push({ year: mc.asiYears[run] + curYear, hw: p.hw_months, w: 1.0 / mc.asiYears.length });
   }
-  return results;
+  return { agi: agiResults, asi: asiResults };
 }
 
 function swarmBuildTracker(idx) {
@@ -899,7 +895,10 @@ function swarmSetMode(m) {
     swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
     swarm.weights = Array.from(swarm.tracker.weights);
     swarm.agiYears = null;
-    swarm.agiYears = swarmComputeAGIYears(swarm.tracker);
+    swarm.asiYears = null;
+    const mcData = swarmComputeAGIYears(swarm.tracker);
+    swarm.agiYears = mcData.agi;
+    swarm.asiYears = mcData.asi;
     if (slider) { slider.min = 2028; slider.max = 2068; slider.step = 1; slider.value = 2068; }
     swarm.forecastSliderMax = 2068;
     if (labels) labels.innerHTML = '<span>2028</span><span></span><span>2038</span><span></span><span>2048</span><span></span><span>2058</span><span>2068</span>';
@@ -909,6 +908,24 @@ function swarmSetMode(m) {
     swarm.weights = Array.from(swarm.tracker.weights);
     if (slider) { slider.min = 0; slider.max = AA_FRONTIER_DATA.length; slider.step = 1; slider.value = swarm.obsIdx; }
     if (labels) labels.innerHTML = '<span>2023</span><span></span><span>2024</span><span></span><span>2025</span><span></span><span>2026</span><span>2026.5</span>';
+  }
+  swarmDraw();
+}
+
+function swarmSetTarget(target) {
+  swarm.showASI = (target === 'asi');
+  document.getElementById('swarmTargetAGI').classList.toggle('active', target === 'agi');
+  document.getElementById('swarmTargetASI').classList.toggle('active', target === 'asi');
+  const slider = document.getElementById('swarmSlider');
+  const labels = document.getElementById('swarmSliderLabels');
+  if (swarm.showASI) {
+    if (slider) { slider.min = 2030; slider.max = 2068; slider.value = 2068; }
+    swarm.forecastSliderMax = 2068;
+    if (labels) labels.innerHTML = '<span>2030</span><span></span><span>2040</span><span></span><span>2050</span><span></span><span>2060</span><span>2068</span>';
+  } else {
+    if (slider) { slider.min = 2028; slider.max = 2068; slider.value = 2068; }
+    swarm.forecastSliderMax = 2068;
+    if (labels) labels.innerHTML = '<span>2028</span><span></span><span>2038</span><span></span><span>2048</span><span></span><span>2058</span><span>2068</span>';
   }
   swarmDraw();
 }
@@ -991,10 +1008,15 @@ function swarmDrawLearn(ctx, w, h, pad, pw, ph) {
 }
 
 function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
-  if (!swarm.agiYears) swarm.agiYears = swarmComputeAGIYears(swarm.tracker);
-  const years = swarm.agiYears;
+  if (!swarm.agiYears) {
+    const mcData = swarmComputeAGIYears(swarm.tracker);
+    swarm.agiYears = mcData.agi;
+    swarm.asiYears = mcData.asi;
+  }
+  const years = swarm.showASI ? swarm.asiYears : swarm.agiYears;
   const cutoff = swarm.forecastSliderMax || 2068;
-  const xMin = 2028, xMax = 2068;
+  const xMin = swarm.showASI ? 2030 : 2028;
+  const xMax = 2068;
   const yMin = 1, yMax = 24;
   const cfg = swarm.tracker.cfg;
 
@@ -1030,9 +1052,9 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
     const pt = years[i];
     const wt = pt.w;
     totalW += wt;
-    if (isFinite(pt.agiYear) && pt.agiYear <= cutoff) {
+    if (isFinite(pt.year) && pt.year <= cutoff) {
       visW += wt;
-      visPts.push({ x: pt.agiYear, y: pt.hw, w: wt });
+      visPts.push({ x: pt.year, y: pt.hw, w: wt });
     }
   }
 
@@ -1051,8 +1073,8 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
   const maxW = visPts.length > 0 ? Math.max(...visPts.map(p => p.w), 1e-10) : 1;
   for (let i = 0; i < years.length; i++) {
     const pt = years[i];
-    const agiYr = pt.agiYear;
-    const r = 2 + (pt.w / maxW) * 20;
+    const agiYr = pt.year;
+    const r = 1 + (pt.w / maxW) * 8;
     if (isFinite(agiYr) && agiYr <= cutoff) {
       const t = Math.max(0, Math.min(1, (agiYr - xMin) / (xMax - xMin)));
       ctx.globalAlpha = 0.8;
@@ -1069,15 +1091,18 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
   ctx.globalAlpha = 1.0;
 
   // labels
+  const xLabel = swarm.showASI ? 'Год ASI' : (LANG[window._lang||'ru'].forecast_xaxis || 'Год AGI');
   ctx.fillStyle = '#666680'; ctx.font = '11px Inter, sans-serif';
-  ctx.textAlign = 'center'; ctx.fillText(LANG[window._lang||'ru'].forecast_xaxis || 'Год AGI', w / 2, h - 6);
+  ctx.textAlign = 'center'; ctx.fillText(xLabel, w / 2, h - 6);
   ctx.save(); ctx.translate(10, h / 2); ctx.rotate(-Math.PI / 2);
   ctx.fillText(LANG[window._lang||'ru'].forecast_yaxis || 'Удвоение HW (мес)', 0, 0); ctx.restore();
 
   // stats
   const pct = totalW > 0 ? (visW / totalW * 100) : 0;
+  const pLabel = swarm.showASI ? 'P(ASI)' : (LANG[window._lang||'ru'].forecast_pagi || 'P(AGI)');
+  const mLabel = swarm.showASI ? 'Медиана ASI' : (LANG[window._lang||'ru'].forecast_median || 'Медиана AGI');
   ctx.fillStyle = '#f0883e'; ctx.font = 'bold 11px JetBrains Mono, monospace'; ctx.textAlign = 'left';
-  ctx.fillText(`${LANG[window._lang||'ru'].forecast_pagi || 'P'}: ${pct.toFixed(1)}%`, pad + 4, pad + 12);
+  ctx.fillText(`${pLabel}: ${pct.toFixed(1)}%`, pad + 4, pad + 12);
 
   if (visPts.length > 0) {
     visPts.sort((a, b) => a.x - b.x);
@@ -1088,7 +1113,7 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
       if (cum >= half) { median = p.x; break; }
     }
     ctx.fillStyle = '#58a6ff'; ctx.textAlign = 'center';
-    ctx.fillText(`${LANG[window._lang||'ru'].forecast_median || 'Медиана'}: ${median.toFixed(1)}`, w / 2, pad + 12);
+    ctx.fillText(`${mLabel}: ${median.toFixed(1)}`, w / 2, pad + 12);
   }
 
   // cutoff label
@@ -1118,24 +1143,34 @@ function swarmDrawOverlay(ctx, w, h, pad) {
   if (swarm.mode === 'forecast') {
     // forecast mode: slider shows AGI year cutoff
     if (slider) { slider.style.display = ''; slider.value = swarm.forecastSliderMax || 2068; }
-    if (playBtn) playBtn.style.display = 'none';
-    const playFBtn = document.getElementById('swarmPlayForecastBtn');
-    if (playFBtn) playFBtn.style.display = '';
+    if (playBtn) {
+      playBtn.style.display = '';
+      const span = playBtn.querySelector('span');
+      span.textContent = LANG[window._lang||'ru'].swarm_play_forecast || 'Анимация';
+      playBtn.onclick = swarmPlay;
+    }
+    const targetToggle = document.getElementById('swarmTargetToggle');
+    if (targetToggle) targetToggle.style.display = '';
     if (hint) hint.style.display = 'none';
     if (ov) {
       const L = LANG[window._lang||'ru'];
-      ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">${L.forecast_overlay||'AGI ≤'} ${cutoff}</div><div style="font-size:.68rem;color:#9898b0">${L.forecast_overlay_desc||'Показаны гипотезы с AGI до'} ${cutoff}</div>`;
+      const target = swarm.showASI ? 'ASI' : 'AGI';
+      ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">${target} ≤ ${cutoff}</div><div style="font-size:.68rem;color:#9898b0">Показаны гипотезы с ${target} до ${cutoff}</div>`;
       ov.style.opacity = '1';
     }
     if (leg) {
-      leg.innerHTML = '<span style="color:#58a6ff">●</span> AGI < 2040 &nbsp; <span style="color:#ffcc00">●</span> 2040-2055 &nbsp; <span style="color:#ef4444">●</span> > 2055 &nbsp; <span style="color:#444">◌</span> Не достигнет';
+      if (swarm.showASI) {
+        leg.innerHTML = '<span style="color:#58a6ff">●</span> ASI < 2040 &nbsp; <span style="color:#ffcc00">●</span> 2040-2055 &nbsp; <span style="color:#ef4444">●</span> > 2055 &nbsp; <span style="color:#444">◌</span> Не достигнет';
+      } else {
+        leg.innerHTML = '<span style="color:#58a6ff">●</span> AGI < 2040 &nbsp; <span style="color:#ffcc00">●</span> 2040-2055 &nbsp; <span style="color:#ef4444">●</span> > 2055 &nbsp; <span style="color:#444">◌</span> Не достигнет';
+      }
     }
   } else {
     // learn mode: slider shows observation index
     if (slider) { slider.style.display = ''; slider.value = swarm.obsIdx; }
     if (playBtn) playBtn.style.display = '';
-    const playFBtn2 = document.getElementById('swarmPlayForecastBtn');
-    if (playFBtn2) playFBtn2.style.display = 'none';
+    const targetToggleL = document.getElementById('swarmTargetToggle');
+    if (targetToggleL) targetToggleL.style.display = 'none';
     if (hint) hint.style.display = '';
     if (swarm.obsIdx > 0 && swarm.obsIdx <= AA_FRONTIER_DATA.length) {
       const obs = AA_FRONTIER_DATA[swarm.obsIdx - 1];
@@ -1148,44 +1183,57 @@ function swarmDrawOverlay(ctx, w, h, pad) {
 }
 
 function swarmPlay() {
-  if (swarm.animating) { swarm.animating = false; clearTimeout(swarm.rafId); document.getElementById('swarmPlayBtn').innerHTML = '<span>' + (LANG[window._lang||'ru'].swarm_play||'Запуск') + '</span>'; return; }
-  if (swarm.obsIdx >= AA_FRONTIER_DATA.length) { swarm.obsIdx = 0; swarmInit(); }
-  swarm.animating = true;
-  document.getElementById('swarmPlayBtn').innerHTML = '<span>⏸</span>';
-  function step() {
-    if (!swarm.animating || swarm.obsIdx >= AA_FRONTIER_DATA.length) { swarm.animating = false; document.getElementById('swarmPlayBtn').innerHTML = '<span>' + (LANG[window._lang||'ru'].swarm_play||'Запуск') + '</span>'; return; }
-    swarm.obsIdx++;
-    swarm.tracker = swarmBuildTracker(swarm.obsIdx);
-    swarm.weights = Array.from(swarm.tracker.weights);
-    swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
-    swarmDraw();
-    swarm.rafId = setTimeout(step, 800);
-  }
-  step();
-}
-
-function swarmPlayForecast() {
-  if (swarm.forecastAnimating) {
-    swarm.forecastAnimating = false;
-    clearTimeout(swarm.forecastRafId);
-    document.getElementById('swarmPlayForecastBtn').innerHTML = '<span>' + (LANG[window._lang||'ru'].swarm_play_forecast||'Анимация') + '</span>';
-    return;
-  }
-  swarm.forecastAnimating = true;
-  document.getElementById('swarmPlayForecastBtn').innerHTML = '<span>⏸</span>';
-  let year = 2028;
-  const step = () => {
-    if (!swarm.forecastAnimating || year > 2068) {
+  if (swarm.mode === 'forecast') {
+    // Forecast mode: animate AGI year slider
+    if (swarm.forecastAnimating) {
       swarm.forecastAnimating = false;
-      document.getElementById('swarmPlayForecastBtn').innerHTML = '<span>' + (LANG[window._lang||'ru'].swarm_play_forecast||'Анимация') + '</span>';
+      clearTimeout(swarm.forecastRafId);
+      document.getElementById('swarmPlayBtn').querySelector('span').textContent = LANG[window._lang||'ru'].swarm_play_forecast || 'Анимация';
       return;
     }
-    swarm.forecastSliderMax = year;
-    swarmDraw();
-    year++;
-    swarm.forecastRafId = setTimeout(step, 150);
-  };
-  step();
+    swarm.forecastAnimating = true;
+    document.getElementById('swarmPlayBtn').querySelector('span').textContent = '⏸';
+    // Reset ASI animation too
+    if (swarm.asiAnimating) { swarm.asiAnimating = false; clearTimeout(swarm.asiRafId); }
+    let year = 2028;
+    const step = () => {
+      if (!swarm.forecastAnimating || year > 2068) {
+        swarm.forecastAnimating = false;
+        document.getElementById('swarmPlayBtn').querySelector('span').textContent = LANG[window._lang||'ru'].swarm_play_forecast || 'Анимация';
+        return;
+      }
+      swarm.forecastSliderMax = year;
+      swarmDraw();
+      year++;
+      swarm.forecastRafId = setTimeout(step, 150);
+    };
+    step();
+  } else {
+    // Learn mode: animate observations
+    if (swarm.animating) {
+      swarm.animating = false;
+      clearTimeout(swarm.rafId);
+      document.getElementById('swarmPlayBtn').querySelector('span').textContent = LANG[window._lang||'ru'].swarm_play || 'Запуск';
+      return;
+    }
+    if (swarm.obsIdx >= AA_FRONTIER_DATA.length) { swarm.obsIdx = 0; swarmInit(); }
+    swarm.animating = true;
+    document.getElementById('swarmPlayBtn').querySelector('span').textContent = '⏸';
+    function step() {
+      if (!swarm.animating || swarm.obsIdx >= AA_FRONTIER_DATA.length) {
+        swarm.animating = false;
+        document.getElementById('swarmPlayBtn').querySelector('span').textContent = LANG[window._lang||'ru'].swarm_play || 'Запуск';
+        return;
+      }
+      swarm.obsIdx++;
+      swarm.tracker = swarmBuildTracker(swarm.obsIdx);
+      swarm.weights = Array.from(swarm.tracker.weights);
+      swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
+      swarmDraw();
+      swarm.rafId = setTimeout(step, 800);
+    }
+    step();
+  }
 }
 
 function swarmReset() {

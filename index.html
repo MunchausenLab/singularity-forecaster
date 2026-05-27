@@ -280,6 +280,10 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
         <button class="lang-btn active" id="swarmModeLearn" onclick="swarmSetMode('learn')" data-i18n="swarm_mode_learn">Обучение</button>
         <button class="lang-btn" id="swarmModeForecast" onclick="swarmSetMode('forecast')" data-i18n="swarm_mode_forecast">Прогноз</button>
       </div>
+      <div class="lang-toggle" style="margin:0;display:none" id="swarmTargetToggle">
+        <button class="lang-btn active" id="swarmTargetAGI" onclick="swarmSetTarget('agi')">AGI</button>
+        <button class="lang-btn" id="swarmTargetASI" onclick="swarmSetTarget('asi')">ASI</button>
+      </div>
     </div>
     <div style="position:relative;width:100%;height:440px;background:#0a0a0f;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-top:12px">
       <canvas id="swarmCanvas" style="width:100%;height:100%"></canvas>
@@ -294,7 +298,6 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     </div>
     <div style="display:flex;gap:12px;margin-top:12px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary btn-sm" id="swarmPlayBtn" onclick="swarmPlay()"><span data-i18n="swarm_play">Запуск</span></button>
-      <button class="btn btn-primary btn-sm" id="swarmPlayForecastBtn" onclick="swarmPlayForecast()" style="display:none"><span data-i18n="swarm_play_forecast">Анимация</span></button>
       <button class="btn btn-secondary btn-sm" onclick="swarmReset()"><span data-i18n="swarm_reset">Сброс</span></button>
       <span id="swarmHint" style="font-size:.7rem;color:var(--text-muted)" data-i18n="swarm_hint">Нажмите «Запуск» или перетаскивайте ползунок</span>
     </div>
