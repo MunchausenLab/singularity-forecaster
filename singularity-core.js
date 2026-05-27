@@ -1027,7 +1027,7 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
   const cutoff = swarm.forecastSliderMax || 2068;
   const xMin = 2020;
   const xMax = 2068;
-  const yMin = 16, yMax = 24;
+  const yMin = 0, yMax = 16;
   const cfg = swarm.tracker.cfg;
 
   function yearToX(yr) { return pad + ((yr - xMin) / (xMax - xMin)) * pw; }
@@ -1048,7 +1048,7 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
     ctx.font = '9px JetBrains Mono, monospace'; ctx.textAlign = 'center';
     ctx.fillText(yr.toString(), x, h - pad + 12);
   }
-  for (let hw = 16; hw <= 24; hw += 4) {
+  for (let hw = 0; hw <= 16; hw += 4) {
     const y = hwToY(hw);
     ctx.strokeStyle = '#1a1a2a'; ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w - pad, y); ctx.stroke();
     ctx.fillStyle = '#444460'; ctx.textAlign = 'right';
@@ -1296,7 +1296,7 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
   const isASI = (colorMode === 'asi');
   const xMin = 2020;
   const xMax = 2068;
-  const yMin = 16, yMax = 24;
+  const yMin = 0, yMax = 16;
 
   function yearToX(yr) { return pad + ((yr - xMin) / (xMax - xMin)) * pw; }
   function hwToY(hw) { return h - pad - ((hw - yMin) / (yMax - yMin)) * ph; }
@@ -1365,7 +1365,7 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
     ctx.fillStyle = '#444460'; ctx.font = '8px JetBrains Mono, monospace'; ctx.textAlign = 'center';
     ctx.fillText(yr.toString(), x, h - pad + 10);
   }
-  for (let hw = 16; hw <= 24; hw += 4) {
+  for (let hw = 0; hw <= 16; hw += 4) {
     const y = hwToY(hw);
     ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w - pad, y); ctx.stroke();
     ctx.fillStyle = '#333350'; ctx.textAlign = 'right';
