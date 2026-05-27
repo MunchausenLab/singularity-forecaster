@@ -1480,7 +1480,7 @@ function ehDraw() {
       // Glow effect for settled particles
       ctx.beginPath();
       ctx.arc(x, y, p.glow, 0, Math.PI * 2);
-      ctx.fillStyle = p.color.replace('0.9', '0.15');
+      ctx.fillStyle = p.glowColor;
       ctx.fill();
     }
 
@@ -1538,21 +1538,24 @@ function ehStep(dt) {
 
       const isASI = pt.asiYear !== Infinity && isFinite(pt.asiYear);
       const isAGI = pt.agiYear !== Infinity && isFinite(pt.agiYear);
-      let targetYear, type, color;
+      let targetYear, type, color, glowColor;
 
       if (isASI) {
         targetYear = pt.asiYear;
         type = 'asi';
         color = 'rgba(239,68,68,0.9)';
+        glowColor = 'rgba(239,68,68,0.15)';
       } else if (isAGI) {
         targetYear = pt.agiYear;
         type = 'agi';
         color = 'rgba(240,136,62,0.9)';
+        glowColor = 'rgba(240,136,62,0.15)';
       } else {
         // Never reached AGI -- drift to far orbit
         targetYear = 2068;
         type = 'never';
         color = 'rgba(80,80,120,0.5)';
+        glowColor = 'rgba(80,80,120,0.08)';
       }
 
       ehData.particles.push({
@@ -1562,6 +1565,7 @@ function ehStep(dt) {
         targetYear: targetYear,
         type: type,
         color: color,
+        glowColor: glowColor,
         glow: 3 + Math.random() * 4,
       });
       ehData.launched++;
