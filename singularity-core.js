@@ -438,7 +438,7 @@ const maxSteps = 12 * 100, dt = 1.0 / 12.0;
 
     const scenarios = [];
     const dt = 1.0 / 12.0;
-    const steps = 40 * 12;
+    const steps = 100 * 12;
 
     for (let s = 0; s < nScenarios; s++) {
       const u = Math.random();
@@ -497,7 +497,7 @@ const maxSteps = 12 * 100, dt = 1.0 / 12.0;
     let cA = p.agency_ceiling;
 
     const dt = 1.0 / 12.0;
-    const steps = 40 * 12;
+    const steps = 100 * 12;
     const years = [], hwComp = [], algoComp = [], paradigmComp = [], rsiComp = [];
     let accumulatedParadigm = 0, accumulatedRsi = 0;
 
@@ -640,7 +640,7 @@ async function runSimulation() {
     const CUR_Y = 2026.30;
     const yq = [];
     for (let y = 0.25; y <= 10; y += 0.25) yq.push(+y.toFixed(4));
-    for (let y = 11; y <= 40; y++) yq.push(y);
+    for (let y = 11; y <= 100; y++) yq.push(y);
     const yqAbs = yq.map(y => +(CUR_Y + y).toFixed(2));
 
     const dummySensitivity = {
@@ -698,7 +698,7 @@ function updateUI(r) {
 function setVal(id, txt, cls) { const el = document.getElementById(id); el.innerHTML = txt; el.className = 'status-value ' + (cls||''); }
 function colorProb(id, val) { const el = document.getElementById(id); el.classList.remove('green','orange','red'); el.classList.add(val > 50 ? 'green' : val > 10 ? 'orange' : 'red'); }
 function yearsText(yrs) {
-  if (!isFinite(yrs) || yrs > 40) return LANG[window._lang||'ru'].fY_gt;
+  if (!isFinite(yrs) || yrs > 100) return LANG[window._lang||'ru'].fY_gt;
   return yrs.toFixed(1) + LANG[window._lang||'ru'].fY_suffix;
 }
 
@@ -901,7 +901,7 @@ const LANG = {
     swarm_mode_learn:'Обучение', swarm_mode_forecast:'Прогноз',
     swarm_play_forecast:'Анимация',
     forecast_xaxis:'Год AGI', forecast_yaxis:'Удвоение HW (мес)',
-    forecast_pagi:'P(AGI до 2068)', forecast_median:'Медиана AGI',
+    forecast_pagi:'P(AGI до 2123)', forecast_median:'Медиана AGI',
     forecast_overlay:'AGI ≤', forecast_overlay_desc:'Показаны гипотезы с AGI до',
     live_swarm_title:'Симуляция в реальном времени', live_swarm_desc:'Каждые 0.25 сек рой перерисовывается из нового прогона Monte Carlo.',
     swarm_play_forecast:'Анимация',
@@ -976,7 +976,7 @@ const LANG = {
     swarm_mode_learn:'Learning', swarm_mode_forecast:'Forecast',
     swarm_play_forecast:'Animate',
     forecast_xaxis:'AGI Year', forecast_yaxis:'HW Doubling (mo)',
-    forecast_pagi:'P(AGI by 2068)', forecast_median:'AGI Median',
+    forecast_pagi:'P(AGI by 2123)', forecast_median:'AGI Median',
     forecast_overlay:'AGI ≤', forecast_overlay_desc:'Showing hypotheses with AGI by',
     live_swarm_title:'Real-time Simulation', live_swarm_desc:'Every 0.25s the swarm redraws from a new Monte Carlo run.',
     // Event Horizon
@@ -1057,9 +1057,9 @@ function swarmSetMode(m) {
     const mcData = swarmComputeAGIYears(swarm.tracker);
     swarm.agiYears = mcData.agi;
     swarm.asiYears = mcData.asi;
-    if (slider) { slider.min = 2020; slider.max = 2068; slider.step = 1; slider.value = 2068; }
-    swarm.forecastSliderMax = 2068;
-    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2038</span><span></span><span>2048</span><span></span><span>2058</span><span>2068</span>';
+    if (slider) { slider.min = 2020; slider.max = 2123; slider.step = 1; slider.value = 2123; }
+    swarm.forecastSliderMax = 2123;
+    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2040</span><span></span><span>2060</span><span></span><span>2080</span><span>2123</span>';
   } else {
     swarm.tracker = swarmBuildTracker(swarm.obsIdx);
     swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
@@ -1077,13 +1077,13 @@ function swarmSetTarget(target) {
   const slider = document.getElementById('swarmSlider');
   const labels = document.getElementById('swarmSliderLabels');
   if (swarm.showASI) {
-    if (slider) { slider.min = 2020; slider.max = 2068; slider.value = 2068; }
-    swarm.forecastSliderMax = 2068;
-    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2040</span><span></span><span>2050</span><span></span><span>2060</span><span>2068</span>';
+    if (slider) { slider.min = 2020; slider.max = 2123; slider.value = 2123; }
+    swarm.forecastSliderMax = 2123;
+    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2040</span><span></span><span>2060</span><span></span><span>2080</span><span>2123</span>';
   } else {
-    if (slider) { slider.min = 2020; slider.max = 2068; slider.value = 2068; }
-    swarm.forecastSliderMax = 2068;
-    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2038</span><span></span><span>2048</span><span></span><span>2058</span><span>2068</span>';
+    if (slider) { slider.min = 2020; slider.max = 2123; slider.value = 2123; }
+    swarm.forecastSliderMax = 2123;
+    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2040</span><span></span><span>2060</span><span></span><span>2080</span><span>2123</span>';
   }
   swarmDraw();
 }
@@ -1172,9 +1172,9 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
     swarm.asiYears = mcData.asi;
   }
   const years = swarm.showASI ? swarm.asiYears : swarm.agiYears;
-  const cutoff = swarm.forecastSliderMax || 2068;
+  const cutoff = swarm.forecastSliderMax || 2123;
   const xMin = 2020;
-  const xMax = 2068;
+  const xMax = 2123;
   const yMin = 0, yMax = 16;
   const cfg = swarm.tracker.cfg;
   if (swarm.showASI) {
@@ -1304,7 +1304,7 @@ function swarmDrawOverlay(ctx, w, h, pad) {
 
   if (swarm.mode === 'forecast') {
     // forecast mode: slider shows AGI year cutoff
-    if (slider) { slider.style.display = ''; slider.value = swarm.forecastSliderMax || 2068; }
+    if (slider) { slider.style.display = ''; slider.value = swarm.forecastSliderMax || 2123; }
     if (playBtn) {
       playBtn.style.display = '';
       const span = playBtn.querySelector('span');
@@ -1316,7 +1316,7 @@ function swarmDrawOverlay(ctx, w, h, pad) {
     if (hint) hint.style.display = 'none';
     if (ov) {
       const target = swarm.showASI ? 'ASI' : 'AGI';
-      const fc = swarm.forecastSliderMax || 2068;
+      const fc = swarm.forecastSliderMax || 2123;
       ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">${target} ≤ ${fc}</div><div style="font-size:.68rem;color:#9898b0">Показаны гипотезы с ${target} до ${fc}</div>`;
       ov.style.opacity = '1';
     }
@@ -1359,7 +1359,7 @@ function swarmPlay() {
     if (swarm.asiAnimating) { swarm.asiAnimating = false; clearTimeout(swarm.asiRafId); }
     let year = 2020;
     const step = () => {
-      if (!swarm.forecastAnimating || year > 2068) {
+      if (!swarm.forecastAnimating || year > 2123) {
         swarm.forecastAnimating = false;
         document.getElementById('swarmPlayBtn').querySelector('span').textContent = LANG[window._lang||'ru'].swarm_play_forecast || 'Анимация';
         return;
@@ -1448,7 +1448,7 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
   // X range depends on AGI vs ASI
   const isASI = (colorMode === 'asi');
   const xMin = 2020;
-  const xMax = 2068;
+  const xMax = 2123;
   const yMin = 0, yMax = 16;
 
   function yearToX(yr) { return pad + ((yr - xMin) / (xMax - xMin)) * pw; }
@@ -1579,14 +1579,14 @@ const ehData = {
   tracker: null,
   radii: {},
   stats: { agi: 0, asi: 0, total: 0 },
-  years: [2026, 2028, 2030, 2032, 2035, 2040, 2045, 2050, 2055, 2060, 2068],
+  years: [2026, 2028, 2030, 2032, 2035, 2040, 2045, 2050, 2055, 2060, 2070, 2080, 2090, 2100, 2123],
 };
 
 const EH_YEARS = [2026, 2028, 2030, 2032, 2035, 2040, 2045, 2050, 2055, 2060, 2070, 2080];
 
 function yearToRadius(year, maxR) {
-  // 2026 -> 20px (center), 2068 -> maxR
-  const t = Math.max(0, Math.min(1, (year - 2026) / (2068 - 2026)));
+  // 2026 -> 20px (center), 2123 -> maxR
+  const t = Math.max(0, Math.min(1, (year - 2026) / (2123 - 2026)));
   return 20 + t * (maxR - 20);
 }
 
@@ -1714,7 +1714,7 @@ function ehStep(dt) {
         glowColor = 'rgba(240,136,62,0.15)';
       } else {
         // Never reached AGI -- drift to far orbit
-        targetYear = 2068;
+        targetYear = 2123;
         type = 'never';
         color = 'rgba(80,80,120,0.5)';
         glowColor = 'rgba(80,80,120,0.08)';
