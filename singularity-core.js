@@ -129,7 +129,9 @@ class BayesianTracker {
       this.particles.push({
         hw_months: Math.max(3.0, randnRange(7.5, 1.5)),
         algo_months: Math.max(2.0, randnRange(6.0, 2.0)),
-        agency_ceiling: Math.max(2.0, randnRange(8.0, 3.0)), // Априорный потолок Трансформеров
+        agency_ceiling: Math.max(2.0, randnRange(8.0, 3.0)),
+        inNewParadigm: false,
+        paradigmPenalty: 0,
       });
     }
   }
@@ -163,6 +165,8 @@ class BayesianTracker {
           hw_months: Math.max(3.0, p.hw_months + randnRange(0, 0.2)),
           algo_months: Math.max(2.0, p.algo_months + randnRange(0, 0.3)),
           agency_ceiling: Math.max(1.5, p.agency_ceiling + randnRange(0, 0.2)),
+          inNewParadigm: p.inNewParadigm || false,
+          paradigmPenalty: p.paradigmPenalty || 0,
         });
       }
       this.particles = newP;
@@ -225,22 +229,28 @@ class BayesianTracker {
 
         const cap = Math.min(reasoning, agency);
 
-        // Эндогенная смена парадигмы: вероятность зависит от saturation и research pressure
-        if (currentYear > this.cfg.CURRENT_YEAR) {
-          // Насколько текущий интеллект близок к потолку (0..1+)
-          const satR = ceilingReasoning > 0 ? reasoning / ceilingReasoning : 0;
-          const satA = ceilingAgency > 0 ? agency / ceilingAgency : 0;
-          const saturation = Math.max(satR, satA);
-          // Давление исследований: чем умнее модели, тем быще ищут новые архитектуры
-          const researchPressure = Math.min(cap / 20.0, 1.0);
-          // Базовая вероятность + давление от saturation, но exhaustion если давно не было прорыва
-          const shiftProb = this.cfg.SCALING_LAW.endo_base
-            + this.cfg.SCALING_LAW.endo_pressure * saturation * researchPressure;
+        // Архитектурный сброс: J-кривая вместо магии ×3
+        // Новая архитектура сначала хуже настроенного Трансформера (шаг назад перед двумя вперед)
+        if (!p.inNewParadigm && currentYear > 2026.5) {
+          const researchPressure = Math.max(
+            ceilingReasoning > 0 ? reasoning / ceilingReasoning : 0,
+            ceilingAgency > 0 ? agency / ceilingAgency : 0
+          );
+          const shiftProb = 0.05 + 0.1 * researchPressure;
           if (Math.random() < shiftProb * dt) {
-            ceilingAgency *= this.cfg.SCALING_LAW.shift_multiplier;
-            ceilingReasoning *= this.cfg.SCALING_LAW.shift_multiplier;
-            baseLog -= 0.5; // compute overhang release
+            p.inNewParadigm = true;
+            p.paradigmPenalty = 1.5; // 1.5 года на освоение новой архитектуры
+            ceilingAgency *= 2.5;
+            ceilingReasoning *= 2.5;
+            // Сброс (Collapse): старые оптимизации теряются
+            algoLog -= 1.0;
+            flopsLog -= 0.5; // Часть специфичного железа (TPU/ASIC) становится неоптимальной
+            dataExhaustionHit = false; // Новая архитектура открывает новые модальности данных
           }
+        }
+        if (p.inNewParadigm && p.paradigmPenalty > 0) {
+          p.paradigmPenalty -= dt;
+          damping *= 0.5; // Пока осваиваем новую архитектуру, прогресс замедлен
         }
 
         // --- ШОКИ: черные лебеди и предсказуемые кризисы ---
