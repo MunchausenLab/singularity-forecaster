@@ -444,9 +444,6 @@ function v3ResetTracker() {
 }
 
 function v3UpdateUI(tracker) {
-  const s = tracker.getSummary();
-  const ess = 1.0 / tracker.weights.reduce((a, b) => a + b * b, 0);
-  document.getElementById('v3Params').textContent = `Апостериор (Байес): Удвоение HW = ${s.hwMonths.toFixed(1)} мес | Удвоение Algo = ${s.algoMonths.toFixed(1)} мес | Потолок Agency = ${s.agencyCeiling.toFixed(2)} | ESS: ${ess.toFixed(0)}`;
   v3CheckWarning(tracker);
 }
 
