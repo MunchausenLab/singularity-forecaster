@@ -333,7 +333,23 @@ class BayesianTracker {
         rsi = Math.min(rsi, 1.5);
         
         const effectiveAlgoK = algoK * (dataExhaustionHit ? 0.5 : 1.0);
-        flopsLog += hwK * damping * shockDamping * dt;
+
+        // Экономика исследований: динамический hwK зависит от ROI
+        // Рынок платит за Agency (автономный труд), а не за чистый Reasoning
+        const marketUtility = reasoning * 0.3 + agency * 0.7;
+        // Ожидания инвесторов растут со временем
+        const investorExpectations = (currentYear - 2023.0) * 1.5;
+        // Капитальный поток: от 0.1 (разочарование) до 2.5 (безумный хайп)
+        const capitalMultiplier = Math.max(0.1, Math.min(2.5,
+            marketUtility / Math.max(1.0, investorExpectations)));
+        // Hardware co-design: продвинутый ИИ сам проектирует чипы
+        let hardwareCoDesign = 1.0;
+        if (reasoning >= 10.0 && agency >= 8.0) {
+          hardwareCoDesign = 1.5;
+        }
+        const dynamicHwK = hwK * capitalMultiplier * hardwareCoDesign;
+
+        flopsLog += dynamicHwK * damping * shockDamping * dt;
         algoLog += (effectiveAlgoK * (isWinter ? 0.4 : 1.0) * damping * shockDamping + rsi) * dt;
       }
       
