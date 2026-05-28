@@ -207,7 +207,7 @@ class BayesianTracker {
       let flopsLog = this.cfg.BASE_LOG_FLOPS, algoLog = 0;
       let baseLog = flopsLog;
       const hwK = Math.log(2) / Math.max(1.0, p.hw_months / 12.0);
-      const algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
+      let algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
       
       // ИСПРАВЛЕНИЕ 1: Оба потолка теперь локальные переменные
       let ceilingReasoning = this.cfg.DIMENSIONS.reasoning.ceiling;
@@ -503,7 +503,7 @@ class BayesianTracker {
       let flopsLog = cfg.BASE_LOG_FLOPS, algoLog = 0;
       let baseLog = flopsLog;
       const hwK = Math.log(2) / Math.max(1.0, p.hw_months / 12.0);
-      const algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
+      let algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
       let cR = cfg.DIMENSIONS.reasoning.ceiling;
       let cA = p.agency_ceiling;
 
