@@ -52,7 +52,7 @@ function createV3Config() {
     BASE_YEAR: 2023.0,          // Якорь (уровень GPT-4)
     BASE_LOG_FLOPS: 24.5,       // Начальные FLOPs в 2023
     CURRENT_YEAR: 2026.30,      // Откуда рисуем графики прогноза
-    THRESHOLDS: { agi: 10.0, asi: 20.0 },
+    THRESHOLDS: { agi: 10.0, asi: 100.0 },
     DIMENSIONS: {
       reasoning: { slope: 0.35, ceiling: 15.0 }, // Откалибровано под рост до 65 баллов
       agency:    { slope: 0.25 }, // Потолок определяет частица
@@ -129,9 +129,7 @@ class BayesianTracker {
       this.particles.push({
         hw_months: Math.max(3.0, randnRange(7.5, 1.5)),
         algo_months: Math.max(2.0, randnRange(6.0, 2.0)),
-        agency_ceiling: Math.max(2.0, randnRange(8.0, 3.0)),
-        inNewParadigm: false,
-        paradigmPenalty: 0,
+        agency_ceiling: Math.max(2.0, randnRange(8.0, 3.0)), // Априорный потолок Трансформеров
       });
     }
   }
@@ -165,8 +163,6 @@ class BayesianTracker {
           hw_months: Math.max(3.0, p.hw_months + randnRange(0, 0.2)),
           algo_months: Math.max(2.0, p.algo_months + randnRange(0, 0.3)),
           agency_ceiling: Math.max(1.5, p.agency_ceiling + randnRange(0, 0.2)),
-          inNewParadigm: p.inNewParadigm || false,
-          paradigmPenalty: p.paradigmPenalty || 0,
         });
       }
       this.particles = newP;
@@ -187,8 +183,8 @@ class BayesianTracker {
 
   runMonteCarloForecast(nRuns) {
     const agiYears = [], asiYears = []; 
-const maxSteps = 12 * 100, dt = 1.0 / 12.0;
-    const plotSteps = 80 * 12;
+    const maxSteps = 12 * 45, dt = 1.0 / 12.0; 
+    const plotSteps = 40 * 12; 
     const trajYears = new Float64Array(plotSteps);
     const trajCaps = Array.from({length: plotSteps}, () => []);
 
@@ -229,31 +225,22 @@ const maxSteps = 12 * 100, dt = 1.0 / 12.0;
 
         const cap = Math.min(reasoning, agency);
 
-        // --- damping: базовый мультипликатор скорости ---
-        let damping = 1.0;
-
-        // Архитектурный сброс: J-кривая вместо магии ×3
-        // Новая архитектура сначала хуже настроенного Трансформера (шаг назад перед двумя вперед)
-        if (!p.inNewParadigm && currentYear > 2026.5) {
-          const researchPressure = Math.max(
-            ceilingReasoning > 0 ? reasoning / ceilingReasoning : 0,
-            ceilingAgency > 0 ? agency / ceilingAgency : 0
-          );
-          const shiftProb = 0.05 + 0.1 * researchPressure;
+        // Эндогенная смена парадигмы: вероятность зависит от saturation и research pressure
+        if (currentYear > this.cfg.CURRENT_YEAR) {
+          // Насколько текущий интеллект близок к потолку (0..1+)
+          const satR = ceilingReasoning > 0 ? reasoning / ceilingReasoning : 0;
+          const satA = ceilingAgency > 0 ? agency / ceilingAgency : 0;
+          const saturation = Math.max(satR, satA);
+          // Давление исследований: чем умнее модели, тем быще ищут новые архитектуры
+          const researchPressure = Math.min(cap / 20.0, 1.0);
+          // Базовая вероятность + давление от saturation, но exhaustion если давно не было прорыва
+          const shiftProb = this.cfg.SCALING_LAW.endo_base
+            + this.cfg.SCALING_LAW.endo_pressure * saturation * researchPressure;
           if (Math.random() < shiftProb * dt) {
-            p.inNewParadigm = true;
-            p.paradigmPenalty = 1.5; // 1.5 года на освоение новой архитектуры
-            ceilingAgency *= 2.5;
-            ceilingReasoning *= 2.5;
-            // Сброс (Collapse): старые оптимизации теряются
-            algoLog -= 1.0;
-            flopsLog -= 0.5; // Часть специфичного железа (TPU/ASIC) становится неоптимальной
-            dataExhaustionHit = false; // Новая архитектура открывает новые модальности данных
+            ceilingAgency *= this.cfg.SCALING_LAW.shift_multiplier;
+            ceilingReasoning *= this.cfg.SCALING_LAW.shift_multiplier;
+            baseLog -= 0.5; // compute overhang release
           }
-        }
-        if (p.inNewParadigm && p.paradigmPenalty > 0) {
-          p.paradigmPenalty -= dt;
-          damping *= 0.5; // Пока осваиваем новую архитектуру, прогресс замедлен
         }
 
         // --- ШОКИ: черные лебеди и предсказуемые кризисы ---
@@ -297,6 +284,8 @@ const maxSteps = 12 * 100, dt = 1.0 / 12.0;
             asiY = currentYear;
             break; // Остановка только на ASI
         }
+        
+        let damping = 1.0;
 
         // Проверка на лопнувший пузырь (AI Winter)
         if (!isWinter && currentYear > 2026.5) {
@@ -380,7 +369,7 @@ const maxSteps = 12 * 100, dt = 1.0 / 12.0;
     }
     return {
         agiYears, asiYears,
-        trajectory: { years: yrs, median: med, p10: p10a, p25: p25a, p75: p75a, p90: p90a, agiThreshold: 10, asiThreshold: 20 }
+        trajectory: { years: yrs, median: med, p10: p10a, p25: p25a, p75: p75a, p90: p90a, agiThreshold: 10, asiThreshold: 100 }
     };
   }
 
@@ -438,7 +427,7 @@ const maxSteps = 12 * 100, dt = 1.0 / 12.0;
 
     const scenarios = [];
     const dt = 1.0 / 12.0;
-    const steps = 100 * 12;
+    const steps = 40 * 12;
 
     for (let s = 0; s < nScenarios; s++) {
       const u = Math.random();
@@ -497,7 +486,7 @@ const maxSteps = 12 * 100, dt = 1.0 / 12.0;
     let cA = p.agency_ceiling;
 
     const dt = 1.0 / 12.0;
-    const steps = 100 * 12;
+    const steps = 40 * 12;
     const years = [], hwComp = [], algoComp = [], paradigmComp = [], rsiComp = [];
     let accumulatedParadigm = 0, accumulatedRsi = 0;
 
@@ -640,7 +629,7 @@ async function runSimulation() {
     const CUR_Y = 2026.30;
     const yq = [];
     for (let y = 0.25; y <= 10; y += 0.25) yq.push(+y.toFixed(4));
-    for (let y = 11; y <= 100; y++) yq.push(y);
+    for (let y = 11; y <= 40; y++) yq.push(y);
     const yqAbs = yq.map(y => +(CUR_Y + y).toFixed(2));
 
     const dummySensitivity = {
@@ -661,10 +650,7 @@ async function runSimulation() {
       },
     };
     updateUI(currentResults);
-    if (typeof liveSwarm !== 'undefined') {
-      liveSwarm.tracker = tracker;
-      liveSwarm.lastData = { agiYears: runData.agiYears, asiYears: runData.asiYears, n: n };
-    }
+    if (typeof liveSwarm !== 'undefined') liveSwarm.tracker = tracker;
     if (typeof swarm !== 'undefined' && swarm) swarm.tracker = tracker;
   } finally {
     simulationRunning = false; btn.disabled = false; overlay.classList.remove('show');
@@ -698,7 +684,7 @@ function updateUI(r) {
 function setVal(id, txt, cls) { const el = document.getElementById(id); el.innerHTML = txt; el.className = 'status-value ' + (cls||''); }
 function colorProb(id, val) { const el = document.getElementById(id); el.classList.remove('green','orange','red'); el.classList.add(val > 50 ? 'green' : val > 10 ? 'orange' : 'red'); }
 function yearsText(yrs) {
-  if (!isFinite(yrs) || yrs > 100) return LANG[window._lang||'ru'].fY_gt;
+  if (!isFinite(yrs) || yrs > 40) return LANG[window._lang||'ru'].fY_gt;
   return yrs.toFixed(1) + LANG[window._lang||'ru'].fY_suffix;
 }
 
@@ -802,16 +788,16 @@ function plotScenarioFan(tracker) {
   }));
 
   // Add AGI/ASI lines
-  const yrRange = [2026, 2080];
+  const yrRange = [2026, 2050];
   traces.push(
     { x: yrRange, y: [10, 10], type: 'scatter', mode: 'lines', name: t.ch_legend_agi, line: { color: '#f0883e', dash: 'dot', width: 1 } },
-    { x: yrRange, y: [20, 20], type: 'scatter', mode: 'lines', name: t.ch_legend_asi, line: { color: '#ef4444', dash: 'dot', width: 1 } }
+    { x: yrRange, y: [100, 100], type: 'scatter', mode: 'lines', name: t.ch_legend_asi, line: { color: '#ef4444', dash: 'dot', width: 1 } }
   );
 
   Plotly.newPlot('c6', traces, {
     ...LAYOUT_BASE,
     xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel }, range: yrRange },
-    yaxis: { ...LAYOUT_BASE.yaxis, type: 'log', range: [0.7, 1.5], title: { text: 'Capability (log)' } },
+    yaxis: { ...LAYOUT_BASE.yaxis, type: 'log', range: [0, 2.0], title: { text: 'Capability (log)' } },
   }, PLOT_CFG);
 }
 
@@ -880,14 +866,14 @@ const LANG = {
     arch_bottlenecks_title:'Бутылочные горлышки',
     arch_bottlenecks_desc:'Экономическая стена: если Reasoning обгоняет Agency более чем на 2.0, инвестиции падают. Энергетическая стена: с 2026 года дефицит инфраструктуры тормозит рост compute.',
     arch_mc_title:'Monte Carlo прогноз',
-    arch_mc_desc:'3000 прогонов из апостериорного распределения. Каждый прогон — симуляция от 2023 до 2123 года с месячным шагом. Результат: распределение лет до AGI (cap >= 10) и ASI (cap >= 20).',
-    defs_intro:'В модели v3 используются строгие операциональные определения на основе двухмерной шкалы (Reasoning, Agency). Шкала логарифмическая: GPT-4 (конец 2023) ~ 3.0 по Reasoning и ~0.2 по Agency, текущие модели середины 2026 ~ 6.8 по Reasoning и ~7.2 по Agency. AGI = 10.0, ASI = 20.0.',
+    arch_mc_desc:'3000 прогонов из апостериорного распределения. Каждый прогон — симуляция от 2023 до 2068 года с месячным шагом. Результат: распределение лет до AGI (cap >= 10) и ASI (cap >= 100).',
+    defs_intro:'В модели v3 используются строгие операциональные определения на основе двухмерной шкалы (Reasoning, Agency). Шкала логарифмическая: GPT-4 (конец 2023) ~ 3.0 по Reasoning и ~0.2 по Agency, текущие модели середины 2026 ~ 6.8 по Reasoning и ~7.2 по Agency. AGI = 10.0, ASI = 100.0.',
     agi_def_title:'AGI — Artificial General Intelligence',
     agi_def_score:'min(Reasoning, Agency) = 10.0',
     agi_def_text1:'Автономный ИИ-исследователь уровня PhD. Демонстрирует истинное обобщение, способен к сложному планированию и надёжной работе (>99%). Может автономно проводить эксперименты, писать продакшен-код и находить ошибки в чужих статьях.',
     agi_def_text2:'Роль в модели: триггер для RSI и геополитической реакции. Без достаточного уровня Agency невозможен.',
     asi_def_title:'ASI — Artificial Superintelligence',
-    asi_def_score:'min(Reasoning, Agency) = 20.0',
+    asi_def_score:'min(Reasoning, Agency) = 100.0',
     asi_def_text1:'Фазовый переход. ИИ автономно сжимает десятилетия научного прогресса в месяцы. Разрыв между ASI и AGI сопоставим с разницей между академиком и первоклассником.',
     asi_def_text2:'Роль в модели: конец симуляции. За этой чертой прогнозы теряют смысл.',
     // Footer
@@ -901,7 +887,7 @@ const LANG = {
     swarm_mode_learn:'Обучение', swarm_mode_forecast:'Прогноз',
     swarm_play_forecast:'Анимация',
     forecast_xaxis:'Год AGI', forecast_yaxis:'Удвоение HW (мес)',
-    forecast_pagi:'P(AGI до 2123)', forecast_median:'Медиана AGI',
+    forecast_pagi:'P(AGI до 2068)', forecast_median:'Медиана AGI',
     forecast_overlay:'AGI ≤', forecast_overlay_desc:'Показаны гипотезы с AGI до',
     live_swarm_title:'Симуляция в реальном времени', live_swarm_desc:'Каждые 0.25 сек рой перерисовывается из нового прогона Monte Carlo.',
     swarm_play_forecast:'Анимация',
@@ -955,14 +941,14 @@ const LANG = {
     arch_bottlenecks_title:'Bottlenecks',
     arch_bottlenecks_desc:'Economic wall: if Reasoning leads Agency by more than 2.0, investment drops. Energy wall: from 2026, infrastructure deficit slows compute growth.',
     arch_mc_title:'Monte Carlo Forecast',
-    arch_mc_desc:'3000 runs from the posterior distribution. Each run simulates 2023 to 2123 at monthly resolution. Result: distribution of years to AGI (cap >= 10) and ASI (cap >= 20).',
-    defs_intro:'The v3 model uses strict operational definitions based on a two-dimensional scale (Reasoning, Agency). The scale is logarithmic: GPT-4 (late 2023) ~ 3.0 in Reasoning and ~0.2 in Agency, current mid-2026 models ~ 6.8 in Reasoning and ~7.2 in Agency. AGI = 10.0, ASI = 20.0.',
+    arch_mc_desc:'3000 runs from the posterior distribution. Each run simulates 2023 to 2068 at monthly resolution. Result: distribution of years to AGI (cap >= 10) and ASI (cap >= 100).',
+    defs_intro:'The v3 model uses strict operational definitions based on a two-dimensional scale (Reasoning, Agency). The scale is logarithmic: GPT-4 (late 2023) ~ 3.0 in Reasoning and ~0.2 in Agency, current mid-2026 models ~ 6.8 in Reasoning and ~7.2 in Agency. AGI = 10.0, ASI = 100.0.',
     agi_def_title:'AGI — Artificial General Intelligence',
     agi_def_score:'min(Reasoning, Agency) = 10.0',
     agi_def_text1:'Autonomous AI researcher at PhD level. Demonstrates true generalization, capable of complex planning and reliable work (>99%). Can autonomously conduct experiments, write production code, and find errors in others\' papers.',
     agi_def_text2:'Role in model: trigger for RSI and geopolitical reaction. Impossible without sufficient Agency level.',
     asi_def_title:'ASI — Artificial Superintelligence',
-    asi_def_score:'min(Reasoning, Agency) = 20.0',
+    asi_def_score:'min(Reasoning, Agency) = 100.0',
     asi_def_text1:'Phase transition. AI autonomously compresses decades of scientific progress into months. The gap between ASI and AGI is comparable to the difference between an academician and a first-grader.',
     asi_def_text2:'Role in model: end of simulation. Beyond this threshold, predictions lose meaning.',
     // Footer
@@ -976,7 +962,7 @@ const LANG = {
     swarm_mode_learn:'Learning', swarm_mode_forecast:'Forecast',
     swarm_play_forecast:'Animate',
     forecast_xaxis:'AGI Year', forecast_yaxis:'HW Doubling (mo)',
-    forecast_pagi:'P(AGI by 2123)', forecast_median:'AGI Median',
+    forecast_pagi:'P(AGI by 2068)', forecast_median:'AGI Median',
     forecast_overlay:'AGI ≤', forecast_overlay_desc:'Showing hypotheses with AGI by',
     live_swarm_title:'Real-time Simulation', live_swarm_desc:'Every 0.25s the swarm redraws from a new Monte Carlo run.',
     // Event Horizon
@@ -1057,9 +1043,9 @@ function swarmSetMode(m) {
     const mcData = swarmComputeAGIYears(swarm.tracker);
     swarm.agiYears = mcData.agi;
     swarm.asiYears = mcData.asi;
-    if (slider) { slider.min = 2020; slider.max = 2123; slider.step = 1; slider.value = 2123; }
-    swarm.forecastSliderMax = 2123;
-    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2040</span><span></span><span>2060</span><span></span><span>2080</span><span>2123</span>';
+    if (slider) { slider.min = 2020; slider.max = 2068; slider.step = 1; slider.value = 2068; }
+    swarm.forecastSliderMax = 2068;
+    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2038</span><span></span><span>2048</span><span></span><span>2058</span><span>2068</span>';
   } else {
     swarm.tracker = swarmBuildTracker(swarm.obsIdx);
     swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
@@ -1077,13 +1063,13 @@ function swarmSetTarget(target) {
   const slider = document.getElementById('swarmSlider');
   const labels = document.getElementById('swarmSliderLabels');
   if (swarm.showASI) {
-    if (slider) { slider.min = 2020; slider.max = 2123; slider.value = 2123; }
-    swarm.forecastSliderMax = 2123;
-    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2040</span><span></span><span>2060</span><span></span><span>2080</span><span>2123</span>';
+    if (slider) { slider.min = 2020; slider.max = 2068; slider.value = 2068; }
+    swarm.forecastSliderMax = 2068;
+    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2040</span><span></span><span>2050</span><span></span><span>2060</span><span>2068</span>';
   } else {
-    if (slider) { slider.min = 2020; slider.max = 2123; slider.value = 2123; }
-    swarm.forecastSliderMax = 2123;
-    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2040</span><span></span><span>2060</span><span></span><span>2080</span><span>2123</span>';
+    if (slider) { slider.min = 2020; slider.max = 2068; slider.value = 2068; }
+    swarm.forecastSliderMax = 2068;
+    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2038</span><span></span><span>2048</span><span></span><span>2058</span><span>2068</span>';
   }
   swarmDraw();
 }
@@ -1172,15 +1158,11 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
     swarm.asiYears = mcData.asi;
   }
   const years = swarm.showASI ? swarm.asiYears : swarm.agiYears;
-  const cutoff = swarm.forecastSliderMax || 2123;
+  const cutoff = swarm.forecastSliderMax || 2068;
   const xMin = 2020;
-  const xMax = 2123;
+  const xMax = 2068;
   const yMin = 0, yMax = 16;
   const cfg = swarm.tracker.cfg;
-  if (swarm.showASI) {
-    const finiteASI = years.filter(y => isFinite(y.year));
-    console.log('SwarmForecast ASI: total years:', years.length, 'finite:', finiteASI.length);
-  }
 
   function yearToX(yr) { return pad + ((yr - xMin) / (xMax - xMin)) * pw; }
   function hwToY(hw) { return h - pad - ((hw - yMin) / (yMax - yMin)) * ph; }
@@ -1304,7 +1286,7 @@ function swarmDrawOverlay(ctx, w, h, pad) {
 
   if (swarm.mode === 'forecast') {
     // forecast mode: slider shows AGI year cutoff
-    if (slider) { slider.style.display = ''; slider.value = swarm.forecastSliderMax || 2123; }
+    if (slider) { slider.style.display = ''; slider.value = swarm.forecastSliderMax || 2068; }
     if (playBtn) {
       playBtn.style.display = '';
       const span = playBtn.querySelector('span');
@@ -1316,7 +1298,7 @@ function swarmDrawOverlay(ctx, w, h, pad) {
     if (hint) hint.style.display = 'none';
     if (ov) {
       const target = swarm.showASI ? 'ASI' : 'AGI';
-      const fc = swarm.forecastSliderMax || 2123;
+      const fc = swarm.forecastSliderMax || 2068;
       ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">${target} ≤ ${fc}</div><div style="font-size:.68rem;color:#9898b0">Показаны гипотезы с ${target} до ${fc}</div>`;
       ov.style.opacity = '1';
     }
@@ -1359,7 +1341,7 @@ function swarmPlay() {
     if (swarm.asiAnimating) { swarm.asiAnimating = false; clearTimeout(swarm.asiRafId); }
     let year = 2020;
     const step = () => {
-      if (!swarm.forecastAnimating || year > 2123) {
+      if (!swarm.forecastAnimating || year > 2068) {
         swarm.forecastAnimating = false;
         document.getElementById('swarmPlayBtn').querySelector('span').textContent = LANG[window._lang||'ru'].swarm_play_forecast || 'Анимация';
         return;
@@ -1409,7 +1391,7 @@ function swarmReset() {
 }
 
 // ===== LIVE SWARM: AGI (blue) + ASI (red) side by side =====
-let liveSwarm = { tracker:null, timerAGI:null, timerASI:null, lastData:null };
+let liveSwarm = { tracker:null, timerAGI:null, timerASI:null };
 
 function liveSwarmInit() {
   // Init both canvases
@@ -1439,7 +1421,6 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
   if (!c || !liveSwarm.tracker) return;
   const ctx = c.getContext('2d');
   const w = c.offsetWidth, h = c.offsetHeight;
-  if (w === 0 || h === 0) { console.log('LiveSwarm canvas zero size:', canvasId); return; }
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = '#0a0a0f'; ctx.fillRect(0, 0, w, h);
 
@@ -1448,31 +1429,22 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
   // X range depends on AGI vs ASI
   const isASI = (colorMode === 'asi');
   const xMin = 2020;
-  const xMax = 2123;
+  const xMax = 2068;
   const yMin = 0, yMax = 16;
 
   function yearToX(yr) { return pad + ((yr - xMin) / (xMax - xMin)) * pw; }
   function hwToY(hw) { return h - pad - ((hw - yMin) / (yMax - yMin)) * ph; }
 
-// Get MC data: use precomputed from main simulation if available, else run fresh
-  let yearData, curYear;
-  if (liveSwarm.lastData && liveSwarm.lastData.n > 0) {
-    // Use data from main simulation run (3000 runs, same tracker)
-    const cfg = liveSwarm.tracker.cfg;
-    curYear = cfg.CURRENT_YEAR;
-    yearData = isASI ? liveSwarm.lastData.asiYears : liveSwarm.lastData.agiYears;
-  } else {
-    // Fallback: run fresh MC (only before first simulation completes)
-    const mc = liveSwarm.tracker.runMonteCarloForecast(500);
-    const cfg = liveSwarm.tracker.cfg;
-    curYear = cfg.CURRENT_YEAR;
-    yearData = isASI ? mc.asiYears : mc.agiYears;
-  }
+  // Run fresh MC
+  const mc = liveSwarm.tracker.runMonteCarloForecast(500);
+  const cfg = liveSwarm.tracker.cfg;
+  const curYear = cfg.CURRENT_YEAR;
   const n = liveSwarm.tracker.n;
   const cumw = new Float64Array(n);
   cumw[0] = liveSwarm.tracker.weights[0];
   for (let i = 1; i < n; i++) cumw[i] = cumw[i-1] + liveSwarm.tracker.weights[i];
 
+  const yearData = isASI ? mc.asiYears : mc.agiYears;
   const pts = [];
   let totalW = 0;
   for (let run = 0; run < yearData.length; run++) {
@@ -1579,14 +1551,14 @@ const ehData = {
   tracker: null,
   radii: {},
   stats: { agi: 0, asi: 0, total: 0 },
-  years: [2026, 2028, 2030, 2032, 2035, 2040, 2045, 2050, 2055, 2060, 2070, 2080, 2090, 2100, 2123],
+  years: [2026, 2028, 2030, 2032, 2035, 2040, 2045, 2050, 2055, 2060, 2068],
 };
 
-const EH_YEARS = [2026, 2028, 2030, 2032, 2035, 2040, 2045, 2050, 2055, 2060, 2070, 2080];
+const EH_YEARS = [2026, 2028, 2030, 2032, 2035, 2040, 2045, 2050, 2055, 2060, 2068];
 
 function yearToRadius(year, maxR) {
-  // 2026 -> 20px (center), 2123 -> maxR
-  const t = Math.max(0, Math.min(1, (year - 2026) / (2123 - 2026)));
+  // 2026 -> 20px (center), 2068 -> maxR
+  const t = Math.max(0, Math.min(1, (year - 2026) / (2068 - 2026)));
   return 20 + t * (maxR - 20);
 }
 
@@ -1714,7 +1686,7 @@ function ehStep(dt) {
         glowColor = 'rgba(240,136,62,0.15)';
       } else {
         // Never reached AGI -- drift to far orbit
-        targetYear = 2123;
+        targetYear = 2068;
         type = 'never';
         color = 'rgba(80,80,120,0.5)';
         glowColor = 'rgba(80,80,120,0.08)';
@@ -1776,13 +1748,9 @@ function eventHorizonPlay() {
 
   ehData.spawnIdx = 0;
   ehData.spawnsLeft = ehData.spawns.length;
-  ehData.stats = { agi: 0, asi: 0, never: 0 };
   ehData.particles = [];
   ehData.launched = 0;
   ehData.running = true;
-  // Count ASI vs AGI vs never in spawns
-  const spawnsASI = ehData.spawns.filter(s => isFinite(s.asiYear)).length;
-  console.log('EventHorizon: total spawns:', ehData.spawns.length, 'ASI:', spawnsASI);
   ehAnimate();
 }
 
