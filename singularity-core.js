@@ -295,8 +295,15 @@ class BayesianTracker {
 
             // Прорыв зависит от насыщения и от compute overhang (избыток капитал/вычисления)
             if (saturation > this.cfg.EXPERT.saturationThreshold) {
+              // Вычисляем capitalMultiplier для compute overhang (полный расчёт ниже)
+              const _marketUtility = reasoning * 0.3 + agency * 0.7;
+              const _investorExpectations = (currentYear - 2023.0) * 1.5;
+              const _capMult = Math.max(0.1, Math.min(this.cfg.EXPERT.maxCapitalMultiplier,
+                  _marketUtility / Math.max(1.0, _investorExpectations)));
+              const _hypeMult = (paradigmGeneration > 0 && hypeGracePeriod > 0) ? Math.max(_capMult, 2.0) : _capMult;
+
               // Compute Overhang: избыток капитала ускоряет брутфорс новых архитектур
-              const computeOverhang = Math.max(1.0, capitalMultiplier);
+              const computeOverhang = Math.max(1.0, _hypeMult);
               let shiftProb = 0.02 + (0.15 * saturation)
                 + (this.cfg.EXPERT.overhangShiftMultiplier * computeOverhang);
 
@@ -431,11 +438,9 @@ class BayesianTracker {
         
         // dataExhaustionHit обрабатывается ниже в currentAlgoK
         // Экономика исследований: динамический hwK зависит от ROI
-        // Рынок платит за Agency (автономный труд), а не за чистый Reasoning
+        // capitalMultiplier уже вычислен выше для compute overhang — переиспользуем логику
         const marketUtility = reasoning * 0.3 + agency * 0.7;
-        // Ожидания инвесторов растут со временем
         const investorExpectations = (currentYear - 2023.0) * 1.5;
-        // Капитальный поток: от 0.1 (разочарование) до 2.5 (безумный хайп)
         let capitalMultiplier = Math.max(0.1, Math.min(this.cfg.EXPERT.maxCapitalMultiplier,
             marketUtility / Math.max(1.0, investorExpectations)));
         // Инвесторы заливают деньги на этапе хайпа, несмотря на просадку метрик
