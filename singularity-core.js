@@ -213,8 +213,9 @@ class BayesianTracker {
       let gpuBubbleBurst = false;
       let alignmentIncidentCooldown = 0;
 
-      // --- Архитектурный сресет: локальное состояние прогона ---
-      let inNewParadigm = false;
+      // --- Каскадные парадигмы ---
+      let paradigmGeneration = 0;    // 0 = Трансформеры, 1 = первая смена, 2 = вторая...
+      let lastShiftYear = 2023.0;     // Год последнего сдвига
       let hypeGracePeriod = 0.0;
       let algoKMultiplier = 1.0;
 
@@ -230,23 +231,42 @@ class BayesianTracker {
 
         const cap = Math.min(reasoning, agency);
 
-        // Архитектурный сброс (Смена парадигмы)
-        if (!inNewParadigm && currentYear > 2026.5) {
-          const researchPressure = Math.max(reasoning / ceilingReasoning, agency / ceilingAgency);
-          const shiftProb = 0.05 + 0.1 * researchPressure;
-          if (Math.random() < shiftProb * dt) {
-            inNewParadigm = true;
-            hypeGracePeriod = 2.5;
-            ceilingAgency *= 3.0;
-            ceilingReasoning *= 3.0;
-            algoLog -= 0.5; // J-кривая
-            algoKMultiplier = 2.0;
-            dataExhaustionHit = false;
-          }
+        // Архитектурный каскад (множественные смены парадигм)
+        // Первая смена — не раньше 2026.5, последующие — не чаще раза в 4 года
+        const canShift = (paradigmGeneration === 0 && currentYear > 2026.5)
+                       || (paradigmGeneration > 0 && currentYear > lastShiftYear + 4.0);
+        if (canShift) {
+            // Насколько мы уперлись в текущий потолок? (от 0.0 до 1.0+)
+            const saturation = Math.max(reasoning / ceilingReasoning, agency / ceilingAgency);
+
+            // Сдвиг происходит только под сильным давлением (saturation > 0.7)
+            if (saturation > 0.7) {
+              // Чем ближе к потолку, тем выше шанс прорыва
+              const shiftProb = 0.02 + 0.15 * saturation;
+
+              if (Math.random() < shiftProb * dt) {
+                paradigmGeneration++;
+                lastShiftYear = currentYear;
+                hypeGracePeriod = 2.5; // Венчурный хайп новой парадигмы
+
+                // Убывающая отдача: 1-й сдвиг x3.0, 2-й x2.5, 3-й x2.0...
+                const shiftMult = Math.max(1.3, 3.0 - (paradigmGeneration * 0.5));
+
+                ceilingAgency *= shiftMult;
+                ceilingReasoning *= shiftMult;
+
+                // Чем дальше, тем больнее переход на новую архитектуру (J-кривая глубже)
+                algoLog -= (0.4 + paradigmGeneration * 0.1);
+
+                // Новые открытия на новой архитектуре
+                algoKMultiplier = 2.0;
+                dataExhaustionHit = false;
+              }
+            }
         }
 
-        // Постепенное затухание эффектов новой парадигмы
-        if (inNewParadigm) {
+        // Затухание эффектов текущей новой парадигмы
+        if (paradigmGeneration > 0) {
           if (hypeGracePeriod > 0) hypeGracePeriod -= dt;
           if (algoKMultiplier > 1.0) {
             algoKMultiplier -= (1.0 / 4.0) * dt;
@@ -353,7 +373,7 @@ class BayesianTracker {
         let capitalMultiplier = Math.max(0.1, Math.min(2.5,
             marketUtility / Math.max(1.0, investorExpectations)));
         // Инвесторы заливают деньги на этапе хайпа, несмотря на просадку метрик
-        if (inNewParadigm && hypeGracePeriod > 0) {
+        if (paradigmGeneration > 0 && hypeGracePeriod > 0) {
           capitalMultiplier = Math.max(capitalMultiplier, 2.0);
         }
         // Hardware co-design: продвинутый ИИ сам проектирует чипы
