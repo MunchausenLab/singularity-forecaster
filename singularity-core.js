@@ -11,17 +11,22 @@ function cdf(list, x) { const c = list.filter(v => isFinite(v) && v <= x).length
 // Перевод латентных переменных (reasoning, agency) в наблюдаемые бенчмарки
 // reasoning и agency в масштабе модели (0..~15 для reasoning, 0..~agency_ceiling для agency)
 // Нормализуем к шкале 0..10 для маппинга
-function mapToObservables(reasoning, agency, ceilingR, ceilingA) {
+function mapToObservables(reasoning, agency, ceilingR, ceilingA, expertCfg) {
     // Нормализация: AA-шкала 0..100 -> внутренняя шкала модели
-    // reasoning: AA/100 * 15 (ceiling по умолчанию), agency: AA/100 * agency_ceiling
     const rNorm = ceilingR > 0 ? reasoning / ceilingR : 0;
     const aNorm = ceilingA > 0 ? agency / ceilingA : 0;
     // Прокси в шкалу 0..10 для формул бенчмарков
     const r10 = rNorm * 10;
     const a10 = aNorm * 10;
 
-    // SWE-bench: смесь reasoning (40%) и agency (60%)
-    const sweBench = 100 * sigmoid(0.4 * (r10 * 0.4 + a10 * 0.6) - 3.5);
+    // toolUseVsAutonomyWeight: насколько бенчмарк реально отражает Agency
+    // 0 = только reasoning, 1 = только agency, 0.6 = смесь (дефолт)
+    const autonomyWeight = expertCfg ? expertCfg.toolUseVsAutonomyWeight : 0.6;
+    const reasoningWeight = 1.0 - autonomyWeight;
+    const blendedReasoning = r10 * reasoningWeight + a10 * autonomyWeight;
+
+    // SWE-bench: смесь reasoning и agency с настраиваемым весом
+    const sweBench = 100 * sigmoid(0.4 * blendedReasoning - 3.5);
 
     // ARC-AGI: чистое reasoning
     const arcAgi = 100 * sigmoid(0.6 * r10 - 4.0);
@@ -50,15 +55,25 @@ const EXPERT_CONFIG = {
   ceilingReasoningBase: 15.0,       // Базовый потолок Трансформеров
   hypeGracePeriod: 2.5,             // Толерантность инвесторов (лет)
   saturationThreshold: 0.7,         // Порог насыщения для прорыва (0-1)
+  overhangShiftMultiplier: 0.2,     // Compute Overhang влияет на вероятность прорыва
   // Категория 2: Самоулучшение
   rsiMultiplier: 1.0,              // Множитель силы RSI
+  rsiTriggerReasoning: 8.0,        // Reasoning для старта RSI (было 6.0)
+  rsiTriggerAgency: 8.0,           // Agency для старта RSI (было 4.0)
   hwCoDesignBonus: 1.5,            // Аппаратный ко-дизайн
+  coordinationFriction: 0.05,      // Координационное трение ансамблей ИИ
+  maxPhysicalHwGrowth: 1.5,        // Физический предел роста железа (log scale)
   // Категория 3: Экономика и Риски
   bubbleBurstRisk: 0.20,           // Риск схлопывания GPU-пузыря
   alignmentCooldown: 1.5,          // Штраф за инцидент безопасности (лет)
   maxCapitalMultiplier: 2.5,       // Эластичность капитала
   // Категория 4: Эпистемология (World Models)
-  worldModels: { cascade: 0.60, hardWall: 0.25, slowTakeoff: 0.15 }
+  worldModels: { cascade: 0.60, hardWall: 0.25, slowTakeoff: 0.15 },
+  // Категория 5: Априорные допущения (Philosophical Priors)
+  priorAgencyMean: 8.0,            // Априорное среднее agency_ceiling
+  priorAgencyStd: 3.0,             // Априорный разброс
+  // Категория 6: Бенчмарки
+  toolUseVsAutonomyWeight: 0.6     // Вес agency в SWE-bench (0=только reasoning, 1=только agency)
 };
 
 // ============================================================================
@@ -155,7 +170,7 @@ class BayesianTracker {
       this.particles.push({
         hw_months: Math.max(3.0, randnRange(7.5, 1.5)),
         algo_months: Math.max(2.0, randnRange(6.0, 2.0)),
-        agency_ceiling: Math.max(2.0, randnRange(8.0, 3.0)),
+        agency_ceiling: Math.max(2.0, randnRange(EXPERT_CONFIG.priorAgencyMean, EXPERT_CONFIG.priorAgencyStd)),
         world_model: worldModel,
       });
     }
@@ -278,9 +293,12 @@ class BayesianTracker {
             // Насколько мы уперлись в текущий потолок? (от 0.0 до 1.0+)
             const saturation = Math.max(reasoning / ceilingReasoning, agency / ceilingAgency);
 
-            // Сдвиг происходит только под сильным давлением
+            // Прорыв зависит от насыщения и от compute overhang (избыток капитал/вычисления)
             if (saturation > this.cfg.EXPERT.saturationThreshold) {
-              let shiftProb = 0.02 + 0.15 * saturation;
+              // Compute Overhang: избыток капитала ускоряет брутфорс новых архитектур
+              const computeOverhang = Math.max(1.0, capitalMultiplier);
+              let shiftProb = 0.02 + (0.15 * saturation)
+                + (this.cfg.EXPERT.overhangShiftMultiplier * computeOverhang);
 
               // World Model модификации вероятности
               if (p.world_model === 'hard_wall') {
@@ -392,26 +410,24 @@ class BayesianTracker {
         // Стадийный RSI: дискретные уровни с порогами reasoning + agency
         let rsi = 0;
         const _rsiM = this.cfg.EXPERT.rsiMultiplier;
+        const _rsiTR = this.cfg.EXPERT.rsiTriggerReasoning;
+        const _rsiTA = this.cfg.EXPERT.rsiTriggerAgency;
+        const _coordF = this.cfg.EXPERT.coordinationFriction;
 
-        // Уровень 1: Tool-assisted optimization (написание кода, рефакторинг)
-        if (reasoning >= 6.0 && agency >= 4.0) {
-          rsi += 0.02 * Math.log(1.0 + reasoning) * _rsiM;
+        // ИИ может начать оптимизировать себя только при высокой автономности
+        if (reasoning >= _rsiTR && agency >= _rsiTA) {
+          // Базовый RSI потенциал
+          let baseRsi = 0.15 * Math.pow(cap - _rsiTA, 1.2) * _rsiM;
+
+          // Координационное трение (Закон Амдала / Брукса для AI-агентов)
+          // Чем выше capability, тем сложнее агентам координироваться
+          const friction = 1.0 / (1.0 + _coordF * Math.max(0, cap - 10.0));
+
+          rsi += baseRsi * friction;
         }
 
-        // Уровень 2: Automated research loops (автономный запуск экспериментов)
-        // Требует высокой агентности!
-        if (reasoning >= 8.0 && agency >= 8.0) {
-          rsi += 0.05 * Math.log(1.0 + cap) * _rsiM;
-        }
-
-        // Уровень 3: Architecture Search & Hardware Co-design (преддверие ASI)
-        // Требует уровня AGI
-        if (cap >= this.cfg.THRESHOLDS.agi) {
-          rsi += 0.15 * Math.pow(cap - this.cfg.THRESHOLDS.agi, 1.2) * _rsiM;
-        }
-
-        // Ограничитель скорости RSI (физическое время на обучение моделей)
-        rsi = Math.min(rsi, 1.5);
+        // Защита от бесконечности
+        rsi = Math.min(rsi, 2.0);
         
         // dataExhaustionHit обрабатывается ниже в currentAlgoK
         // Экономика исследований: динамический hwK зависит от ROI
@@ -433,6 +449,11 @@ class BayesianTracker {
         }
         let dynamicHwK = hwK * capitalMultiplier * hardwareCoDesign * damping;
         if (gpuBubbleBurst) dynamicHwK *= 0.2;
+
+        // Физический предел роста железа (Material Cycle)
+        // Когнитивный цикл может быть быстрым, но бетон, АЭС и литография — это физика
+        dynamicHwK = Math.min(dynamicHwK, this.cfg.EXPERT.maxPhysicalHwGrowth);
+
         flopsLog += dynamicHwK * shockDamping * dt;
 
         // Применяем локальный мультипликатор к скорости алгоритмов
@@ -1928,33 +1949,53 @@ function expertResetDefaults() {
     ceilingReasoningBase: 15.0,
     hypeGracePeriod: 2.5,
     saturationThreshold: 0.7,
+    overhangShiftMultiplier: 0.2,
     rsiMultiplier: 1.0,
+    rsiTriggerReasoning: 8.0,
+    rsiTriggerAgency: 8.0,
     hwCoDesignBonus: 1.5,
+    coordinationFriction: 0.05,
+    maxPhysicalHwGrowth: 1.5,
     bubbleBurstRisk: 0.20,
     alignmentCooldown: 1.5,
     maxCapitalMultiplier: 2.5,
-    worldModels: { cascade: 0.60, hardWall: 0.25, slowTakeoff: 0.15 }
+    worldModels: { cascade: 0.60, hardWall: 0.25, slowTakeoff: 0.15 },
+    priorAgencyMean: 8.0,
+    priorAgencyStd: 3.0,
+    toolUseVsAutonomyWeight: 0.6
   });
   // Обновить все UI элементы
   const fields = [
-    'ceilingReasoningBase', 'hypeGracePeriod', 'saturationThreshold',
-    'rsiMultiplier', 'hwCoDesignBonus', 'bubbleBurstRisk',
-    'alignmentCooldown', 'maxCapitalMultiplier'
+    'ceilingReasoningBase', 'hypeGracePeriod', 'saturationThreshold', 'overhangShiftMultiplier',
+    'rsiMultiplier', 'rsiTriggerReasoning', 'rsiTriggerAgency', 'hwCoDesignBonus',
+    'coordinationFriction', 'maxPhysicalHwGrowth', 'bubbleBurstRisk',
+    'alignmentCooldown', 'maxCapitalMultiplier',
+    'priorAgencyMean', 'priorAgencyStd', 'toolUseVsAutonomyWeight'
   ];
   const defValues = {
-    ceilingReasoningBase: 15, hypeGracePeriod: 2.5, saturationThreshold: 0.70,
-    rsiMultiplier: 1.0, hwCoDesignBonus: 1.5, bubbleBurstRisk: 0.20,
-    alignmentCooldown: 1.5, maxCapitalMultiplier: 2.5
+    ceilingReasoningBase: 15, hypeGracePeriod: 2.5, saturationThreshold: 0.70, overhangShiftMultiplier: 0.20,
+    rsiMultiplier: 1.0, rsiTriggerReasoning: 8.0, rsiTriggerAgency: 8.0, hwCoDesignBonus: 1.5,
+    coordinationFriction: 0.05, maxPhysicalHwGrowth: 1.5, bubbleBurstRisk: 0.20,
+    alignmentCooldown: 1.5, maxCapitalMultiplier: 2.5,
+    priorAgencyMean: 8.0, priorAgencyStd: 3.0, toolUseVsAutonomyWeight: 0.60
   };
   const formats = {
     ceilingReasoningBase: v => v.toFixed(1),
     hypeGracePeriod: v => v.toFixed(1),
     saturationThreshold: v => v.toFixed(2),
+    overhangShiftMultiplier: v => v.toFixed(2),
     rsiMultiplier: v => v.toFixed(1),
+    rsiTriggerReasoning: v => v.toFixed(1),
+    rsiTriggerAgency: v => v.toFixed(1),
     hwCoDesignBonus: v => v.toFixed(1),
+    coordinationFriction: v => v.toFixed(2),
+    maxPhysicalHwGrowth: v => v.toFixed(1),
     bubbleBurstRisk: v => v.toFixed(2),
     alignmentCooldown: v => v.toFixed(1),
-    maxCapitalMultiplier: v => v.toFixed(1)
+    maxCapitalMultiplier: v => v.toFixed(1),
+    priorAgencyMean: v => v.toFixed(1),
+    priorAgencyStd: v => v.toFixed(1),
+    toolUseVsAutonomyWeight: v => v.toFixed(2)
   };
   for (const f of fields) {
     document.getElementById('e-' + f).value = defValues[f];
@@ -1995,7 +2036,7 @@ function updateObsMetrics() {
   const reasoningModel = (intel / 100) * ceilingR;
   const agencyModel = (agentic / 100) * agencyCeiling;
 
-  const m = mapToObservables(reasoningModel, agencyModel, ceilingR, agencyCeiling);
+  const m = mapToObservables(reasoningModel, agencyModel, ceilingR, agencyCeiling, EXPERT_CONFIG);
 
   const el = document.getElementById('obsMetrics');
   if (el) el.style.display = 'block';

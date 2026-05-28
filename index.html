@@ -387,6 +387,14 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
         <input type="range" id="e-saturationThreshold" min="0.4" max="0.95" step="0.05" value="0.70" oninput="expertUpdate('saturationThreshold',this.value)">
         <div class="expert-param-desc">Насколько надо упереться для смены парадигмы</div>
       </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name">Compute Overhang</span>
+          <span class="expert-param-value" id="ev-overhangShiftMultiplier">0.20</span>
+        </div>
+        <input type="range" id="e-overhangShiftMultiplier" min="0" max="1" step="0.05" value="0.20" oninput="expertUpdate('overhangShiftMultiplier',this.value)">
+        <div class="expert-param-desc">Влияние избытка капитала на вероятность прорыва</div>
+      </div>
     </div>
 
     <!-- Категория 2: Самоулучшение -->
@@ -399,6 +407,38 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
         </div>
         <input type="range" id="e-rsiMultiplier" min="0" max="3" step="0.1" value="1.0" oninput="expertUpdate('rsiMultiplier',this.value)">
         <div class="expert-param-desc">Умножает все коэффициенты RSI (0 = без самоулучшения)</div>
+      </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name">Порог RSI (Reasoning)</span>
+          <span class="expert-param-value" id="ev-rsiTriggerReasoning">8.0</span>
+        </div>
+        <input type="range" id="e-rsiTriggerReasoning" min="4" max="12" step="0.5" value="8" oninput="expertUpdate('rsiTriggerReasoning',this.value)">
+        <div class="expert-param-desc">Reasoning для старта авто-улучшений</div>
+      </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name">Порог RSI (Agency)</span>
+          <span class="expert-param-value" id="ev-rsiTriggerAgency">8.0</span>
+        </div>
+        <input type="range" id="e-rsiTriggerAgency" min="2" max="12" step="0.5" value="8" oninput="expertUpdate('rsiTriggerAgency',this.value)">
+        <div class="expert-param-desc">Agency для старта авто-улучшений</div>
+      </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name">Координационное трение</span>
+          <span class="expert-param-value" id="ev-coordinationFriction">0.05</span>
+        </div>
+        <input type="range" id="e-coordinationFriction" min="0" max="1" step="0.05" value="0.05" oninput="expertUpdate('coordinationFriction',this.value)">
+        <div class="expert-param-desc">Деградация при масштабировании агентов (0 = идеальная координация)</div>
+      </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name">Макс. рост железа</span>
+          <span class="expert-param-value" id="ev-maxPhysicalHwGrowth">1.50</span>
+        </div>
+        <input type="range" id="e-maxPhysicalHwGrowth" min="0.3" max="3" step="0.1" value="1.5" oninput="expertUpdate('maxPhysicalHwGrowth',this.value)">
+        <div class="expert-param-desc">Физический предел роста hardware (log scale)</div>
       </div>
       <div class="expert-param">
         <div class="expert-param-label">
@@ -458,6 +498,40 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
       </div>
       <div class="expert-world-error" id="expertWorldError">Сумма должна быть 100%</div>
       <div class="expert-param-desc" style="margin-top:8px">Априорные вероятности гипотез о структуре реальности. Сумма = 100%.</div>
+    </div>
+  </div>
+
+  <!-- Категория 5: Априорные допущения -->
+  <div class="expert-group" style="grid-column:span 1">
+    <div class="expert-group-title">Априорные допущения</div>
+    <div class="expert-param">
+      <div class="expert-param-label">
+        <span class="expert-param-name">Априорное среднее Agency</span>
+        <span class="expert-param-value" id="ev-priorAgencyMean">8.0</span>
+      </div>
+      <input type="range" id="e-priorAgencyMean" min="2" max="20" step="0.5" value="8" oninput="expertUpdate('priorAgencyMean',this.value)">
+      <div class="expert-param-desc">Базовое ожидание потолка агентности (=10 это AGI)</div>
+    </div>
+    <div class="expert-param">
+      <div class="expert-param-label">
+        <span class="expert-param-name">Априорный разброс</span>
+        <span class="expert-param-value" id="ev-priorAgencyStd">3.0</span>
+      </div>
+      <input type="range" id="e-priorAgencyStd" min="0.5" max="8" step="0.5" value="3" oninput="expertUpdate('priorAgencyStd',this.value)">
+      <div class="expert-param-desc">Разброс мнений о потолке (больше = больше оптимистичных частиц)</div>
+    </div>
+  </div>
+
+  <!-- Категория 6: Бенчмарки -->
+  <div class="expert-group" style="grid-column:span 1">
+    <div class="expert-group-title">Бенчмарки и Прочее</div>
+    <div class="expert-param">
+      <div class="expert-param-label">
+        <span class="expert-param-name">Вес Autonomy в SWE-bench</span>
+        <span class="expert-param-value" id="ev-toolUseVsAutonomyWeight">0.60</span>
+      </div>
+      <input type="range" id="e-toolUseVsAutonomyWeight" min="0" max="1" step="0.05" value="0.60" oninput="expertUpdate('toolUseVsAutonomyWeight',this.value)">
+      <div class="expert-param-desc">0 = бенчмарк взламывается reasoning, 1 = только реальная автономность</div>
     </div>
   </div>
   <div class="expert-apply-row">
