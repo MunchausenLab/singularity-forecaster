@@ -126,10 +126,16 @@ class BayesianTracker {
     this.weights = new Float64Array(this.n).fill(1.0 / this.n);
     this.observationLog = [];
     for (let i = 0; i < this.n; i++) {
+      const rand = Math.random();
+      let worldModel = 'cascade'; // 60% верят в каскадные парадигмы
+      if (rand >= 0.6 && rand < 0.85) worldModel = 'hard_wall'; // 25% верят в Стену
+      else if (rand >= 0.85) worldModel = 'slow_takeoff'; // 15% верят в Медленный взлёт
+
       this.particles.push({
         hw_months: Math.max(3.0, randnRange(7.5, 1.5)),
         algo_months: Math.max(2.0, randnRange(6.0, 2.0)),
-        agency_ceiling: Math.max(2.0, randnRange(8.0, 3.0)), // Априорный потолок Трансформеров
+        agency_ceiling: Math.max(2.0, randnRange(8.0, 3.0)),
+        world_model: worldModel,
       });
     }
   }
@@ -163,6 +169,7 @@ class BayesianTracker {
           hw_months: Math.max(3.0, p.hw_months + randnRange(0, 0.2)),
           algo_months: Math.max(2.0, p.algo_months + randnRange(0, 0.3)),
           agency_ceiling: Math.max(1.5, p.agency_ceiling + randnRange(0, 0.2)),
+          world_model: p.world_model || 'cascade',
         });
       }
       this.particles = newP;
@@ -205,7 +212,18 @@ class BayesianTracker {
       // ИСПРАВЛЕНИЕ 1: Оба потолка теперь локальные переменные
       let ceilingReasoning = this.cfg.DIMENSIONS.reasoning.ceiling;
       let ceilingAgency = p.agency_ceiling;
-      
+
+      // --- World Models: эпистемическая неопределённость ---
+      // Каждая частица верит в свою "физику мира"
+      if (p.world_model === 'hard_wall') {
+        // Мир "Стены": Трансформеры упираются в потолок агентности ~5.5
+        ceilingAgency = Math.min(ceilingAgency, 5.5);
+      } else if (p.world_model === 'slow_takeoff') {
+        // Мир "Нейросимволики": медленный старт, но огромный потенциал
+        algoK *= 0.6; // Алгоритмический прогресс тормозит до прорыва
+      }
+      // 'cascade' — каскадные парадигмы, без модификаций
+
       let agiY = null, asiY = null;
       let plotIdx = 0;
       let isWinter = false;
@@ -241,24 +259,34 @@ class BayesianTracker {
 
             // Сдвиг происходит только под сильным давлением (saturation > 0.7)
             if (saturation > 0.7) {
-              // Чем ближе к потолку, тем выше шанс прорыва
-              const shiftProb = 0.02 + 0.15 * saturation;
+              let shiftProb = 0.02 + 0.15 * saturation;
+
+              // World Model модификации вероятности
+              if (p.world_model === 'hard_wall') {
+                // В мире Стены парадигмальных сдвигов почти не бывает
+                shiftProb = 0.001;
+              }
 
               if (Math.random() < shiftProb * dt) {
                 paradigmGeneration++;
                 lastShiftYear = currentYear;
-                hypeGracePeriod = 2.5; // Венчурный хайп новой парадигмы
+                hypeGracePeriod = 2.5;
 
                 // Убывающая отдача: 1-й сдвиг x3.0, 2-й x2.5, 3-й x2.0...
-                const shiftMult = Math.max(1.3, 3.0 - (paradigmGeneration * 0.5));
+                let shiftMult = Math.max(1.3, 3.0 - (paradigmGeneration * 0.5));
+
+                // World Model модификации множителя
+                if (p.world_model === 'slow_takeoff' && paradigmGeneration === 1) {
+                  // Нейросимволика: первый срыв даёт ОГРОМНЫЙ скачок
+                  shiftMult = 5.0;
+                }
+                // hard_wall: потолок агентности уже заблокирована на 5.5,
+                // сдвиг почти никогда не срабатывает, но если случится — обычный shiftMult
 
                 ceilingAgency *= shiftMult;
                 ceilingReasoning *= shiftMult;
 
-                // Чем дальше, тем больнее переход на новую архитектуру (J-кривая глубже)
                 algoLog -= (0.4 + paradigmGeneration * 0.1);
-
-                // Новые открытия на новой архитектуре
                 algoKMultiplier = 2.0;
                 dataExhaustionHit = false;
               }
@@ -577,13 +605,25 @@ let v3Tracker = null;
 let v3Observations = [];
 
 const AA_FRONTIER_DATA = [
-  { year: 2023.25, intel: 30.0, agentic: 2.0, event: "GPT-4 Release" },
-  { year: 2024.20, intel: 45.0, agentic: 13.8, event: "Claude 3 Opus / Devin" },
-  { year: 2024.45, intel: 52.0, agentic: 31.4, event: "Claude 3.5 Sonnet" },
-  { year: 2024.75, intel: 55.0, agentic: 36.0, event: "OpenAI o1-preview" },
-  { year: 2025.10, intel: 58.0, agentic: 42.0, event: "DeepSeek-R1 / Gemini 2.0 Pro" },
-  { year: 2025.80, intel: 62.0, agentic: 45.0, event: "Q4 2025 Frontier" },
-  { year: 2026.30, intel: 68.0, agentic: 72.0, event: "Anthropic Mythos (Closed Demo)" },
+  // --- РАННЯЯ ЭПОХА (Пре-Агенты) ---
+  { year: 2020.45, intel: 5.0,  agentic: 0.1,  event: "GPT-3 Release" },
+  { year: 2022.90, intel: 7.0,  agentic: 0.5,  event: "ChatGPT (GPT-3.5)" },
+
+  // --- ЭПОХА ИНСТРУМЕНТОВ (2023 — начало 2024) ---
+  { year: 2023.25, intel: 14.0, agentic: 2.0,  event: "GPT-4 Release" },
+  { year: 2023.85, intel: 15.0, agentic: 5.5,  event: "GPT-4 Turbo + Assistants API" },
+  { year: 2024.20, intel: 18.0, agentic: 13.8, event: "Claude 3 Opus" },
+
+  // --- ЭПОХА АГЕНТНОГО ПРОРЫВА (середина 2024 — 2025) ---
+  { year: 2024.45, intel: 30.0, agentic: 31.4, event: "Claude 3.5 Sonnet" },
+  { year: 2024.75, intel: 31.0, agentic: 36.0, event: "OpenAI o1-preview" },
+  { year: 2025.20, intel: 35.0, agentic: 42.0, event: "Claude 3.7 Sonnet (reasoning)" },
+  { year: 2025.30, intel: 37.0, agentic: 48.0, event: "Claude 4 Sonnet (reasoning)" },
+  { year: 2025.80, intel: 48.0, agentic: 52.0, event: "Gemini 3 Pro" },
+
+  // --- СОВРЕМЕННЫЙ ФРОНТИР (2026) ---
+  { year: 2026.15, intel: 57.0, agentic: 61.0, event: "GPT-5.4 (Agentic Web)" },
+  { year: 2026.30, intel: 65.0, agentic: 65.0, event: "Claude Mythos (Closed)" },
 ];
 
 function v3GetTracker() {
@@ -905,7 +945,7 @@ const LANG = {
     arch_bottlenecks_desc:'Экономическая стена: если Reasoning обгоняет Agency более чем на 2.0, инвестиции падают. Энергетическая стена: с 2026 года дефицит инфраструктуры тормозит рост compute.',
     arch_mc_title:'Monte Carlo прогноз',
     arch_mc_desc:'3000 прогонов из апостериорного распределения. Каждый прогон — симуляция от 2023 до 2068 года с месячным шагом. Результат: распределение лет до AGI (cap >= 10) и ASI (cap >= 100).',
-    defs_intro:'В модели v3 используются строгие операциональные определения на основе двухмерной шкалы (Reasoning, Agency). Шкала логарифмическая: GPT-4 (конец 2023) ~ 3.0 по Reasoning и ~0.2 по Agency, текущие модели середины 2026 ~ 6.8 по Reasoning и ~7.2 по Agency. AGI = 10.0, ASI = 100.0.',
+    defs_intro:'В модели v3 используются строгие операциональные определения на основе двухмерной шкалы (Reasoning, Agency). Шкала логарифмическая: GPT-4 (конец 2023) ~ 3.0 по Reasoning и ~0.2 по Agency, текущие модели середины 2026 ~ 6.5 по Reasoning и ~6.5 по Agency. AGI = 10.0, ASI = 100.0.',
     agi_def_title:'AGI — Artificial General Intelligence',
     agi_def_score:'min(Reasoning, Agency) = 10.0',
     agi_def_text1:'Автономный ИИ-исследователь уровня PhD. Демонстрирует истинное обобщение, способен к сложному планированию и надёжной работе (>99%). Может автономно проводить эксперименты, писать продакшен-код и находить ошибки в чужих статьях.',
@@ -980,7 +1020,7 @@ const LANG = {
     arch_bottlenecks_desc:'Economic wall: if Reasoning leads Agency by more than 2.0, investment drops. Energy wall: from 2026, infrastructure deficit slows compute growth.',
     arch_mc_title:'Monte Carlo Forecast',
     arch_mc_desc:'3000 runs from the posterior distribution. Each run simulates 2023 to 2068 at monthly resolution. Result: distribution of years to AGI (cap >= 10) and ASI (cap >= 100).',
-    defs_intro:'The v3 model uses strict operational definitions based on a two-dimensional scale (Reasoning, Agency). The scale is logarithmic: GPT-4 (late 2023) ~ 3.0 in Reasoning and ~0.2 in Agency, current mid-2026 models ~ 6.8 in Reasoning and ~7.2 in Agency. AGI = 10.0, ASI = 100.0.',
+    defs_intro:'The v3 model uses strict operational definitions based on a two-dimensional scale (Reasoning, Agency). The scale is logarithmic: GPT-4 (late 2023) ~ 3.0 in Reasoning and ~0.2 in Agency, current mid-2026 models ~ 6.5 in Reasoning and ~6.5 in Agency. AGI = 10.0, ASI = 100.0.',
     agi_def_title:'AGI — Artificial General Intelligence',
     agi_def_score:'min(Reasoning, Agency) = 10.0',
     agi_def_text1:'Autonomous AI researcher at PhD level. Demonstrates true generalization, capable of complex planning and reliable work (>99%). Can autonomously conduct experiments, write production code, and find errors in others\' papers.',
