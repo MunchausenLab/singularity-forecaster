@@ -43,6 +43,25 @@ function mapToObservables(reasoning, agency, ceilingR, ceilingA) {
 }
 
 // ============================================================================
+// EXPERT SANDBOX — Параметры по умолчанию (соответствуют текущему поведению)
+// ============================================================================
+const EXPERT_CONFIG = {
+  // Категория 1: Архитектура и Парадигмы
+  ceilingReasoningBase: 15.0,       // Базовый потолок Трансформеров
+  hypeGracePeriod: 2.5,             // Толерантность инвесторов (лет)
+  saturationThreshold: 0.7,         // Порог насыщения для прорыва (0-1)
+  // Категория 2: Самоулучшение
+  rsiMultiplier: 1.0,              // Множитель силы RSI
+  hwCoDesignBonus: 1.5,            // Аппаратный ко-дизайн
+  // Категория 3: Экономика и Риски
+  bubbleBurstRisk: 0.20,           // Риск схлопывания GPU-пузыря
+  alignmentCooldown: 1.5,          // Штраф за инцидент безопасности (лет)
+  maxCapitalMultiplier: 2.5,       // Эластичность капитала
+  // Категория 4: Эпистемология (World Models)
+  worldModels: { cascade: 0.60, hardWall: 0.25, slowTakeoff: 0.15 }
+};
+
+// ============================================================================
 // v3.0 — BAYESIAN PARTICLE FILTER (Исправлено: Якорь на 2023 год + Inference)
 // ============================================================================
 const V3_DEFAULT_PARTICLES = 1000;
@@ -54,9 +73,10 @@ function createV3Config() {
     CURRENT_YEAR: 2026.30,      // Откуда рисуем графики прогноза
     THRESHOLDS: { agi: 10.0, asi: 100.0 },
     DIMENSIONS: {
-      reasoning: { slope: 0.35, ceiling: 15.0 }, // Откалибровано под рост до 65 баллов
+      reasoning: { slope: 0.35, ceiling: EXPERT_CONFIG.ceilingReasoningBase },
       agency:    { slope: 0.25 }, // Потолок определяет частица
     },
+    EXPERT: EXPERT_CONFIG,
     INFERENCE_SCALING: {
       max_bonus_reasoning: 2.0,
       max_bonus_agency: 1.5,
@@ -127,9 +147,10 @@ class BayesianTracker {
     this.observationLog = [];
     for (let i = 0; i < this.n; i++) {
       const rand = Math.random();
-      let worldModel = 'cascade'; // 60% верят в каскадные парадигмы
-      if (rand >= 0.6 && rand < 0.85) worldModel = 'hard_wall'; // 25% верят в Стену
-      else if (rand >= 0.85) worldModel = 'slow_takeoff'; // 15% верят в Медленный взлёт
+      const w = EXPERT_CONFIG.worldModels;
+      let worldModel = 'cascade';
+      if (rand > w.cascade && rand <= w.cascade + w.hardWall) worldModel = 'hard_wall';
+      else if (rand > w.cascade + w.hardWall) worldModel = 'slow_takeoff';
 
       this.particles.push({
         hw_months: Math.max(3.0, randnRange(7.5, 1.5)),
@@ -257,8 +278,8 @@ class BayesianTracker {
             // Насколько мы уперлись в текущий потолок? (от 0.0 до 1.0+)
             const saturation = Math.max(reasoning / ceilingReasoning, agency / ceilingAgency);
 
-            // Сдвиг происходит только под сильным давлением (saturation > 0.7)
-            if (saturation > 0.7) {
+            // Сдвиг происходит только под сильным давлением
+            if (saturation > this.cfg.EXPERT.saturationThreshold) {
               let shiftProb = 0.02 + 0.15 * saturation;
 
               // World Model модификации вероятности
@@ -270,7 +291,7 @@ class BayesianTracker {
               if (Math.random() < shiftProb * dt) {
                 paradigmGeneration++;
                 lastShiftYear = currentYear;
-                hypeGracePeriod = 2.5;
+                hypeGracePeriod = this.cfg.EXPERT.hypeGracePeriod;
 
                 // Убывающая отдача: 1-й сдвиг x3.0, 2-й x2.5, 3-й x2.0...
                 let shiftMult = Math.max(1.3, 3.0 - (paradigmGeneration * 0.5));
@@ -311,11 +332,11 @@ class BayesianTracker {
 
         // Шок 2: Инцидент безопасности / Регуляторный бан (Alignment Incident)
         if (alignmentIncidentCooldown <= 0 && agency > 6.0 && Math.random() < (agency * 0.01) * dt) {
-          alignmentIncidentCooldown = 1.5; // Бан на масштабирование на 1.5 года
+          alignmentIncidentCooldown = this.cfg.EXPERT.alignmentCooldown;
         }
 
         // Шок 3: Схлопывание GPU-пузыря
-        if (!gpuBubbleBurst && currentYear > 2027.0 && agency < 4.0 && Math.random() < 0.20 * dt) {
+        if (!gpuBubbleBurst && currentYear > 2027.0 && agency < 4.0 && Math.random() < this.cfg.EXPERT.bubbleBurstRisk * dt) {
           gpuBubbleBurst = true;
           flopsLog -= 0.5; // Списание устаревших капитальных вложений / банкротства
         }
@@ -370,22 +391,23 @@ class BayesianTracker {
 
         // Стадийный RSI: дискретные уровни с порогами reasoning + agency
         let rsi = 0;
+        const _rsiM = this.cfg.EXPERT.rsiMultiplier;
 
         // Уровень 1: Tool-assisted optimization (написание кода, рефакторинг)
         if (reasoning >= 6.0 && agency >= 4.0) {
-          rsi += 0.02 * Math.log(1.0 + reasoning);
+          rsi += 0.02 * Math.log(1.0 + reasoning) * _rsiM;
         }
 
         // Уровень 2: Automated research loops (автономный запуск экспериментов)
         // Требует высокой агентности!
         if (reasoning >= 8.0 && agency >= 8.0) {
-          rsi += 0.05 * Math.log(1.0 + cap);
+          rsi += 0.05 * Math.log(1.0 + cap) * _rsiM;
         }
 
         // Уровень 3: Architecture Search & Hardware Co-design (преддверие ASI)
         // Требует уровня AGI
         if (cap >= this.cfg.THRESHOLDS.agi) {
-          rsi += 0.15 * Math.pow(cap - this.cfg.THRESHOLDS.agi, 1.2);
+          rsi += 0.15 * Math.pow(cap - this.cfg.THRESHOLDS.agi, 1.2) * _rsiM;
         }
 
         // Ограничитель скорости RSI (физическое время на обучение моделей)
@@ -398,7 +420,7 @@ class BayesianTracker {
         // Ожидания инвесторов растут со временем
         const investorExpectations = (currentYear - 2023.0) * 1.5;
         // Капитальный поток: от 0.1 (разочарование) до 2.5 (безумный хайп)
-        let capitalMultiplier = Math.max(0.1, Math.min(2.5,
+        let capitalMultiplier = Math.max(0.1, Math.min(this.cfg.EXPERT.maxCapitalMultiplier,
             marketUtility / Math.max(1.0, investorExpectations)));
         // Инвесторы заливают деньги на этапе хайпа, несмотря на просадку метрик
         if (paradigmGeneration > 0 && hypeGracePeriod > 0) {
@@ -407,7 +429,7 @@ class BayesianTracker {
         // Hardware co-design: продвинутый ИИ сам проектирует чипы
         let hardwareCoDesign = 1.0;
         if (reasoning >= 10.0 && agency >= 8.0) {
-          hardwareCoDesign = 1.5;
+          hardwareCoDesign = this.cfg.EXPERT.hwCoDesignBonus;
         }
         let dynamicHwK = hwK * capitalMultiplier * hardwareCoDesign * damping;
         if (gpuBubbleBurst) dynamicHwK *= 0.2;
@@ -1866,6 +1888,90 @@ window.addEventListener('load', () => {
   const tracker = v3GetTracker();
   v3UpdateUI(tracker);
 });
+// ===== EXPERT SANDBOX UI =====
+let _expertPanelOpen = false;
+
+function toggleExpertPanel() {
+  _expertPanelOpen = !_expertPanelOpen;
+  document.getElementById('expertPanel').classList.toggle('open', _expertPanelOpen);
+  document.getElementById('expertArrow').classList.toggle('open', _expertPanelOpen);
+}
+
+function expertUpdate(key, value) {
+  value = parseFloat(value);
+  EXPERT_CONFIG[key] = value;
+  const el = document.getElementById('ev-' + key);
+  if (el) {
+    el.textContent = (value % 1 === 0) ? value.toFixed(1) : value.toString();
+  }
+}
+
+function expertWorldUpdate() {
+  const c = parseInt(document.getElementById('e-world-cascade').value) || 0;
+  const h = parseInt(document.getElementById('e-world-hardWall').value) || 0;
+  const s = parseInt(document.getElementById('e-world-slowTakeoff').value) || 0;
+  const sum = c + h + s;
+  const err = document.getElementById('expertWorldError');
+  if (err) err.style.display = (sum !== 100) ? '' : 'none';
+  if (sum === 100) {
+    EXPERT_CONFIG.worldModels.cascade = c / 100;
+    EXPERT_CONFIG.worldModels.hardWall = h / 100;
+    EXPERT_CONFIG.worldModels.slowTakeoff = s / 100;
+  }
+}
+
+function expertResetDefaults() {
+  // Сбросить EXPERT_CONFIG к дефолтам
+  Object.assign(EXPERT_CONFIG, {
+    ceilingReasoningBase: 15.0,
+    hypeGracePeriod: 2.5,
+    saturationThreshold: 0.7,
+    rsiMultiplier: 1.0,
+    hwCoDesignBonus: 1.5,
+    bubbleBurstRisk: 0.20,
+    alignmentCooldown: 1.5,
+    maxCapitalMultiplier: 2.5,
+    worldModels: { cascade: 0.60, hardWall: 0.25, slowTakeoff: 0.15 }
+  });
+  // Обновить все UI элементы
+  const fields = [
+    'ceilingReasoningBase', 'hypeGracePeriod', 'saturationThreshold',
+    'rsiMultiplier', 'hwCoDesignBonus', 'bubbleBurstRisk',
+    'alignmentCooldown', 'maxCapitalMultiplier'
+  ];
+  const defValues = {
+    ceilingReasoningBase: 15, hypeGracePeriod: 2.5, saturationThreshold: 0.70,
+    rsiMultiplier: 1.0, hwCoDesignBonus: 1.5, bubbleBurstRisk: 0.20,
+    alignmentCooldown: 1.5, maxCapitalMultiplier: 2.5
+  };
+  const formats = {
+    ceilingReasoningBase: v => v.toFixed(1),
+    hypeGracePeriod: v => v.toFixed(1),
+    saturationThreshold: v => v.toFixed(2),
+    rsiMultiplier: v => v.toFixed(1),
+    hwCoDesignBonus: v => v.toFixed(1),
+    bubbleBurstRisk: v => v.toFixed(2),
+    alignmentCooldown: v => v.toFixed(1),
+    maxCapitalMultiplier: v => v.toFixed(1)
+  };
+  for (const f of fields) {
+    document.getElementById('e-' + f).value = defValues[f];
+    document.getElementById('ev-' + f).textContent = formats[f](defValues[f]);
+  }
+  document.getElementById('e-world-cascade').value = 60;
+  document.getElementById('e-world-hardWall').value = 25;
+  document.getElementById('e-world-slowTakeoff').value = 15;
+  document.getElementById('expertWorldError').style.display = 'none';
+}
+
+function expertApplyAndRun() {
+  // Синхронизируем EXPERT_CONFIG с текущими значениями UI (включая world models)
+  expertWorldUpdate();
+  // Сбрасываем трекер и перезапускаем
+  v3ResetTracker();
+  setTimeout(runSimulation, 100);
+}
+
 window.addEventListener('load', () => { setTimeout(runSimulation, 800); });
 
 function v3QuickWarning() {
@@ -1879,8 +1985,8 @@ function updateObsMetrics() {
   const agentic = +document.getElementById('v3Agentic').value || 0;
 
   // AA-шкала 0..100 -> внутренняя шкала модели
-  // reasoning_ceiling = 15.0 (default), agency_ceiling = ~12 (aposteriori)
-  const ceilingR = 15.0;
+  // reasoning_ceiling = из EXPERT_CONFIG, agency_ceiling = ~12 (aposteriori)
+  const ceilingR = EXPERT_CONFIG.ceilingReasoningBase;
   const agencyCeiling = (v3Tracker && v3Tracker.getSummary)
     ? v3Tracker.getSummary().agencyCeiling : 12.0;
   // AA 0..100 -> model scale: divide by 100, multiply by ceiling
