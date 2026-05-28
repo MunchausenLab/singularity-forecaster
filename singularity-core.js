@@ -213,6 +213,11 @@ class BayesianTracker {
       let gpuBubbleBurst = false;
       let alignmentIncidentCooldown = 0;
 
+      // --- Архитектурный сресет: локальное состояние прогона ---
+      let inNewParadigm = false;
+      let hypeGracePeriod = 0.0;
+      let algoKMultiplier = 1.0;
+
       for (let step = 0; step < maxSteps; step++) {
         const currentYear = this.cfg.BASE_YEAR + step * dt;
         
@@ -225,21 +230,27 @@ class BayesianTracker {
 
         const cap = Math.min(reasoning, agency);
 
-        // Эндогенная смена парадигмы: вероятность зависит от saturation и research pressure
-        if (currentYear > this.cfg.CURRENT_YEAR) {
-          // Насколько текущий интеллект близок к потолку (0..1+)
-          const satR = ceilingReasoning > 0 ? reasoning / ceilingReasoning : 0;
-          const satA = ceilingAgency > 0 ? agency / ceilingAgency : 0;
-          const saturation = Math.max(satR, satA);
-          // Давление исследований: чем умнее модели, тем быще ищут новые архитектуры
-          const researchPressure = Math.min(cap / 20.0, 1.0);
-          // Базовая вероятность + давление от saturation, но exhaustion если давно не было прорыва
-          const shiftProb = this.cfg.SCALING_LAW.endo_base
-            + this.cfg.SCALING_LAW.endo_pressure * saturation * researchPressure;
+        // Архитектурный сброс (Смена парадигмы)
+        if (!inNewParadigm && currentYear > 2026.5) {
+          const researchPressure = Math.max(reasoning / ceilingReasoning, agency / ceilingAgency);
+          const shiftProb = 0.05 + 0.1 * researchPressure;
           if (Math.random() < shiftProb * dt) {
-            ceilingAgency *= this.cfg.SCALING_LAW.shift_multiplier;
-            ceilingReasoning *= this.cfg.SCALING_LAW.shift_multiplier;
-            baseLog -= 0.5; // compute overhang release
+            inNewParadigm = true;
+            hypeGracePeriod = 2.5;
+            ceilingAgency *= 3.0;
+            ceilingReasoning *= 3.0;
+            algoLog -= 0.5; // J-кривая
+            algoKMultiplier = 2.0;
+            dataExhaustionHit = false;
+          }
+        }
+
+        // Постепенное затухание эффектов новой парадигмы
+        if (inNewParadigm) {
+          if (hypeGracePeriod > 0) hypeGracePeriod -= dt;
+          if (algoKMultiplier > 1.0) {
+            algoKMultiplier -= (1.0 / 4.0) * dt;
+            if (algoKMultiplier < 1.0) algoKMultiplier = 1.0;
           }
         }
 
@@ -332,25 +343,32 @@ class BayesianTracker {
         // Ограничитель скорости RSI (физическое время на обучение моделей)
         rsi = Math.min(rsi, 1.5);
         
-        const effectiveAlgoK = algoK * (dataExhaustionHit ? 0.5 : 1.0);
-
+        // dataExhaustionHit обрабатывается ниже в currentAlgoK
         // Экономика исследований: динамический hwK зависит от ROI
         // Рынок платит за Agency (автономный труд), а не за чистый Reasoning
         const marketUtility = reasoning * 0.3 + agency * 0.7;
         // Ожидания инвесторов растут со временем
         const investorExpectations = (currentYear - 2023.0) * 1.5;
         // Капитальный поток: от 0.1 (разочарование) до 2.5 (безумный хайп)
-        const capitalMultiplier = Math.max(0.1, Math.min(2.5,
+        let capitalMultiplier = Math.max(0.1, Math.min(2.5,
             marketUtility / Math.max(1.0, investorExpectations)));
+        // Инвесторы заливают деньги на этапе хайпа, несмотря на просадку метрик
+        if (inNewParadigm && hypeGracePeriod > 0) {
+          capitalMultiplier = Math.max(capitalMultiplier, 2.0);
+        }
         // Hardware co-design: продвинутый ИИ сам проектирует чипы
         let hardwareCoDesign = 1.0;
         if (reasoning >= 10.0 && agency >= 8.0) {
           hardwareCoDesign = 1.5;
         }
-        const dynamicHwK = hwK * capitalMultiplier * hardwareCoDesign;
+        let dynamicHwK = hwK * capitalMultiplier * hardwareCoDesign * damping;
+        if (gpuBubbleBurst) dynamicHwK *= 0.2;
+        flopsLog += dynamicHwK * shockDamping * dt;
 
-        flopsLog += dynamicHwK * damping * shockDamping * dt;
-        algoLog += (effectiveAlgoK * (isWinter ? 0.4 : 1.0) * damping * shockDamping + rsi) * dt;
+        // Применяем локальный мультипликатор к скорости алгоритмов
+        let currentAlgoK = algoK * algoKMultiplier;
+        if (dataExhaustionHit) currentAlgoK *= 0.5;
+        algoLog += (currentAlgoK * (isWinter ? 0.4 : 1.0) * shockDamping + rsi) * dt;
       }
       
       agiYears.push(agiY !== null ? agiY - this.cfg.CURRENT_YEAR : Infinity);
