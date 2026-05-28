@@ -668,8 +668,10 @@ function v3AddObservation() {
 
 function v3ResetTracker() {
   v3Tracker = null; v3Observations = [];
-  document.getElementById('v3Observations').innerHTML = '';
-  document.getElementById('v3Params').textContent = '';
+  const obsEl = document.getElementById('v3Observations');
+  if (obsEl) obsEl.innerHTML = '';
+  const parEl = document.getElementById('v3Params');
+  if (parEl) parEl.textContent = '';
 }
 
 function v3UpdateUI(tracker) {
