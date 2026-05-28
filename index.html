@@ -355,188 +355,188 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 <div style="padding:0 32px;background:var(--bg-primary)">
   <div class="expert-toggle" onclick="toggleExpertPanel()">
     <span class="expert-arrow" id="expertArrow">▼</span>
-    <span class="expert-toggle-label">Expert Sandbox</span>
+    <span class="expert-toggle-label" data-i18n="expert_toggle">Экспертные настройки</span>
   </div>
 </div>
 <div class="expert-panel" id="expertPanel">
   <div class="expert-grid" style="margin-top:0">
     <!-- Категория 1: Архитектура и Парадигмы -->
     <div class="expert-group">
-      <div class="expert-group-title">Архитектура и Парадигмы</div>
+      <div class="expert-group-title" data-i18n="expert_cat1">Архитектура и Парадигмы</div>
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name">Потолок Трансформеров</span>
+          <span class="expert-param-name" data-i18n="expert_p_ceilingReasoningBase">Потолок Трансформеров</span>
           <span class="expert-param-value" id="ev-ceilingReasoningBase">15.0</span>
         </div>
         <input type="range" id="e-ceilingReasoningBase" min="10" max="30" step="0.5" value="15" oninput="expertUpdate('ceilingReasoningBase',this.value)">
-        <div class="expert-param-desc">Когда текущая архитектура упрется в стену</div>
+        <div class="expert-param-desc" data-i18n="expert_d_ceilingReasoningBase">Когда текущая архитектура упрется в стену</div>
       </div>
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name">Венчурный хайп (лет)</span>
+          <span class="expert-param-name" data-i18n="expert_p_hypeGracePeriod">Венчурный хайп (лет)</span>
           <span class="expert-param-value" id="ev-hypeGracePeriod">2.5</span>
         </div>
         <input type="range" id="e-hypeGracePeriod" min="0.5" max="5" step="0.1" value="2.5" oninput="expertUpdate('hypeGracePeriod',this.value)">
-        <div class="expert-param-desc">Сколько лет рынок заливает деньги в новую парадигму</div>
+        <div class="expert-param-desc" data-i18n="expert_d_hypeGracePeriod">Сколько лет рынок заливает деньги в новую парадигму</div>
       </div>
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name">Порог насыщения</span>
+          <span class="expert-param-name" data-i18n="expert_p_saturationThreshold">Порог насыщения</span>
           <span class="expert-param-value" id="ev-saturationThreshold">0.70</span>
         </div>
         <input type="range" id="e-saturationThreshold" min="0.4" max="0.95" step="0.05" value="0.70" oninput="expertUpdate('saturationThreshold',this.value)">
-        <div class="expert-param-desc">Насколько надо упереться для смены парадигмы</div>
+        <div class="expert-param-desc" data-i18n="expert_d_saturationThreshold">Насколько надо упереться для смены парадигмы</div>
       </div>
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name">Compute Overhang</span>
+          <span class="expert-param-name" data-i18n="expert_p_overhangShiftMultiplier">Compute Overhang</span>
           <span class="expert-param-value" id="ev-overhangShiftMultiplier">0.20</span>
         </div>
         <input type="range" id="e-overhangShiftMultiplier" min="0" max="1" step="0.05" value="0.20" oninput="expertUpdate('overhangShiftMultiplier',this.value)">
-        <div class="expert-param-desc">Влияние избытка капитала на вероятность прорыва</div>
+        <div class="expert-param-desc" data-i18n="expert_d_overhangShiftMultiplier">Влияние избытка капитала на вероятность прорыва</div>
       </div>
     </div>
 
     <!-- Категория 2: Самоулучшение -->
     <div class="expert-group">
-      <div class="expert-group-title">Самоулучшение (RSI)</div>
+      <div class="expert-group-title" data-i18n="expert_cat2">Самоулучшение (RSI)</div>
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name">Множитель RSI</span>
+          <span class="expert-param-name" data-i18n="expert_p_rsiMultiplier">Множитель RSI</span>
           <span class="expert-param-value" id="ev-rsiMultiplier">1.0</span>
         </div>
         <input type="range" id="e-rsiMultiplier" min="0" max="3" step="0.1" value="1.0" oninput="expertUpdate('rsiMultiplier',this.value)">
-        <div class="expert-param-desc">Умножает все коэффициенты RSI (0 = без самоулучшения)</div>
+        <div class="expert-param-desc" data-i18n="expert_d_rsiMultiplier">Умножает все коэффициенты RSI (0 = без самоулучшения)</div>
       </div>
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name">Порог RSI (Reasoning)</span>
+          <span class="expert-param-name" data-i18n="expert_p_rsiTriggerReasoning">Порог RSI (Reasoning)</span>
           <span class="expert-param-value" id="ev-rsiTriggerReasoning">8.0</span>
         </div>
         <input type="range" id="e-rsiTriggerReasoning" min="4" max="12" step="0.5" value="8" oninput="expertUpdate('rsiTriggerReasoning',this.value)">
-        <div class="expert-param-desc">Reasoning для старта авто-улучшений</div>
+        <div class="expert-param-desc" data-i18n="expert_d_rsiTriggerReasoning">Reasoning для старта авто-улучшений</div>
       </div>
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name">Порог RSI (Agency)</span>
+          <span class="expert-param-name" data-i18n="expert_p_rsiTriggerAgency">Порог RSI (Agency)</span>
           <span class="expert-param-value" id="ev-rsiTriggerAgency">8.0</span>
         </div>
         <input type="range" id="e-rsiTriggerAgency" min="2" max="12" step="0.5" value="8" oninput="expertUpdate('rsiTriggerAgency',this.value)">
-        <div class="expert-param-desc">Agency для старта авто-улучшений</div>
+        <div class="expert-param-desc" data-i18n="expert_d_rsiTriggerAgency">Agency для старта авто-улучшений</div>
       </div>
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name">Координационное трение</span>
+          <span class="expert-param-name" data-i18n="expert_p_coordinationFriction">Координационное трение</span>
           <span class="expert-param-value" id="ev-coordinationFriction">0.05</span>
         </div>
         <input type="range" id="e-coordinationFriction" min="0" max="1" step="0.05" value="0.05" oninput="expertUpdate('coordinationFriction',this.value)">
-        <div class="expert-param-desc">Деградация при масштабировании агентов (0 = идеальная координация)</div>
+        <div class="expert-param-desc" data-i18n="expert_d_coordinationFriction">Деградация при масштабировании агентов (0 = идеальная координация)</div>
       </div>
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name">Макс. рост железа</span>
+          <span class="expert-param-name" data-i18n="expert_p_maxPhysicalHwGrowth">Макс. рост железа</span>
           <span class="expert-param-value" id="ev-maxPhysicalHwGrowth">1.50</span>
         </div>
         <input type="range" id="e-maxPhysicalHwGrowth" min="0.3" max="3" step="0.1" value="1.5" oninput="expertUpdate('maxPhysicalHwGrowth',this.value)">
-        <div class="expert-param-desc">Физический предел роста hardware (log scale)</div>
+        <div class="expert-param-desc" data-i18n="expert_d_maxPhysicalHwGrowth">Физический предел роста hardware</div>
       </div>
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name">HW ко-дизайн</span>
+          <span class="expert-param-name" data-i18n="expert_p_hwCoDesignBonus">HW ко-дизайн</span>
           <span class="expert-param-value" id="ev-hwCoDesignBonus">1.5</span>
         </div>
         <input type="range" id="e-hwCoDesignBonus" min="1" max="3" step="0.1" value="1.5" oninput="expertUpdate('hwCoDesignBonus',this.value)">
-        <div class="expert-param-desc">Насколько AGI ускоряет закон Мура</div>
+        <div class="expert-param-desc" data-i18n="expert_d_hwCoDesignBonus">Насколько AGI ускоряет закон Мура</div>
       </div>
     </div>
 
     <!-- Категория 3: Экономика и Риски -->
     <div class="expert-group">
-      <div class="expert-group-title">Экономика и Риски</div>
+      <div class="expert-group-title" data-i18n="expert_cat3">Экономика и Риски</div>
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name">Риск GPU-пузыря</span>
+          <span class="expert-param-name" data-i18n="expert_p_bubbleBurstRisk">Риск GPU-пузыря</span>
           <span class="expert-param-value" id="ev-bubbleBurstRisk">0.20</span>
         </div>
         <input type="range" id="e-bubbleBurstRisk" min="0" max="1" step="0.05" value="0.20" oninput="expertUpdate('bubbleBurstRisk',this.value)">
-        <div class="expert-param-desc">Шанс краха инвестиций если agency &lt; 4</div>
+        <div class="expert-param-desc" data-i18n="expert_d_bubbleBurstRisk">Шанс краха инвестиций если agency &lt; 4</div>
       </div>
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name">Инцидент безопасности (лет)</span>
+          <span class="expert-param-name" data-i18n="expert_p_alignmentCooldown">Инцидент безопасности (лет)</span>
           <span class="expert-param-value" id="ev-alignmentCooldown">1.5</span>
         </div>
         <input type="range" id="e-alignmentCooldown" min="0" max="5" step="0.1" value="1.5" oninput="expertUpdate('alignmentCooldown',this.value)">
-        <div class="expert-param-desc">Заморозка регуляторами после инцидента</div>
+        <div class="expert-param-desc" data-i18n="expert_d_alignmentCooldown">Заморозка регуляторами после инцидента</div>
       </div>
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name">Эластичность капитала</span>
+          <span class="expert-param-name" data-i18n="expert_p_maxCapitalMultiplier">Эластичность капитала</span>
           <span class="expert-param-value" id="ev-maxCapitalMultiplier">2.5</span>
         </div>
         <input type="range" id="e-maxCapitalMultiplier" min="1" max="5" step="0.1" value="2.5" oninput="expertUpdate('maxCapitalMultiplier',this.value)">
-        <div class="expert-param-desc">Макс. множитель инвестиций при высокой полезности</div>
+        <div class="expert-param-desc" data-i18n="expert_d_maxCapitalMultiplier">Макс. множитель инвестиций при высокой полезности</div>
       </div>
     </div>
 
     <!-- Категория 4: Эпистемология -->
     <div class="expert-group">
-      <div class="expert-group-title">Эпистемология (World Models)</div>
+      <div class="expert-group-title" data-i18n="expert_cat4">Эпистемология (World Models)</div>
       <div class="expert-worlds">
         <div class="expert-world-input">
-          <label>Каскад %</label>
+          <label data-i18n="expert_world_cascade">Каскад %</label>
           <input type="number" id="e-world-cascade" min="0" max="100" step="5" value="60" oninput="expertWorldUpdate()">
         </div>
         <div class="expert-world-input">
-          <label>Стена %</label>
+          <label data-i18n="expert_world_hardWall">Стена %</label>
           <input type="number" id="e-world-hardWall" min="0" max="100" step="5" value="25" oninput="expertWorldUpdate()">
         </div>
         <div class="expert-world-input">
-          <label>Медл.взлёт %</label>
+          <label data-i18n="expert_world_slowTakeoff">Медл.взлёт %</label>
           <input type="number" id="e-world-slowTakeoff" min="0" max="100" step="5" value="15" oninput="expertWorldUpdate()">
         </div>
       </div>
-      <div class="expert-world-error" id="expertWorldError">Сумма должна быть 100%</div>
-      <div class="expert-param-desc" style="margin-top:8px">Априорные вероятности гипотез о структуре реальности. Сумма = 100%.</div>
+      <div class="expert-world-error" id="expertWorldError" data-i18n="expert_world_error">Сумма должна быть 100%</div>
+      <div class="expert-param-desc" style="margin-top:8px" data-i18n="expert_world_desc">Априорные вероятности гипотез о структуре реальности. Сумма = 100%.</div>
     </div>
   </div>
 
   <!-- Категория 5: Априорные допущения -->
   <div class="expert-group" style="grid-column:span 1">
-    <div class="expert-group-title">Априорные допущения</div>
+    <div class="expert-group-title" data-i18n="expert_cat5">Априорные допущения</div>
     <div class="expert-param">
       <div class="expert-param-label">
-        <span class="expert-param-name">Априорное среднее Agency</span>
+        <span class="expert-param-name" data-i18n="expert_p_priorAgencyMean">Априорное среднее Agency</span>
         <span class="expert-param-value" id="ev-priorAgencyMean">8.0</span>
       </div>
       <input type="range" id="e-priorAgencyMean" min="2" max="20" step="0.5" value="8" oninput="expertUpdate('priorAgencyMean',this.value)">
-      <div class="expert-param-desc">Базовое ожидание потолка агентности (=10 это AGI)</div>
+      <div class="expert-param-desc" data-i18n="expert_d_priorAgencyMean">Базовое ожидание потолка агентности (=10 это AGI)</div>
     </div>
     <div class="expert-param">
       <div class="expert-param-label">
-        <span class="expert-param-name">Априорный разброс</span>
+        <span class="expert-param-name" data-i18n="expert_p_priorAgencyStd">Априорный разброс</span>
         <span class="expert-param-value" id="ev-priorAgencyStd">3.0</span>
       </div>
       <input type="range" id="e-priorAgencyStd" min="0.5" max="8" step="0.5" value="3" oninput="expertUpdate('priorAgencyStd',this.value)">
-      <div class="expert-param-desc">Разброс мнений о потолке (больше = больше оптимистичных частиц)</div>
+      <div class="expert-param-desc" data-i18n="expert_d_priorAgencyStd">Разброс мнений о потолке (больше = больше оптимистичных частиц)</div>
     </div>
   </div>
 
   <!-- Категория 6: Бенчмарки -->
   <div class="expert-group" style="grid-column:span 1">
-    <div class="expert-group-title">Бенчмарки и Прочее</div>
+    <div class="expert-group-title" data-i18n="expert_cat6">Бенчмарки и Прочее</div>
     <div class="expert-param">
       <div class="expert-param-label">
-        <span class="expert-param-name">Вес Autonomy в SWE-bench</span>
+        <span class="expert-param-name" data-i18n="expert_p_toolUseVsAutonomyWeight">Вес Autonomy в SWE-bench</span>
         <span class="expert-param-value" id="ev-toolUseVsAutonomyWeight">0.60</span>
       </div>
       <input type="range" id="e-toolUseVsAutonomyWeight" min="0" max="1" step="0.05" value="0.60" oninput="expertUpdate('toolUseVsAutonomyWeight',this.value)">
-      <div class="expert-param-desc">0 = бенчмарк взламывается reasoning, 1 = только реальная автономность</div>
+      <div class="expert-param-desc" data-i18n="expert_d_toolUseVsAutonomyWeight">0 = бенчмарк взлабывается reasoning, 1 = только реальная автономность</div>
     </div>
   </div>
   <div class="expert-apply-row">
-    <button class="btn btn-secondary btn-sm" onclick="expertResetDefaults()">Сбросить по умолчанию</button>
-    <button class="btn btn-primary btn-sm" onclick="expertApplyAndRun()">Применить и перезапустить</button>
+    <button class="btn btn-secondary btn-sm" onclick="expertResetDefaults()" data-i18n="expert_reset">Сбросить по умолчанию</button>
+    <button class="btn btn-primary btn-sm" onclick="expertApplyAndRun()" data-i18n="expert_apply">Применить и перезапустить</button>
   </div>
 </div>
 
