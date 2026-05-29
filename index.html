@@ -114,6 +114,19 @@ body{font-family:var(--font);background:var(--bg-primary);color:var(--text-prima
 .def-card .score{font-size:1rem;font-weight:700;font-family:var(--mono);margin-bottom:8px}
 .def-card p{font-size:.74rem;color:var(--text-muted);line-height:1.55}
 
+/* ===== DESCRIPTION CARDS ===== */
+.desc-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;min-height:420px;transition:var(--transition)}
+.desc-card:hover{border-color:var(--border-hover);box-shadow:var(--shadow)}
+.desc-body{flex:1;overflow-y:auto}
+.desc-body p{font-size:.74rem;color:var(--text-secondary);line-height:1.7;margin-bottom:10px}
+.desc-body p:last-child{margin-bottom:0}
+.desc-body ul{margin:4px 0 0 16px;font-size:.72rem;color:var(--text-secondary);line-height:1.9}
+.desc-body li{margin-bottom:2px}
+.desc-body em{color:var(--accent);font-style:normal;font-weight:600}
+.desc-body b{color:var(--text-primary);font-weight:600}
+.desc-body code{font-family:var(--mono);font-size:.7rem;background:rgba(88,166,255,.12);padding:1px 5px;border-radius:3px;color:var(--accent)}
+.desc-body .formula{font-family:var(--mono);font-size:.72rem;color:var(--orange);background:rgba(240,136,62,.08);border-left:2px solid var(--orange);padding:8px 12px;border-radius:4px;margin:10px 0;line-height:1.6;overflow-x:auto}
+
 /* ===== LOADING OVERLAY ===== */
 .overlay{position:fixed;inset:0;background:rgba(5,5,10,.85);display:none;align-items:center;justify-content:center;flex-direction:column;z-index:999;backdrop-filter:blur(8px)}
 .overlay.show{display:flex}
@@ -577,6 +590,8 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 
 <!-- ===== CHARTS ===== -->
 <div class="grid">
+
+  <!-- ROW 1: Swarm (график | описание) -->
   <div class="card" id="swarmSection">
     <span class="card-tag" style="background:rgba(88,166,255,.15);color:var(--accent)" data-i18n="swarm_title">Визуализация обучения и прогноза</span>
     <div class="card-header">
@@ -610,6 +625,32 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
       </div>
     </div>
   </div>
+
+  <div class="desc-card">
+    <span class="card-tag" style="background:rgba(88,166,255,.15);color:var(--accent)">Обучение роя</span>
+    <div class="desc-body">
+      <p>Интерактивная визуализация байесовского обучения в реальном времени. Каждая точка — гипотеза о мире (частица): скорость роста железа <em>hw_months</em> и потолок агентности <em>agency_ceiling</em>.</p>
+      <p><b>Режим «Обучение» (Learn):</b> ползунок прикладывает наблюдения AA одно за другим. При каждом наблюдении пересчитываются веса:</p>
+      <div class="formula">log w<sub>i</sub> ∝ −0.5 × ((I<sub>obs</sub> − R<sub>i</sub>)/σ)<sup>2</sup> − 0.5 × ((A<sub>obs</sub> − Ag<sub>i</sub>)/σ)<sup>2</sup></div>
+      <p>где R<sub>i</sub> и Ag<sub>i</sub> — предсказания частицы i на год наблюдения, σ — нешумящее правдоподобие. Частицы, чьи предсказания далеки от наблюдения, экспоненциально теряют вес.</p>
+      <p><b>Режим «Прогноз» (Forecast):</b> все наблюдения применены. Ползунок фильтрует гипотезы по году AGI — показывая, какие частицы предсказывают AGI до выбранного года.</p>
+      <p><b>Визуальный язык:</b> яркие области = высокая плотность весов; оранжевый круг = медиана роя; красный = текущее наблюдение. В режиме покой рой «дышит» — перестраивается из нового MC прогона каждые 0.25 сек.</p>
+      <p><b>Что влияет:</b> количество и точность наблюдений AA, априорные допущения (priorAgencyMean/Std в Expert Sandbox), сам состав частиц.</p>
+    </div>
+  </div>
+
+  <!-- ROW 2: Live Swarm (описание | график) -->
+  <div class="desc-card">
+    <span class="card-tag" style="background:rgba(239,68,68,.15);color:var(--real-time)">Живой рой</span>
+    <div class="desc-body">
+      <p>Две параллельные симуляции — AGI и ASI — обновляются каждые 0.25 сек из нового прогона Monte Carlo. Показывает «живой» posterior без необходимости нажимать «Запуск».</p>
+      <p><b>Точки:</b> каждая частица = один прогон <code>runMonteCarloForecast(500)</code>. Цвет кодирует год AGI/ASI: голубой = ранний, жёлтый = средний, красный = поздний. Прозрачность = вес частицы.</p>
+      <p><b>Формула AGI/ASI year:</b> для каждого из 500 прогонов моделируется траектория от BASE_YEAR (2023) до 2068 с месячным шагом. AGI = первый год, где <code>cap ≥ 10.0</code>. ASI = первый год, где <code>cap ≥ 100.0</code>.</p>
+      <p>Статистика справа: медиана, P10–P90, количество частиц. Обновляется в реальном времени — видна дисперсия posterior.</p>
+      <p><b>Что влияет:</b> текущий набор наблюдений, веса частиц, случайность MC прогона. Стабильность картинки ← уверенность модели. Хаотичность ← высокая неопределённость.</p>
+    </div>
+  </div>
+
   <div class="card" id="liveSwarmSection">
     <span class="card-tag" style="background:rgba(239,68,68,.15);color:var(--red)" data-i18n="live_swarm_title">Симуляция в реальном времени</span>
     <div class="card-header">
@@ -628,6 +669,8 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
       </div>
     </div>
   </div>
+
+  <!-- ROW 3: Гистограмма (график | описание) -->
   <div class="card">
     <span class="card-tag" data-i18n="tag1">Вероятностный анализ</span>
     <div class="card-header">
@@ -636,6 +679,31 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     </div>
     <div class="chart-container" id="c1"></div>
   </div>
+
+  <div class="desc-card">
+    <span class="card-tag">Распределение сценариев</span>
+    <div class="desc-body">
+      <p>Результат 3000 прогонов Monte Carlo из апостериорного распределения. По оси X — год, по Y — количество прогонов, в которых AGI/ASI достигнут в этот год.</p>
+      <p><b>Ключевое уравнение:</b> каждый прогон выбирается из весов частиц (systematic resampling), затем симулируется полная траектория до 2068:</p>
+      <div class="formula">cap(t) = min(R(t), Ag(t)), где R(t) = f(log FLOPs(t)), Ag(t) = g(log FLOPs(t))</div>
+      <p><b>Пик гистограммы</b> = наиболее вероятный год. Широкое распределение = высокая неопределённость. Бимодальность = два конкурирующих сценария (например, «быстрый прорыв» vs «стагнация»).</p>
+      <p><b>Что сдвигает гистограмму:</b> новые наблюдения AA (через байесовское обновление весов), параметры Expert Sandbox (пороги RSI, парадигмы, потолки), количество частиц.</p>
+    </div>
+  </div>
+
+  <!-- ROW 4: Кумулятивная (описание | график) -->
+  <div class="desc-card">
+    <span class="card-tag">Накопленная вероятность</span>
+    <div class="desc-body">
+      <p>Накопленная функция распределения: P(AGI ≤ X) и P(ASI ≤ X). Отвечает на вопрос «какова вероятность, что AGI случится не позднее года X?»</p>
+      <p><b>Вычисление:</b> из тех же 3000 прогонов. Для каждого года T:</p>
+      <div class="formula">P(AGI ≤ T) = (# прогонов, где AGI_year ≤ T) / (всего прогонов) × 100%</div>
+      <p><b>Ступенчатый подъём</b> = концентрация прогнозов в узком окне. <b>Плато</b> = затор (data wall, энергетика, регуляция). <b>Резкий скачок</b> = почти все частицы сходятся в одном сценарии.</p>
+      <p><b>ASI-кривая</b> всегда лежит правее AGI — ASI требует cap ≥ 100. Расстояние между кривыми = время между AGI и ASI.</p>
+      <p><b>Что влияет:</b> те же факторы, что и гистограмма. Кривые дополняют друг друга — гистограмма показывает «где пик», кумулятивная — «какова вероятность к году X».</p>
+    </div>
+  </div>
+
   <div class="card">
     <span class="card-tag" data-i18n="tag3">Кумулятивная</span>
     <div class="card-header">
@@ -644,10 +712,8 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     </div>
     <div class="chart-container" id="c3"></div>
   </div>
-</div>
 
-<!-- ===== ADVANCED CHARTS ===== -->
-<div class="grid" style="padding-top:0">
+  <!-- ROW 5: Чувствительность (график | описание) -->
   <div class="card">
     <span class="card-tag" style="background:rgba(6,182,212,.15);color:var(--cyan)" data-i18n="tag5">Чувствительность</span>
     <div class="card-header">
@@ -656,6 +722,34 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     </div>
     <div class="chart-container" id="c5"></div>
   </div>
+
+  <div class="desc-card">
+    <span class="card-tag" style="background:rgba(6,182,212,.15);color:var(--cyan)">Карта чувствительности</span>
+    <div class="desc-body">
+      <p>Карта чувствительности: как прогноз зависит от последнего наблюдения Intelligence × Agentic. Ячейка (i,j) — медианный год AGI если последнее наблюдение = (Intel=i, Agentic=j).</p>
+      <p><b>Вычисление:</b> для каждой пары (i,j) из сетки [40,45,...,85] × [10,20,...,100] выполняется <code>runSensitivityMatrix()</code> — берётся текущий tracker, клонируются частицы, заменяется последнее наблюдение на (i,j), запускается MC.</p>
+      <p><b>Интерпретация цвета:</b> синий = ранний AGI (модель «верит» что мы близко); красный = поздний AGI (далёко). Градиенты показывают, какой параметр доминирует:</p>
+      <ul>
+        <li>Вертикальный градиент → доминирует Intelligence</li>
+        <li>Горизонтальный градиент → доминирует Agency</li>
+        <li>Диагональный → оба параметра равноценны</li>
+      </ul>
+      <p><b>Что влияет:</b> текущий posterior (после всех наблюдений), архитектура модели (slope reasoning/agency, потолки). Смотрите — сдвиг на 1 пункт по какой оси сильнее всего сдвигает прогноз.</p>
+    </div>
+  </div>
+
+  <!-- ROW 6: Веер сценариев (описание | график) -->
+  <div class="desc-card">
+    <span class="card-tag" style="background:rgba(34,197,94,.15);color:var(--green)">Веер сценариев</span>
+    <div class="desc-body">
+      <p>30 случайных прогонов из posterior, наложенных полупрозрачно. Показывает разброс возможных путей capability от 2026 до 2050 года (логарифмическая шкала).</p>
+      <p><b>Каждый прогон:</b> случайная частица (по весам) симулируется до 2050 с месячным шагом. На каждом шаге: paradigm shift, RSI, экономические бутылочные горлышки.</p>
+      <div class="formula">cap(t) = min(R<sub>inf</sub>(t), Ag<sub>inf</sub>(t)) + RSI_bonus(t) + paradigm_shift(t)</div>
+      <p><b>Плотные пучки</b> = сценарии сходятся. <b>Разброс</b> = высокая неопределённость. <b>Горизонтальные линии cap=10 и cap=100:</b> пороги AGI и ASI соответственно.</p>
+      <p><b>Что формирует веер:</b><br>• Ширина ← различие в hw_months, algo_months между частицами<br>• Наклон ← FLOPs-scaling (hwK и algoK)<br>• Изгибы ← paradigm shifts, RSI onset, экономические стены</p>
+    </div>
+  </div>
+
   <div class="card">
     <span class="card-tag" style="background:rgba(34,197,94,.15);color:var(--green)" data-i18n="tag6">Сценарии</span>
     <div class="card-header">
@@ -664,6 +758,8 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     </div>
     <div class="chart-container" id="c6"></div>
   </div>
+
+  <!-- ROW 7: Декомпозиция (график | описание) -->
   <div class="card">
     <span class="card-tag" style="background:rgba(240,136,62,.15);color:var(--orange)" data-i18n="tag7">Декомпозиция</span>
     <div class="card-header">
@@ -672,6 +768,34 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     </div>
     <div class="chart-container" id="c7"></div>
   </div>
+
+  <div class="desc-card">
+    <span class="card-tag" style="background:rgba(240,136,62,.15);color:var(--orange)">Декомпозиция роста</span>
+    <div class="desc-body">
+      <p>Stacked area: разбивка суммарной capability на 4 компоненты. Показывает, <em>что</em> движет прогрессом в каждый момент времени.</p>
+      <p><b>Компоненты:</b></p>
+      <ul>
+        <li><b style="color:#58a6ff">● Hardware</b> — log FLOPs рост: FLOPs(t) = FLOPs<sub>0</sub> × 2<sup>t/hw_months</sup></li>
+        <li><b style="color:#22c55e">● Algorithms</b> — алгоритмический прогресс: algo(t) = algo<sub>0</sub> × 2<sup>t/algo_months</sup></li>
+        <li><b style="color:#a78bfa">● Paradigm shift</b> — смена парадигмы: ×3.0, ×2.5, ×2.0... (убывающая отдача)</li>
+        <li><b style="color:#ef4444">● RSI feedback</b> — рекурсивное самоулучшение: (cap − threshold)<sup>1.2</sup> × friction</li>
+      </ul>
+      <p>Вычисляется через <code>runDecomposition()</code> — усреднение по всем частицам с весами. Переход от «железа» к «алгоритмам» к «RSI» = путь к сингулярности.</p>
+    </div>
+  </div>
+
+  <!-- ROW 8: Сфера Сингулярности (описание | график) -->
+  <div class="desc-card">
+    <span class="card-tag" style="background:rgba(167,139,250,.15);color:var(--purple)">Сфера Сингулярности</span>
+    <div class="desc-body">
+      <p>Анимированная визуализация распределения AGI/ASI. Каждая частица = один MC прогон. Вылетает из центра (2026) и застывает на орбите своего года AGI.</p>
+      <p><b>Метафора:</b> плотные кольца = высокая вероятность (много частиц предсказывают AGI в этом году). Редкие точки = маловероятные сценарии.</p>
+      <p><b>Механика:</b> при запуске частицы «взлетают» из центра с задержкой, пропорциональной году AGI. Оранжевые орбиты = AGI, красные = ASI. Расстояние от центр = вес частицы.</p>
+      <div class="formula">θ(i) = 2π × i / N,  r(i) = year_AGI(i),  α(i) = weight(i)</div>
+      <p><b>Что влияет:</b> распределение AGI/ASI лет из posterior, случайность MC прогона. Симметричная сфера = один чёткий пик. Фрактальная структура = множество конкурирующих сценариев. P(AGI к 2068), медиана AGI — обновляется в реальном времени.</p>
+    </div>
+  </div>
+
   <div class="card" id="eventHorizonSection">
     <span class="card-tag" style="background:rgba(167,139,250,.15);color:var(--purple)" data-i18n="eh_title">Визуализация: «Сфера Сингулярности»</span>
     <div class="card-header" style="margin-top:8px">
@@ -689,6 +813,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
       </div>
     </div>
   </div>
+
 </div>
 
 <!-- ===== ABOUT ===== -->
