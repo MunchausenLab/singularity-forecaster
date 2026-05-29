@@ -772,10 +772,8 @@ async function runSimulation() {
   await new Promise(r => setTimeout(r, 50));
   try {
     // Конвертируем бенчмарки в AA
-    const sweVal = +document.getElementById('v3SWE').value;
     const arcVal = +document.getElementById('v3ARC').value;
     const horizonVal = +document.getElementById('v3Horizon').value;
-    const costVal = +document.getElementById('v3Cost').value;
     const aa = benchmarksToAA(arcVal, horizonVal);
     const currentY = 2026.5;
     const currentI = aa.intel;
@@ -1103,7 +1101,7 @@ const LANG = {
     expert_reset:'Сбросить по умолчанию',
     expert_apply:'Применить и перезапустить',
     // Observable Metrics
-    obs_current:'Прогноз при текущих I/A:',
+    obs_current:'Прогноз при текущих бенчмарках:',
     obs_swe:'SWE-bench',
     obs_arc:'ARC-AGI',
     obs_horizon:'Автономность',
@@ -1243,7 +1241,7 @@ const LANG = {
     expert_reset:'Reset to Defaults',
     expert_apply:'Apply & Restart',
     // Observable Metrics
-    obs_current:'Forecast at current I/A:',
+    obs_current:'Forecast at current benchmarks:',
     obs_swe:'SWE-bench',
     obs_arc:'ARC-AGI',
     obs_horizon:'Autonomy',
@@ -2203,10 +2201,8 @@ function v3QuickWarning() {
 }
 
 function updateObsMetrics() {
-  const sweVal = +document.getElementById('v3SWE').value || 0;
   const arcVal = +document.getElementById('v3ARC').value || 0;
   const horizonVal = +document.getElementById('v3Horizon').value || 0;
-  const costVal = +document.getElementById('v3Cost').value || 0;
 
   // Конвертируем бенчмарки → AA → model scale
   const aa = benchmarksToAA(arcVal, horizonVal);
