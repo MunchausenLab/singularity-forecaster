@@ -685,7 +685,7 @@ function v3GetTracker() {
     v3Tracker = new BayesianTracker(1000);
     AA_FRONTIER_DATA.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 1.5));
   }
-  return v3Tracker();
+  return v3Tracker;
 }
 
 // Обратная конвертация: бенчмарки → AA Intelligence/Agentic
