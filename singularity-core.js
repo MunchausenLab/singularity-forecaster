@@ -753,7 +753,8 @@ function v3CheckWarning(tracker) {
   }
   if (minDist > 8.0) {
     warnEl.style.display = '';
-    warnEl.textContent = '⚠️ Значения далеко от диапазона частиц — модель не может надёжно экстраполировать. Прогноз ближе к априорному.';
+    const L = LANG[window._lang || 'ru'];
+    warnEl.textContent = L.v3_warning_far || '⚠️ Значения далеко от диапазона частиц — модель не может надёжно экстраполировать. Прогноз ближе к априорному.';
   } else {
     warnEl.style.display = 'none';
   }
@@ -799,7 +800,7 @@ async function runSimulation() {
 
     const dummySensitivity = {
         base: percentile(finite, 50),
-        variations: { info: { label: '(v3: Дисперсия в облаке частиц)', agiMedian: percentile(finite, 50) } }
+        variations: { info: { label: LANG[window._lang||'ru'].v3_variations_label || '(v3: Дисперсия в облаке частиц)', agiMedian: percentile(finite, 50) } }
     };
 
     currentResults = {
@@ -1118,13 +1119,32 @@ const LANG = {
     swarm_play_forecast:'Анимация',
     forecast_xaxis:'Год AGI', forecast_yaxis:'Удвоение HW (мес)',
     forecast_pagi:'P(AGI до 2068)', forecast_median:'Медиана AGI',
-    forecast_overlay:'AGI ≤', forecast_overlay_desc:'Показаны гипотезы с AGI до',
+    forecast_xaxis_asi:'Год ASI', forecast_median_asi:'Медиана ASI',
+    forecast_overlay:'AGI \u2264', forecast_overlay_desc:'Показаны гипотезы с AGI до',
     live_swarm_title:'Симуляция в реальном времени', live_swarm_desc:'Каждые 0.25 сек рой перерисовывается из нового прогона Monte Carlo.',
     swarm_play_forecast:'Анимация',
     // Event Horizon
     eh_title:'Визуализация: «Сфера Сингулярности»',
     eh_desc:'Каждая частица — один прогон Monte Carlo. Вылетает из центра (2026) и застывает на орбите своего года AGI. Плотные кольца = высокая вероятность. Оранжевые орбиты — AGI, красные — ASI.',
     eh_play:'Запуск', eh_reset:'Сброс',
+    eh_legend_agi:'достигнут', eh_legend_asi:'достигнут', eh_legend_flight:'в полёте',
+    v3_variations_label:'(v3: Дисперсия в облаке частиц)',
+    // Canvas / overlay hardcoded strings (Swarm learn mode)
+    swarm_canvas_median:'Медиана роя', canvas_hw_doubling:'Удвоение HW (мес)',
+    canvas_agency_ceiling:'Потолок Agency', canvas_observation:'Наблюдение',
+    swarm_canvas_legend_density:'Плотность роя', swarm_canvas_legend_obs:'Наблюдение',
+    swarm_canvas_legend_median:'Медиана', canvas_particles:'частиц',
+    // Swarm forecast overlay
+    forecast_overlay_hypotheses:'Показаны гипотезы с', forecast_overlay_by:'до',
+    legend_early:'< 2040', legend_mid:'2040-2055', legend_late:'> 2055',
+    legend_not_reached:'Не достигнет',
+    // Live swarm
+    live_swarm_stats_median:'Медиана:', live_swarm_stats_range:'P10–P90:',
+    live_swarm_stats_n:'N =',
+    // Observable metrics warning
+    v3_warning_far:'⚠️ Значения далеко от диапазона частиц — модель не может надёжно экстраполировать. Прогноз ближе к априорному.',
+    // v3 params panel
+    v3_params_title:'Параметры v3', v3_no_agi:'AGI не достигнут ни одной частицей к 2068',
   },
   en: {
     hdr_title:'Singularity Forecaster', hdr_sub:'v3 Bayesian Tracker',
@@ -1258,12 +1278,33 @@ const LANG = {
     swarm_play_forecast:'Animate',
     forecast_xaxis:'AGI Year', forecast_yaxis:'HW Doubling (mo)',
     forecast_pagi:'P(AGI by 2068)', forecast_median:'AGI Median',
-    forecast_overlay:'AGI ≤', forecast_overlay_desc:'Showing hypotheses with AGI by',
+    forecast_xaxis_asi:'ASI Year', forecast_median_asi:'ASI Median',
+    forecast_overlay:'AGI \u2264', forecast_overlay_desc:'Showing hypotheses with AGI by',
     live_swarm_title:'Real-time Simulation', live_swarm_desc:'Every 0.25s the swarm redraws from a new Monte Carlo run.',
     // Event Horizon
     eh_title:'Visualization: "Sphere of Singularity"',
     eh_desc:'Each particle is one Monte Carlo run. Flies from center (2026) and freezes at its AGI year orbit. Dense rings = high probability. Orange orbits — AGI, red — ASI.',
     eh_play:'Play', eh_reset:'Reset',
+    eh_legend_agi:'reached', eh_legend_asi:'reached', eh_legend_flight:'in flight',
+    v3_variations_label:'(v3: Variance in particle cloud)',
+    // Canvas / overlay hardcoded strings (Swarm learn mode)
+    swarm_canvas_median:'Swarm Median', canvas_hw_doubling:'HW Doubling (mo)',
+    canvas_agency_ceiling:'Agency Ceiling', canvas_observation:'Observation',
+    swarm_canvas_legend_density:'Swarm Density', swarm_canvas_legend_obs:'Observation',
+    swarm_canvas_legend_median:'Median', canvas_particles:'particles',
+    // Swarm forecast overlay
+    forecast_overlay_hypotheses:'Hypotheses with', forecast_overlay_by:'by',
+    legend_early:'< 2040', legend_mid:'2040-2055', legend_late:'> 2055',
+    legend_not_reached:'Not reached',
+    // Live swarm
+    live_swarm_stats_median:'Median:', live_swarm_stats_range:'P10–P90:',
+    live_swarm_stats_n:'N =',
+    // Observable metrics warning
+    v3_warning_far:'Values far from particle range — model cannot reliably extrapolate. Forecast is closer to prior.',
+    // v3 params panel
+    v3_params_title:'v3 Parameters', v3_no_agi:'No AGI by 2068 in any particle',
+    // Footer / misc
+    footer_note_en:'Data is estimated',
   }
 };
 
@@ -1438,16 +1479,18 @@ function swarmDrawLearn(ctx, w, h, pad, pw, ph) {
     ctx.beginPath(); ctx.arc(ox, oy, 4, 0, Math.PI * 2); ctx.fill();
   }
   ctx.fillStyle = '#58a6ff'; ctx.font = '9px JetBrains Mono, monospace'; ctx.textAlign = 'left';
-  ctx.fillText('Медиана роя', pad + 4, pad + 12);
+  const t = LANG[window._lang || 'ru'];
+  ctx.fillText(t.swarm_canvas_median, pad + 4, pad + 12);
   ctx.fillStyle = '#666680'; ctx.font = '11px Inter, sans-serif';
-  ctx.textAlign = 'center'; ctx.fillText('Удвоение HW (мес)', w / 2, h - 8);
+  ctx.textAlign = 'center'; ctx.fillText(t.canvas_hw_doubling, w / 2, h - 8);
   ctx.save(); ctx.translate(12, h / 2); ctx.rotate(-Math.PI / 2);
-  ctx.fillText('Потолок Agency', 0, 0); ctx.restore();
+  ctx.fillText(t.canvas_agency_ceiling, 0, 0); ctx.restore();
   ctx.fillStyle = '#ef4444'; ctx.font = '9px JetBrains Mono, monospace'; ctx.textAlign = 'right';
-  ctx.fillText('Наблюдение', w - pad - 4, pad + 12);
+  ctx.fillText(t.canvas_observation, w - pad - 4, pad + 12);
 }
 
 function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
+  const L = LANG[window._lang || 'ru'];
   if (!swarm.agiYears) {
     const mcData = swarmComputeAGIYears(swarm.tracker);
     swarm.agiYears = mcData.agi;
@@ -1531,16 +1574,16 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
   ctx.globalAlpha = 1.0;
 
   // labels
-  const xLabel = swarm.showASI ? 'Год ASI' : (LANG[window._lang||'ru'].forecast_xaxis || 'Год AGI');
+  const xLabel = swarm.showASI ? (L.forecast_xaxis_asi || 'ASI Year') : (L.forecast_xaxis || 'AGI Year');
   ctx.fillStyle = '#666680'; ctx.font = '11px Inter, sans-serif';
   ctx.textAlign = 'center'; ctx.fillText(xLabel, w / 2, h - 6);
   ctx.save(); ctx.translate(10, h / 2); ctx.rotate(-Math.PI / 2);
-  ctx.fillText(LANG[window._lang||'ru'].forecast_yaxis || 'Удвоение HW (мес)', 0, 0); ctx.restore();
+  ctx.fillText(L.forecast_yaxis || 'HW Doubling (mo)', 0, 0); ctx.restore();
 
   // stats
   const pct = totalW > 0 ? (visW / totalW * 100) : 0;
-  const pLabel = swarm.showASI ? 'P(ASI)' : (LANG[window._lang||'ru'].forecast_pagi || 'P(AGI)');
-  const mLabel = swarm.showASI ? 'Медиана ASI' : (LANG[window._lang||'ru'].forecast_median || 'Медиана AGI');
+  const pLabel = swarm.showASI ? 'P(ASI)' : (L.forecast_pagi || 'P(AGI)');
+  const mLabel = swarm.showASI ? (L.forecast_median_asi || 'ASI Median') : (L.forecast_median || 'Median AGI');
   ctx.fillStyle = '#f0883e'; ctx.font = 'bold 11px JetBrains Mono, monospace'; ctx.textAlign = 'left';
   ctx.fillText(`${pLabel}: ${pct.toFixed(1)}%`, pad + 4, pad + 12);
 
@@ -1571,9 +1614,10 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
 }
 
 function swarmDrawOverlay(ctx, w, h, pad) {
+  const L = LANG[window._lang || 'ru'];
   const ess = 1.0 / swarm.weights.reduce((a, b) => a + b * b, 0);
   ctx.fillStyle = '#666680'; ctx.font = '10px JetBrains Mono, monospace'; ctx.textAlign = 'left';
-  ctx.fillText(`ESS: ${ess.toFixed(0)} | частиц: ${swarm.particles.length}`, pad + 4, pad - 4);
+  ctx.fillText(`ESS: ${ess.toFixed(0)} | ${L.canvas_particles}: ${swarm.particles.length}`, pad + 4, pad - 4);
   const slider = document.getElementById('swarmSlider');
   const ov = document.getElementById('swarmOverlay');
   const leg = document.getElementById('swarmLegend');
@@ -1595,15 +1639,11 @@ function swarmDrawOverlay(ctx, w, h, pad) {
     if (ov) {
       const target = swarm.showASI ? 'ASI' : 'AGI';
       const fc = swarm.forecastSliderMax || 2068;
-      ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">${target} ≤ ${fc}</div><div style="font-size:.68rem;color:#9898b0">Показаны гипотезы с ${target} до ${fc}</div>`;
+      ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">${target} ≤ ${fc}</div><div style="font-size:.68rem;color:#9898b0">${L.forecast_overlay_hypotheses} ${target} ${L.forecast_overlay_by} ${fc}</div>`;
       ov.style.opacity = '1';
     }
     if (leg) {
-      if (swarm.showASI) {
-        leg.innerHTML = '<span style="color:#58a6ff">●</span> ASI < 2040 &nbsp; <span style="color:#ffcc00">●</span> 2040-2055 &nbsp; <span style="color:#ef4444">●</span> > 2055 &nbsp; <span style="color:#444">◌</span> Не достигнет';
-      } else {
-        leg.innerHTML = '<span style="color:#58a6ff">●</span> AGI < 2040 &nbsp; <span style="color:#ffcc00">●</span> 2040-2055 &nbsp; <span style="color:#ef4444">●</span> > 2055 &nbsp; <span style="color:#444">◌</span> Не достигнет';
-      }
+      leg.innerHTML = `<span style="color:#58a6ff">●</span> ${target} ${L.legend_early} &nbsp; <span style="color:#ffcc00">●</span> ${L.legend_mid} &nbsp; <span style="color:#ef4444">●</span> ${L.legend_late} &nbsp; <span style="color:#444">◌</span> ${L.legend_not_reached}`;
     }
   } else {
     // learn mode: slider shows observation index
@@ -1617,7 +1657,7 @@ function swarmDrawOverlay(ctx, w, h, pad) {
       if (ov) { ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">${obs.year.toFixed(2)}</div><div style="font-size:.68rem;color:#9898b0">${obs.event}</div><div style="font-size:.65rem;color:#666680;margin-top:4px">I=${obs.intel.toFixed(0)} A=${obs.agentic.toFixed(1)}</div>`; ov.style.opacity = '1'; }
     } else { if (ov) ov.style.opacity = '0'; }
     if (leg) {
-      leg.innerHTML = '<span style="color:#58a6ff">●</span> Плотность роя &nbsp; <span style="color:#ef4444">●</span> Наблюдение &nbsp; <span style="color:#f0883e">●</span> Медиана';
+      leg.innerHTML = `<span style="color:#58a6ff">●</span> ${L.swarm_canvas_legend_density} &nbsp; <span style="color:#ef4444">●</span> ${L.swarm_canvas_legend_obs} &nbsp; <span style="color:#f0883e">●</span> ${L.swarm_canvas_legend_median}`;
     }
   }
 }
@@ -1831,8 +1871,8 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
 
   // Axis labels
   const lang = window._lang || 'ru';
-  const xLabel = isASI ? (LANG[lang].forecast_xaxis.replace('AGI','ASI') || 'Год ASI') : (LANG[lang].forecast_xaxis || 'Год AGI');
-  const yLabel = LANG[lang].forecast_yaxis || 'Удвоение HW (мес)';
+  const xLabel = isASI ? (LANG[lang].forecast_xaxis_asi || 'ASI Year') : (LANG[lang].forecast_xaxis || 'AGI Year');
+  const yLabel = LANG[lang].forecast_yaxis || 'HW Doubling (mo)';
   ctx.fillStyle = '#555570'; ctx.font = '10px Inter, sans-serif';
   ctx.textAlign = 'center'; ctx.fillText(xLabel, w / 2, h - 4);
   ctx.save(); ctx.translate(9, h / 2); ctx.rotate(-Math.PI / 2);
@@ -1848,8 +1888,8 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
 
   const statsEl = document.getElementById(statsId);
   if (statsEl) {
-    const mLabel = isASI ? (LANG[lang].forecast_median.replace('AGI','ASI') || 'Медиана ASI') : (LANG[lang].forecast_median || 'Медиана AGI');
-    statsEl.innerHTML = `${mLabel}: <b>${median.toFixed(1)}</b><br>P10–P90: ${pct10.toFixed(0)}–${pct90.toFixed(0)}<br>N = ${totalW}`;
+    const mLabel = isASI ? (LANG[lang].forecast_median_asi || 'ASI Median') : (LANG[lang].forecast_median || 'Median AGI');
+    statsEl.innerHTML = `${mLabel}: <b>${median.toFixed(1)}</b><br>P10\u2013P90: ${pct10.toFixed(0)}\u2013${pct90.toFixed(0)}<br>N = ${totalW}`;
   }
 }
 
@@ -1966,7 +2006,8 @@ function ehDraw() {
   }
 
   if (legendEl) {
-    legendEl.innerHTML = `<span style="color:#f0883e">● AGI</span> достигнут &nbsp; <span style="color:#ef4444">● ASI</span> достигнут &nbsp; <span style="color:#555570">● в полёте</span>`;
+    const L = LANG[window._lang || 'ru'];
+    legendEl.innerHTML = `<span style="color:#f0883e">● AGI</span> ${L.eh_legend_agi || 'достигнут'} &nbsp; <span style="color:#ef4444">● ASI</span> ${L.eh_legend_asi || 'достигнут'} &nbsp; <span style="color:#555570">● ${L.eh_legend_flight || 'в полёте'}</span>`;
   }
 }
 
@@ -2103,6 +2144,13 @@ function setLang(lang) {
     const key = el.getAttribute('data-i18n');
     if (t[key]) el.textContent = t[key];
   });
+  // Re-draw canvases with new language
+  if (typeof swarmDraw === 'function') swarmDraw();
+  if (typeof ehDraw === 'function') ehDraw();
+  if (typeof drawLiveSwarm === 'function') {
+    if (typeof liveSwarm !== 'undefined' && liveSwarm.timerAGI) { clearTimeout(liveSwarm.timerAGI); liveSwarmTickAGI(); }
+    if (typeof liveSwarm !== 'undefined' && liveSwarm.timerASI) { clearTimeout(liveSwarm.timerASI); liveSwarmTickASI(); }
+  }
 }
 
 window.addEventListener('load', () => setLang('ru'));
