@@ -56,6 +56,9 @@ const EXPERT_CONFIG = {
   hypeGracePeriod: 2.5,             // Толерантность инвесторов (лет)
   saturationThreshold: 0.7,         // Порог насыщения для прорыва (0-1)
   overhangShiftMultiplier: 0.2,     // Compute Overhang влияет на вероятность прорыва
+  baseShiftMultiplier: 3.0,         // Множитель потолка при первом сдвиге
+  paradigmDecayRate: 0.5,           // Насколько слабее каждый следующий сдвиг
+  minShiftMultiplier: 1.2,          // Минимальный гарантированный множитель
   // Категория 2: Самоулучшение
   rsiMultiplier: 1.0,              // Множитель силы RSI
   rsiTriggerReasoning: 8.0,        // Reasoning для старта RSI (было 6.0)
@@ -318,13 +321,16 @@ class BayesianTracker {
                 lastShiftYear = currentYear;
                 hypeGracePeriod = this.cfg.EXPERT.hypeGracePeriod;
 
-                // Убывающая отдача: 1-й сдвиг x3.0, 2-й x2.5, 3-й x2.0...
-                let shiftMult = Math.max(1.3, 3.0 - (paradigmGeneration * 0.5));
+                // Настраиваемый множитель сдвига с убывающей отдачей
+                let shiftMult = Math.max(
+                  this.cfg.EXPERT.minShiftMultiplier,
+                  this.cfg.EXPERT.baseShiftMultiplier - ((paradigmGeneration - 1) * this.cfg.EXPERT.paradigmDecayRate)
+                );
 
                 // World Model модификации множителя
                 if (p.world_model === 'slow_takeoff' && paradigmGeneration === 1) {
                   // Нейросимволика: первый срыв даёт ОГРОМНЫЙ скачок
-                  shiftMult = 5.0;
+                  shiftMult = Math.max(shiftMult, 5.0);
                 }
                 // hard_wall: потолок агентности уже заблокирована на 5.5,
                 // сдвиг почти никогда не срабатывает, но если случится — обычный shiftMult
@@ -1024,6 +1030,12 @@ const LANG = {
     expert_d_saturationThreshold:'Насколько надо упереться для смены парадигмы',
     expert_p_overhangShiftMultiplier:'Compute Overhang',
     expert_d_overhangShiftMultiplier:'Влияние избытка капитала на вероятность прорыва',
+    expert_p_baseShiftMultiplier:'Базовый множитель прорыва',
+    expert_d_baseShiftMultiplier:'Множитель потолка при первом сдвиге (1.1=иллюзия прорыва, 10=квантовый скачок)',
+    expert_p_paradigmDecayRate:'Темп убывающей отдачи',
+    expert_d_paradigmDecayRate:'Насколько слабее каждый следующий сдвиг (0=бесконечная сингулярность)',
+    expert_p_minShiftMultiplier:'Мин. множитель сдвига',
+    expert_d_minShiftMultiplier:'Гарантированный минимум (потолок не уменьшится)',
     expert_p_rsiMultiplier:'Множитель RSI',
     expert_d_rsiMultiplier:'Умножает все коэффициенты RSI (0 = без самоулучшения)',
     expert_p_rsiTriggerReasoning:'Порог RSI (Reasoning)',
@@ -1156,6 +1168,12 @@ const LANG = {
     expert_d_saturationThreshold:'How hard must we hit the ceiling to trigger paradigm shift',
     expert_p_overhangShiftMultiplier:'Compute Overhang',
     expert_d_overhangShiftMultiplier:'Effect of capital surplus on breakthrough probability',
+    expert_p_baseShiftMultiplier:'Base Shift Multiplier',
+    expert_d_baseShiftMultiplier:'Ceiling multiplier at first shift (1.1=illusion of progress, 10=quantum leap)',
+    expert_p_paradigmDecayRate:'Diminishing Returns Rate',
+    expert_d_paradigmDecayRate:'How much weaker each subsequent shift is (0=infinite singularity)',
+    expert_p_minShiftMultiplier:'Min Shift Multiplier',
+    expert_d_minShiftMultiplier:'Guaranteed minimum (ceiling never decreases)',
     expert_p_rsiMultiplier:'RSI Multiplier',
     expert_d_rsiMultiplier:'Multiplies all RSI coefficients (0 = no self-improvement)',
     expert_p_rsiTriggerReasoning:'RSI Threshold (Reasoning)',
@@ -2086,6 +2104,7 @@ function expertResetDefaults() {
   // Обновить все UI элементы
   const fields = [
     'ceilingReasoningBase', 'hypeGracePeriod', 'saturationThreshold', 'overhangShiftMultiplier',
+    'baseShiftMultiplier', 'paradigmDecayRate', 'minShiftMultiplier',
     'rsiMultiplier', 'rsiTriggerReasoning', 'rsiTriggerAgency', 'hwCoDesignBonus',
     'coordinationFriction', 'maxPhysicalHwGrowth', 'bubbleBurstRisk',
     'alignmentCooldown', 'maxCapitalMultiplier',
@@ -2093,6 +2112,7 @@ function expertResetDefaults() {
   ];
   const defValues = {
     ceilingReasoningBase: 15, hypeGracePeriod: 2.5, saturationThreshold: 0.70, overhangShiftMultiplier: 0.20,
+    baseShiftMultiplier: 3.0, paradigmDecayRate: 0.5, minShiftMultiplier: 1.2,
     rsiMultiplier: 1.0, rsiTriggerReasoning: 8.0, rsiTriggerAgency: 8.0, hwCoDesignBonus: 1.5,
     coordinationFriction: 0.05, maxPhysicalHwGrowth: 1.5, bubbleBurstRisk: 0.20,
     alignmentCooldown: 1.5, maxCapitalMultiplier: 2.5,
@@ -2103,6 +2123,9 @@ function expertResetDefaults() {
     hypeGracePeriod: v => v.toFixed(1),
     saturationThreshold: v => v.toFixed(2),
     overhangShiftMultiplier: v => v.toFixed(2),
+    baseShiftMultiplier: v => v.toFixed(1),
+    paradigmDecayRate: v => v.toFixed(1),
+    minShiftMultiplier: v => v.toFixed(2),
     rsiMultiplier: v => v.toFixed(1),
     rsiTriggerReasoning: v => v.toFixed(1),
     rsiTriggerAgency: v => v.toFixed(1),

@@ -395,6 +395,30 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
         <input type="range" id="e-overhangShiftMultiplier" min="0" max="1" step="0.05" value="0.20" oninput="expertUpdate('overhangShiftMultiplier',this.value)">
         <div class="expert-param-desc" data-i18n="expert_d_overhangShiftMultiplier">Влияние избытка капитала на вероятность прорыва</div>
       </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_baseShiftMultiplier">Базовый множитель прорыва</span>
+          <span class="expert-param-value" id="ev-baseShiftMultiplier">3.0</span>
+        </div>
+        <input type="range" id="e-baseShiftMultiplier" min="1.1" max="10" step="0.1" value="3.0" oninput="expertUpdate('baseShiftMultiplier',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_baseShiftMultiplier">Множитель потолка при первом сдвиге (1.1=иллюзия прорыва, 10=квантовый скачок)</div>
+      </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_paradigmDecayRate">Темп убывающей отдачи</span>
+          <span class="expert-param-value" id="ev-paradigmDecayRate">0.5</span>
+        </div>
+        <input type="range" id="e-paradigmDecayRate" min="0" max="2" step="0.1" value="0.5" oninput="expertUpdate('paradigmDecayRate',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_paradigmDecayRate">Насколько слабее каждый следующий сдвиг (0=бесконечная сингулярность)</div>
+      </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_minShiftMultiplier">Мин. множитель сдвига</span>
+          <span class="expert-param-value" id="ev-minShiftMultiplier">1.2</span>
+        </div>
+        <input type="range" id="e-minShiftMultiplier" min="1.01" max="2" step="0.01" value="1.2" oninput="expertUpdate('minShiftMultiplier',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_minShiftMultiplier">Гарантированный минимум (потолок не уменьшится)</div>
+      </div>
     </div>
 
     <!-- Категория 2: Самоулучшение -->
