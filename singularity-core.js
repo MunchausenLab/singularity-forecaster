@@ -1693,14 +1693,20 @@ function swarmReset() {
   swarmStartLive();
 }
 
-// Live background redraw every 250ms (no learning progress)
+// Live background: re-draw every 250ms
+// In learn mode, rebuild tracker from same obsIdx so particles "breathe" (new MC draw, no progress)
 let _swarmLiveTimer = null;
 function swarmStartLive() {
   swarmStopLive();
   _swarmLiveTimer = setInterval(() => {
-    if (!swarm.animating && !swarm.forecastAnimating) {
-      swarmDraw();
+    if (swarm.animating || swarm.forecastAnimating) return;
+    if (swarm.mode === 'learn') {
+      // Rebuild tracker with fresh MC particles at current obsIdx (no learning progress)
+      swarm.tracker = swarmBuildTracker(swarm.obsIdx);
+      swarm.weights = Array.from(swarm.tracker.weights);
+      swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
     }
+    swarmDraw();
   }, 250);
 }
 function swarmStopLive() {
