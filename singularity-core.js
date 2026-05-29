@@ -815,9 +815,11 @@ function v3UpdateUI(tracker) {
 function v3CheckWarning(tracker) {
   const warnEl = document.getElementById('v3Warning');
   if (!warnEl) return;
-  const curI = +document.getElementById('v3Intel').value;
-  const curA = +document.getElementById('v3Agentic').value;
-  const tR = curI / 10.0, tA = curA / 10.0;
+  // Read from benchmark inputs (ARC-AGI + Horizon) and convert to AA scale
+  const arcVal = +document.getElementById('v3ARC').value || 0;
+  const horizonVal = +document.getElementById('v3Horizon').value || 0;
+  const aa = benchmarksToAA(arcVal, horizonVal);
+  const tR = aa.intel / 10.0, tA = aa.agency / 10.0;
   let minDist = Infinity;
   for (let i = 0; i < Math.min(tracker.n, 100); i++) {
     if (tracker.weights[i] < 0.001) continue;
@@ -1175,6 +1177,14 @@ const LANG = {
     expert_world_desc:'Априорные вероятности гипотез о структуре реальности. Сумма = 100%.',
     expert_reset:'Сбросить по умолчанию',
     expert_apply:'Применить и перезапустить',
+    // Category 7: Simulation Parameters
+    expert_cat7:'Симуляции и Бенчмарки',
+    expert_p_simulations:'Симуляции (N)',
+    expert_d_simulations:'Количество Monte Carlo прогонов (500-10000)',
+    expert_p_arc_agi:'ARC-AGI (%)',
+    expert_d_arc_agi:'Текущий уровень ARC-AGI для наблюдений',
+    expert_p_horizon:'Автономность (часов)',
+    expert_d_horizon:'Горизонт автономности для текущих бенчмарков',
     // Observable Metrics
     obs_current:'Прогноз при текущих бенчмарках:',
     obs_swe:'SWE-bench',
@@ -1382,6 +1392,14 @@ const LANG = {
     expert_world_desc:'Prior probabilities about structure of reality. Sum = 100%.',
     expert_reset:'Reset to Defaults',
     expert_apply:'Apply & Restart',
+    // Category 7: Simulation Parameters
+    expert_cat7:'Simulation & Benchmarks',
+    expert_p_simulations:'Simulations (N)',
+    expert_d_simulations:'Number of Monte Carlo runs (500-10000)',
+    expert_p_arc_agi:'ARC-AGI (%)',
+    expert_d_arc_agi:'Current ARC-AGI level for observations',
+    expert_p_horizon:'Autonomy (hours)',
+    expert_d_horizon:'Autonomy horizon for current benchmarks',
     // Observable Metrics
     obs_current:'Forecast at current benchmarks:',
     obs_swe:'SWE-bench',
@@ -2416,6 +2434,16 @@ function expertResetDefaults() {
   document.getElementById('e-world-hardWall').value = 25;
   document.getElementById('e-world-slowTakeoff').value = 15;
   document.getElementById('expertWorldError').style.display = 'none';
+  // Reset simulation parameters
+  document.getElementById('e-rN').value = 3000;
+  document.getElementById('ev-rN').textContent = '3000';
+  document.getElementById('rN').value = 3000;
+  document.getElementById('e-v3ARC').value = 52;
+  document.getElementById('ev-v3ARC').textContent = '52';
+  document.getElementById('v3ARC').value = 52;
+  document.getElementById('e-v3Horizon').value = 18.3;
+  document.getElementById('ev-v3Horizon').textContent = '18.3';
+  document.getElementById('v3Horizon').value = 18.3;
 }
 
 function expertApplyAndRun() {
