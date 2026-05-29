@@ -685,11 +685,38 @@ function v3GetTracker() {
     v3Tracker = new BayesianTracker(1000);
     AA_FRONTIER_DATA.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 1.5));
   }
-  return v3Tracker;
+  return v3Tracker();
+}
+
+// Обратная конвертация: бенчмарки → AA Intelligence/Agentic
+// ARC-AGI → reasoning, Автономность → agency
+function benchmarksToAA(arcAgiPct, horizonHours) {
+  // ARC-AGI = 100 * sigmoid(0.6 * r10 - 4.0)
+  // Обратная: r10 = (ln(p/(100-p)) + 4.0) / 0.6
+  const arc = Math.max(0.1, Math.min(99.9, arcAgiPct));
+  const r10 = (Math.log(arc / (100 - arc)) + 4.0) / 0.6;
+
+  // Автономность = 0.5 * exp(0.5 * a10) часов
+  // Обратная: a10 = 2 * ln(horizon / 0.5)
+  const h = Math.max(0.1, horizonHours);
+  const a10 = 2.0 * Math.log(h / 0.5);
+
+  // r10 = (intel/100) * ceilingR → intel = r10 * 100 / ceilingR
+  // a10 = (agency/100) * 10 → agency = a10 * 10
+  const ceilingR = EXPERT_CONFIG.ceilingReasoningBase;
+  const intel = Math.max(0, Math.min(100, (r10 / ceilingR) * 100));
+  const agency = Math.max(0, Math.min(100, a10 * 10));
+
+  return { intel, agency };
 }
 
 function v3AddObservation() {
-  const y = +document.getElementById('v3Year').value, i = +document.getElementById('v3Intel').value, a = +document.getElementById('v3Agentic').value;
+  const arcVal = +document.getElementById('v3ARC').value;
+  const horizonVal = +document.getElementById('v3Horizon').value;
+  const aa = benchmarksToAA(arcVal, horizonVal);
+  const y = 2026.5;
+  const i = aa.intel;
+  const a = aa.agency;
   v3Observations = v3Observations.filter(o => o.year < y - 0.01);
   v3Observations.push({ year: y, intel: i, agentic: a });
   v3Tracker = new BayesianTracker(1000);
@@ -744,9 +771,15 @@ async function runSimulation() {
 
   await new Promise(r => setTimeout(r, 50));
   try {
-    const currentY = +document.getElementById('v3Year').value;
-    const currentI = +document.getElementById('v3Intel').value;
-    const currentA = +document.getElementById('v3Agentic').value;
+    // Конвертируем бенчмарки в AA
+    const sweVal = +document.getElementById('v3SWE').value;
+    const arcVal = +document.getElementById('v3ARC').value;
+    const horizonVal = +document.getElementById('v3Horizon').value;
+    const costVal = +document.getElementById('v3Cost').value;
+    const aa = benchmarksToAA(arcVal, horizonVal);
+    const currentY = 2026.5;
+    const currentI = aa.intel;
+    const currentA = aa.agency;
     v3Tracker = new BayesianTracker(1000);
     AA_FRONTIER_DATA.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 1.5));
     v3Observations.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 2.0));
@@ -966,6 +999,8 @@ const LANG = {
     ctrl_simulations:'Симуляции (N)', ctrl_obs_year:'Год наблюдения',
     ctrl_intelligence:'Интеллект (AA)', ctrl_agentic:'Агентность (AA)',
     ctrl_add:'Добавить', ctrl_reset:'Сбросить',
+    ctrl_swe_bench:'SWE-bench (%)', ctrl_arc_agi:'ARC-AGI (%)',
+    ctrl_horizon:'Автономность (часов)', ctrl_cost:'Стоимость 1M токенов ($)',
     run_btn:'Запустить симуляцию',
     // Charts
     tag1:'Вероятностный анализ', tag3:'Кумулятивная',
@@ -1104,6 +1139,8 @@ const LANG = {
     ctrl_simulations:'Simulations (N)', ctrl_obs_year:'Observation Year',
     ctrl_intelligence:'Intelligence (AA)', ctrl_agentic:'Agentic (AA)',
     ctrl_add:'Add', ctrl_reset:'Reset',
+    ctrl_swe_bench:'SWE-bench (%)', ctrl_arc_agi:'ARC-AGI (%)',
+    ctrl_horizon:'Autonomy (hours)', ctrl_cost:'Cost per 1M tokens ($)',
     run_btn:'Run Simulation',
     // Charts
     tag1:'Probabilistic Analysis', tag3:'Cumulative',
@@ -2160,23 +2197,27 @@ function expertApplyAndRun() {
 window.addEventListener('load', () => { setTimeout(runSimulation, 800); });
 
 function v3QuickWarning() {
-  const t = v3Tracker || v3GetTracker();
-  v3CheckWarning(t);
+  const tracker = v3Tracker || v3GetTracker();
+  v3CheckWarning(tracker);
   updateObsMetrics();
 }
 
 function updateObsMetrics() {
-  const intel = +document.getElementById('v3Intel').value || 0;
-  const agentic = +document.getElementById('v3Agentic').value || 0;
+  const sweVal = +document.getElementById('v3SWE').value || 0;
+  const arcVal = +document.getElementById('v3ARC').value || 0;
+  const horizonVal = +document.getElementById('v3Horizon').value || 0;
+  const costVal = +document.getElementById('v3Cost').value || 0;
 
-  // AA-шкала 0..100 -> внутренняя шкала модели
-  // reasoning_ceiling = из EXPERT_CONFIG, agency_ceiling = ~12 (aposteriori)
+  // Конвертируем бенчмарки → AA → model scale
+  const aa = benchmarksToAA(arcVal, horizonVal);
+  const intel = aa.intel;
+  const agency = aa.agency;
+
   const ceilingR = EXPERT_CONFIG.ceilingReasoningBase;
   const agencyCeiling = (v3Tracker && v3Tracker.getSummary)
     ? v3Tracker.getSummary().agencyCeiling : 12.0;
-  // AA 0..100 -> model scale: divide by 100, multiply by ceiling
   const reasoningModel = (intel / 100) * ceilingR;
-  const agencyModel = (agentic / 100) * agencyCeiling;
+  const agencyModel = (agency / 100) * agencyCeiling;
 
   const _cfg = Object.assign({}, EXPERT_CONFIG, { _lang: window._lang || 'ru' });
   const m = mapToObservables(reasoningModel, agencyModel, ceilingR, agencyCeiling, _cfg);

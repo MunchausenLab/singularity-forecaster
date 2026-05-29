@@ -333,16 +333,20 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     <span class="n-display"><span id="vN">3000</span></span>
   </div>
   <div class="control-group">
-    <label data-i18n="ctrl_obs_year">Год наблюдения</label>
-    <input type="number" id="v3Year" value="2026.5" min="2022" max="2030" step="0.1" style="width:80px" oninput="v3QuickWarning()">
+    <label data-i18n="ctrl_swe_bench">SWE-bench (%)</label>
+    <input type="number" id="v3SWE" value="33.5" min="0" max="100" step="0.1" style="width:70px" oninput="v3QuickWarning()">
   </div>
   <div class="control-group">
-    <label data-i18n="ctrl_intelligence">Интеллект (AA)</label>
-    <input type="number" id="v3Intel" value="68" min="0" max="100" step="1" style="width:70px" oninput="v3QuickWarning()">
+    <label data-i18n="ctrl_arc_agi">ARC-AGI (%)</label>
+    <input type="number" id="v3ARC" value="52" min="0" max="100" step="0.1" style="width:70px" oninput="v3QuickWarning()">
   </div>
   <div class="control-group">
-    <label data-i18n="ctrl_agentic">Агентность (AA)</label>
-    <input type="number" id="v3Agentic" value="72" min="0" max="100" step="0.1" style="width:70px" oninput="v3QuickWarning()">
+    <label data-i18n="ctrl_horizon">Автономность (часов)</label>
+    <input type="number" id="v3Horizon" value="18.3" min="0.1" max="1000" step="0.1" style="width:70px" oninput="v3QuickWarning()">
+  </div>
+  <div class="control-group">
+    <label data-i18n="ctrl_cost">Стоимость 1M токенов ($)</label>
+    <input type="number" id="v3Cost" value="1.3" min="0.001" max="100" step="0.01" style="width:70px" oninput="v3QuickWarning()">
   </div>
   <button class="btn btn-secondary btn-sm" data-i18n="ctrl_add" onclick="v3AddObservation()">+ Добавить</button>
   <button class="btn btn-primary" id="runBtn" onclick="runSimulation()">
