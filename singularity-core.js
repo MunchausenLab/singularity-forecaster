@@ -19,8 +19,8 @@ function mapToObservables(r10, a10, expertCfg) {
     const reasoningWeight = 1.0 - autonomyWeight;
     const blendedReasoning = r10 * reasoningWeight + a10 * autonomyWeight;
 
-    // SWE-bench: смесь reasoning и agency с настраиваемым весом
-    const sweBench = 100 * sigmoid(0.4 * blendedReasoning - 3.5);
+    // Откалибровано под SWE-bench Verified:
+    const sweBench = 100 * sigmoid(0.55 * blendedReasoning - 2.5);
 
     // ARC-AGI: чистое reasoning
     const arcAgi = 100 * sigmoid(0.6 * r10 - 4.0);
