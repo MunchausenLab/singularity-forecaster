@@ -11,13 +11,13 @@ function cdf(list, x) { const c = list.filter(v => isFinite(v) && v <= x).length
 // Перевод латентных переменных (reasoning, agency) в наблюдаемые бенчмарки
 // reasoning и agency в масштабе модели (0..~15 для reasoning, 0..~agency_ceiling для agency)
 // Нормализуем к шкале 0..10 для маппинга
-function mapToObservables(reasoning, agency, ceilingR, ceilingA, expertCfg) {
-    // Нормализация: AA-шкала 0..100 -> внутренняя шкала модели
-    const rNorm = ceilingR > 0 ? reasoning / ceilingR : 0;
-    const aNorm = ceilingA > 0 ? agency / ceilingA : 0;
+function mapToObservables(intelPct, agencyPct, ceilingR, ceilingA, expertCfg) {
+    // AA-шкала 0..100 → внутренняя шкала модели
+    const reasoning = (intelPct / 100) * ceilingR;
+    const agency = (agencyPct / 100) * ceilingA;
     // Прокси в шкалу 0..10 для формул бенчмарков
-    const r10 = rNorm * 10;
-    const a10 = aNorm * 10;
+    const r10 = (reasoning / ceilingR) * 10;  // = intelPct / 10
+    const a10 = (agency / ceilingA) * 10;     // = agencyPct / 10
 
     // toolUseVsAutonomyWeight: насколько бенчмарк реально отражает Agency
     // 0 = только reasoning, 1 = только agency, 0.6 = смесь (дефолт)
@@ -2453,11 +2453,9 @@ function updateObsMetrics() {
   const ceilingR = EXPERT_CONFIG.ceilingReasoningBase;
   const agencyCeiling = (v3Tracker && v3Tracker.getSummary)
     ? v3Tracker.getSummary().agencyCeiling : 12.0;
-  const reasoningModel = (intel / 100) * ceilingR;
-  const agencyModel = (agency / 100) * agencyCeiling;
 
   const _cfg = Object.assign({}, EXPERT_CONFIG, { _lang: window._lang || 'ru' });
-  const m = mapToObservables(reasoningModel, agencyModel, ceilingR, agencyCeiling, _cfg);
+  const m = mapToObservables(intel, agency, ceilingR, agencyCeiling, _cfg);
 
   const el = document.getElementById('obsMetrics');
   if (el) el.style.display = 'block';
