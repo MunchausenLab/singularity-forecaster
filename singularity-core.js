@@ -1498,7 +1498,7 @@ const LANG = {
 
 // ===== PARTICLE SWARM ANIMATION =====
 // ===== PARTICLE SWARM v3 =====
-let swarm = { mode:'learn', obsIdx:0, tracker:null, particles:[], weights:[], animating:false, rafId:null, agiYears:null, asiYears:null, forecastSliderMax:0, forecastAnimating:false, forecastRafId:null, asiAnimating:false, asiRafId:null, showASI:false };
+let swarm = { mode:'learn', obsIdx:0, tracker:null, particles:[], weights:[], animating:false, rafId:null, agiYears:null, forecastSliderMax:0 };
 
 // Pre-compute AGI and ASI years using the same MC forecast as the main charts
 // Returns { agiYears: [{agiYear, hw, w}], asiYears: [{asiYear, hw, w}] }
@@ -1564,19 +1564,23 @@ function swarmSetMode(m) {
     swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
     swarm.weights = Array.from(swarm.tracker.weights);
     swarm.agiYears = null;
-    swarm.asiYears = null;
     const mcData = swarmComputeAGIYears(swarm.tracker);
     swarm.agiYears = mcData.agi;
-    swarm.asiYears = mcData.asi;
     if (slider) { slider.min = 2020; slider.max = 2068; slider.step = 1; slider.value = 2068; }
     swarm.forecastSliderMax = 2068;
     if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2038</span><span></span><span>2048</span><span></span><span>2058</span><span>2068</span>';
+    // Hide play button in forecast mode — static result only
+    const playBtn = document.getElementById('swarmPlayBtn');
+    if (playBtn) playBtn.style.display = 'none';
   } else {
     swarm.tracker = swarmBuildTracker(swarm.obsIdx);
     swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
     swarm.weights = Array.from(swarm.tracker.weights);
     if (slider) { slider.min = 0; slider.max = AA_FRONTIER_DATA.length; slider.step = 1; slider.value = swarm.obsIdx; }
     if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2024</span><span></span><span>2025</span><span></span><span>2026</span><span>2026.5</span>';
+    // Show play button in learn mode
+    const playBtn = document.getElementById('swarmPlayBtn');
+    if (playBtn) playBtn.style.display = '';
   }
   swarmDraw();
 }
@@ -1684,7 +1688,7 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
     swarm.agiYears = mcData.agi;
     swarm.asiYears = mcData.asi;
   }
-  const years = swarm.showASI ? swarm.asiYears : swarm.agiYears;
+  const years = swarm.agiYears;
   const cutoff = swarm.forecastSliderMax || 2068;
   const xMin = 2020;
   const xMax = 2068;
@@ -1762,7 +1766,7 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
   ctx.globalAlpha = 1.0;
 
   // labels
-  const xLabel = swarm.showASI ? (L.forecast_xaxis_asi || 'ASI Year') : (L.forecast_xaxis || 'AGI Year');
+  const xLabel = L.forecast_xaxis || 'AGI Year';
   ctx.fillStyle = '#666680'; ctx.font = '11px Inter, sans-serif';
   ctx.textAlign = 'center'; ctx.fillText(xLabel, w / 2, h - 6);
   ctx.save(); ctx.translate(10, h / 2); ctx.rotate(-Math.PI / 2);
@@ -1770,8 +1774,8 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
 
   // stats
   const pct = totalW > 0 ? (visW / totalW * 100) : 0;
-  const pLabel = swarm.showASI ? 'P(ASI)' : (L.forecast_pagi || 'P(AGI)');
-  const mLabel = swarm.showASI ? (L.forecast_median_asi || 'ASI Median') : (L.forecast_median || 'Median AGI');
+  const pLabel = L.forecast_pagi || 'P(AGI)';
+  const mLabel = L.forecast_median || 'Median AGI';
   ctx.fillStyle = '#f0883e'; ctx.font = 'bold 11px JetBrains Mono, monospace'; ctx.textAlign = 'left';
   ctx.fillText(`${pLabel}: ${pct.toFixed(1)}%`, pad + 4, pad + 12);
 
@@ -1813,25 +1817,17 @@ function swarmDrawOverlay(ctx, w, h, pad) {
   const hint = document.getElementById('swarmHint');
 
   if (swarm.mode === 'forecast') {
-    // forecast mode: slider shows AGI year cutoff
+    // forecast mode: static result — no animation, no target toggle
     if (slider) { slider.style.display = ''; slider.value = swarm.forecastSliderMax || 2068; }
-    if (playBtn) {
-      playBtn.style.display = '';
-      const span = playBtn.querySelector('span');
-      span.textContent = LANG[window._lang||'ru'].swarm_play_forecast || 'Анимация';
-      playBtn.onclick = swarmPlay;
-    }
-    const targetToggle = document.getElementById('swarmTargetToggle');
-    if (targetToggle) targetToggle.style.display = '';
+    if (playBtn) playBtn.style.display = 'none';
     if (hint) hint.style.display = 'none';
     if (ov) {
-      const target = swarm.showASI ? 'ASI' : 'AGI';
       const fc = swarm.forecastSliderMax || 2068;
-      ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">${target} ≤ ${fc}</div><div style="font-size:.68rem;color:#9898b0">${L.forecast_overlay_hypotheses} ${target} ${L.forecast_overlay_by} ${fc}</div>`;
+      ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">AGI ≤ ${fc}</div><div style="font-size:.68rem;color:#9898b0">${L.forecast_overlay_hypotheses} AGI ${L.forecast_overlay_by} ${fc}</div>`;
       ov.style.opacity = '1';
     }
     if (leg) {
-      leg.innerHTML = `<span style="color:#58a6ff">●</span> ${target} ${L.legend_early} &nbsp; <span style="color:#ffcc00">●</span> ${L.legend_mid} &nbsp; <span style="color:#ef4444">●</span> ${L.legend_late} &nbsp; <span style="color:#444">◌</span> ${L.legend_not_reached}`;
+      leg.innerHTML = `<span style="color:#58a6ff">●</span> AGI ${L.legend_early} &nbsp; <span style="color:#ffcc00">●</span> ${L.legend_mid} &nbsp; <span style="color:#ef4444">●</span> ${L.legend_late} &nbsp; <span style="color:#444">◌</span> ${L.legend_not_reached}`;
     }
   } else {
     // learn mode: slider shows observation index
@@ -1840,6 +1836,9 @@ function swarmDrawOverlay(ctx, w, h, pad) {
     const targetToggleL = document.getElementById('swarmTargetToggle');
     if (targetToggleL) targetToggleL.style.display = 'none';
     if (hint) hint.style.display = '';
+    // Show play button in learn mode
+    const playBtnL = document.getElementById('swarmPlayBtn');
+    if (playBtnL) playBtnL.style.display = '';
     if (swarm.obsIdx > 0 && swarm.obsIdx <= AA_FRONTIER_DATA.length) {
       const obs = AA_FRONTIER_DATA[swarm.obsIdx - 1];
       if (ov) { ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">${obs.year.toFixed(2)}</div><div style="font-size:.68rem;color:#9898b0">${obs.event}</div><div style="font-size:.65rem;color:#666680;margin-top:4px">I=${obs.intel.toFixed(0)} A=${obs.agentic.toFixed(1)}</div>`; ov.style.opacity = '1'; }
@@ -1852,32 +1851,8 @@ function swarmDrawOverlay(ctx, w, h, pad) {
 
 function swarmPlay() {
   if (swarm.mode === 'forecast') {
-    // Forecast mode: animate AGI year slider
-    if (swarm.forecastAnimating) {
-      swarm.forecastAnimating = false;
-      clearTimeout(swarm.forecastRafId);
-      document.getElementById('swarmPlayBtn').querySelector('span').textContent = LANG[window._lang||'ru'].swarm_play_forecast || 'Анимация';
-      swarmStartLive(); // resume live updates when stopped
-      return;
-    }
-    swarm.forecastAnimating = true;
-    swarmStopLive(); // pause live during animation
-    document.getElementById('swarmPlayBtn').querySelector('span').textContent = '⏸';
-    if (swarm.asiAnimating) { swarm.asiAnimating = false; clearTimeout(swarm.asiRafId); }
-    let year = 2020;
-    const step = () => {
-      if (!swarm.forecastAnimating || year > 2068) {
-        swarm.forecastAnimating = false;
-        document.getElementById('swarmPlayBtn').querySelector('span').textContent = LANG[window._lang||'ru'].swarm_play_forecast || 'Анимация';
-        swarmStartLive();
-        return;
-      }
-      swarm.forecastSliderMax = year;
-      swarmDraw();
-      year++;
-      swarm.forecastRafId = setTimeout(step, 250);
-    };
-    step();
+    // Static mode — no animation, just redraw
+    swarmDraw();
   } else {
     // Learn mode: animate observations
     if (swarm.animating) {
@@ -1912,6 +1887,9 @@ function swarmPlay() {
 function swarmReset() {
   swarm.animating = false; clearTimeout(swarm.rafId);
   swarm.forecastAnimating = false; clearTimeout(swarm.forecastRafId);
+  // Restore play button visibility in learn mode
+  const resetPlayBtn = document.getElementById('swarmPlayBtn');
+  if (resetPlayBtn) resetPlayBtn.style.display = '';
   swarmStopLive();
   swarm.obsIdx = 0; swarmInit();
   document.getElementById('swarmPlayBtn').innerHTML = '<span>' + (LANG[window._lang||'ru'].swarm_play||'Запуск') + '</span>';
