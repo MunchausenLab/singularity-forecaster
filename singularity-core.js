@@ -11,13 +11,7 @@ function cdf(list, x) { const c = list.filter(v => isFinite(v) && v <= x).length
 // Перевод латентных переменных (reasoning, agency) в наблюдаемые бенчмарки
 // reasoning и agency в масштабе модели (0..~15 для reasoning, 0..~agency_ceiling для agency)
 // Нормализуем к шкале 0..10 для маппинга
-function mapToObservables(intelPct, agencyPct, ceilingR, ceilingA, expertCfg) {
-    // AA-шкала 0..100 → внутренняя шкала модели
-    const reasoning = (intelPct / 100) * ceilingR;
-    const agency = (agencyPct / 100) * ceilingA;
-    // Прокси в шкалу 0..10 для формул бенчмарков
-    const r10 = (reasoning / ceilingR) * 10;  // = intelPct / 10
-    const a10 = (agency / ceilingA) * 10;     // = agencyPct / 10
+function mapToObservables(r10, a10, expertCfg) {
 
     // toolUseVsAutonomyWeight: насколько бенчмарк реально отражает Agency
     // 0 = только reasoning, 1 = только agency, 0.6 = смесь (дефолт)
@@ -775,13 +769,11 @@ function benchmarksToAA(arcAgiPct, horizonHours) {
   const h = Math.max(0.1, horizonHours);
   const a10 = 2.0 * Math.log(h / 0.5);
 
-  // r10 = (intel/100) * ceilingR → intel = r10 * 100 / ceilingR
-  // a10 = (agency/100) * 10 → agency = a10 * 10
-  const ceilingR = EXPERT_CONFIG.ceilingReasoningBase;
-  const intel = Math.max(0, Math.min(100, (r10 / ceilingR) * 100));
+  // r10 (0..10) → intel (0..100), a10 (0..10) → agency (0..100)
+  const intel = Math.max(0, Math.min(100, r10 * 10));
   const agency = Math.max(0, Math.min(100, a10 * 10));
 
-  return { intel, agency };
+  return { intel, agency, r10, a10 };
 }
 
 function v3AddObservation() {
@@ -2447,15 +2439,9 @@ function updateObsMetrics() {
 
   // Конвертируем бенчмарки → AA → model scale
   const aa = benchmarksToAA(arcVal, horizonVal);
-  const intel = aa.intel;
-  const agency = aa.agency;
-
-  const ceilingR = EXPERT_CONFIG.ceilingReasoningBase;
-  const agencyCeiling = (v3Tracker && v3Tracker.getSummary)
-    ? v3Tracker.getSummary().agencyCeiling : 12.0;
 
   const _cfg = Object.assign({}, EXPERT_CONFIG, { _lang: window._lang || 'ru' });
-  const m = mapToObservables(intel, agency, ceilingR, agencyCeiling, _cfg);
+  const m = mapToObservables(aa.r10, aa.a10, _cfg);
 
   const el = document.getElementById('obsMetrics');
   if (el) el.style.display = 'block';
