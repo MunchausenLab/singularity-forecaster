@@ -545,6 +545,27 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <!-- Категория 6: Бенчмарки -->
   <div class="expert-group" style="grid-column:span 1">
     <div class="expert-group-title" data-i18n="expert_cat6">Бенчмарки и Прочее</div>
+  </div>
+
+  <!-- Категория 7: Simulation Parameters -->
+  <div class="expert-group" style="grid-column:span 1">
+    <div class="expert-group-title" data-i18n="expert_cat7">Симуляции и Бенчмарки</div>
+    <div class="expert-param">
+      <div class="expert-param-label">
+        <span class="expert-param-name" data-i18n="expert_p_arc_agi">ARC-AGI (%)</span>
+        <span class="expert-param-value" id="ev-v3ARC">52</span>
+      </div>
+      <input type="range" id="e-v3ARC" min="0" max="100" step="1" value="52" oninput="document.getElementById('ev-v3ARC').textContent=this.value;document.getElementById('v3ARC').value=this.value;v3QuickWarning()">
+      <div class="expert-param-desc" data-i18n="expert_d_arc_agi">Текущий уровень ARC-AGI для наблюдений</div>
+    </div>
+    <div class="expert-param">
+      <div class="expert-param-label">
+        <span class="expert-param-name" data-i18n="expert_p_horizon">Автономность (часов)</span>
+        <span class="expert-param-value" id="ev-v3Horizon">18.3</span>
+      </div>
+      <input type="range" id="e-v3Horizon" min="0.5" max="200" step="0.5" value="18.3" oninput="document.getElementById('ev-v3Horizon').textContent=this.value;document.getElementById('v3Horizon').value=this.value;v3QuickWarning()">
+      <div class="expert-param-desc" data-i18n="expert_d_horizon">Горизонт автономности для текущих бенчмарков</div>
+    </div>
     <div class="expert-param">
       <div class="expert-param-label">
         <span class="expert-param-name" data-i18n="expert_p_toolUseVsAutonomyWeight">Вес Autonomy в SWE-bench</span>
@@ -553,11 +574,6 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
       <input type="range" id="e-toolUseVsAutonomyWeight" min="0" max="1" step="0.05" value="0.60" oninput="expertUpdate('toolUseVsAutonomyWeight',this.value)">
       <div class="expert-param-desc" data-i18n="expert_d_toolUseVsAutonomyWeight">0 = бенчмарк взлабывается reasoning, 1 = только реальная автономность</div>
     </div>
-  </div>
-
-  <!-- Категория 7: Simulation Parameters -->
-  <div class="expert-group" style="grid-column:span 1">
-    <div class="expert-group-title" data-i18n="expert_cat7">Симуляции и Бенчмарки</div>
     <div class="expert-param">
       <div class="expert-param-label">
         <span class="expert-param-name" data-i18n="expert_p_simulations">Симуляции (N)</span>
@@ -565,22 +581,6 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
       </div>
       <input type="range" id="e-rN" min="500" max="10000" step="500" value="3000" oninput="document.getElementById('ev-rN').textContent=this.value;document.getElementById('rN').value=this.value">
       <div class="expert-param-desc" data-i18n="expert_d_simulations">Количество Monte Carlo прогонов (500-10000)</div>
-    </div>
-    <div class="expert-param">
-      <div class="expert-param-label">
-        <span class="expert-param-name" data-i18n="expert_p_arc_agi">ARC-AGI (%)</span>
-        <span class="expert-param-value" id="ev-v3ARC">52</span>
-      </div>
-      <input type="number" id="e-v3ARC" value="52" min="0" max="100" step="0.1" style="width:70px" oninput="document.getElementById('ev-v3ARC').textContent=this.value;document.getElementById('v3ARC').value=this.value;v3QuickWarning()">
-      <div class="expert-param-desc" data-i18n="expert_d_arc_agi">Текущий уровень ARC-AGI для наблюдений</div>
-    </div>
-    <div class="expert-param">
-      <div class="expert-param-label">
-        <span class="expert-param-name" data-i18n="expert_p_horizon">Автономность (часов)</span>
-        <span class="expert-param-value" id="ev-v3Horizon">18.3</span>
-      </div>
-      <input type="number" id="e-v3Horizon" value="18.3" min="0.1" max="1000" step="0.1" style="width:70px" oninput="document.getElementById('ev-v3Horizon').textContent=this.value;document.getElementById('v3Horizon').value=this.value;v3QuickWarning()">
-      <div class="expert-param-desc" data-i18n="expert_d_horizon">Горизонт автономности для текущих бенчмарков</div>
     </div>
   </div>
   <div class="expert-apply-row">

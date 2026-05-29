@@ -2422,6 +2422,8 @@ function expertResetDefaults() {
   document.getElementById('e-v3Horizon').value = 18.3;
   document.getElementById('ev-v3Horizon').textContent = '18.3';
   document.getElementById('v3Horizon').value = 18.3;
+  document.getElementById('e-toolUseVsAutonomyWeight').value = 0.60;
+  document.getElementById('ev-toolUseVsAutonomyWeight').textContent = '0.60';
 }
 
 function expertApplyAndRun() {
