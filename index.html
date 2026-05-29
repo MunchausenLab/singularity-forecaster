@@ -664,29 +664,21 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     </div>
     <div class="chart-container" id="c6"></div>
   </div>
-  <div class="card">
-    <span class="card-tag" style="background:rgba(240,136,62,.15);color:var(--orange)" data-i18n="tag7">Декомпозиция</span>
-    <div class="card-header">
-      <h3 data-i18n="chart7">5. Вклад компонент (Stacked Area)</h3>
-      <span class="tip">?<span class="tip-text" data-i18n="tip7">Разбивка capability на составляющие: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Показывает, что двигает прогресс.</span></span>
+  <div class="card" id="eventHorizonSection">
+    <span class="card-tag" style="background:rgba(167,139,250,.15);color:var(--purple)" data-i18n="eh_title">Визуализация: «Сфера Сингулярности»</span>
+    <div class="card-header" style="margin-top:8px">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-primary btn-sm" id="ehPlayBtn" onclick="eventHorizonPlay()"><span data-i18n="eh_play">Запуск</span></button>
+        <button class="btn btn-secondary btn-sm" onclick="eventHorizonReset()"><span data-i18n="eh_reset">Сброс</span></button>
+        <span id="ehStats" style="font-size:.72rem;color:var(--text-muted);font-family:var(--mono)"></span>
+      </div>
     </div>
-    <div class="chart-container" id="c7"></div>
-  </div>
-</div>
-
-<!-- ===== EVENT HORIZON ===== -->
-  <div class="about" id="eventHorizonSection">
-    <h2 data-i18n="eh_title">Визуализация: «Сфера Сингулярности»</h2>
-    <p data-i18n="eh_desc">Каждая частица — один прогон Monte Carlo. Вылетает из центра (2026) и застывает на орбите своего года AGI. Плотные кольца = высокая вероятность. Оранжевые орбиты — AGI, красные — ASI.</p>
-    <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap;align-items:center">
-      <button class="btn btn-primary btn-sm" id="ehPlayBtn" onclick="eventHorizonPlay()"><span data-i18n="eh_play">Запуск</span></button>
-      <button class="btn btn-secondary btn-sm" onclick="eventHorizonReset()"><span data-i18n="eh_reset">Сброс</span></button>
-      <span id="ehStats" style="font-size:.72rem;color:var(--text-muted);font-family:var(--mono);margin-left:8px"></span>
-    </div>
-    <div id="eventHorizonWrap" style="position:relative;width:100%;height:520px;background:#06060c;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-top:12px">
-      <canvas id="eventHorizonCanvas" style="width:100%;height:100%"></canvas>
-      <div id="ehLegend" style="position:absolute;bottom:12px;left:16px;font-size:.65rem;color:var(--text-muted);font-family:var(--mono);pointer-events:none;line-height:1.6"></div>
-      <div id="ehCenterLabel" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:.65rem;color:var(--text-muted);font-family:var(--mono);pointer-events:none;text-align:center;line-height:1.4"></div>
+    <div class="chart-container" style="min-height:540px">
+      <div id="eventHorizonWrap" style="position:relative;width:100%;height:520px;background:#06060c;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+        <canvas id="eventHorizonCanvas" style="width:100%;height:100%"></canvas>
+        <div id="ehLegend" style="position:absolute;bottom:12px;left:16px;font-size:.65rem;color:var(--text-muted);font-family:var(--mono);pointer-events:none;line-height:1.6"></div>
+        <div id="ehCenterLabel" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:.65rem;color:var(--text-muted);font-family:var(--mono);pointer-events:none;text-align:center;line-height:1.4"></div>
+      </div>
     </div>
   </div>
 </div>
