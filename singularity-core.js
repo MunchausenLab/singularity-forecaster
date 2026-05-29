@@ -3,7 +3,7 @@
 // UTILITY FUNCTIONS
 // ============================================================================
 function sigmoid(x) { return 1.0 / (1.0 + Math.exp(-Math.max(-30, Math.min(30, x)))); }
-function randnRange(mean, std) { const u1 = Math.random(), u2 = Math.random(); return mean + std * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2); }
+function randnRange(mean, std) { const u1 = Math.random() || Number.EPSILON, u2 = Math.random(); return mean + std * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2); }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function percentile(arr, p) { const sorted = arr.slice().sort((a, b) => a - b); const idx = clamp(Math.floor(p / 100 * sorted.length), 0, sorted.length - 1); return sorted[idx]; }
 function cdf(list, x) { const c = list.filter(v => isFinite(v) && v <= x).length; return list.length ? (c / list.length) * 100 : 0; }
@@ -32,7 +32,7 @@ function mapToObservables(reasoning, agency, ceilingR, ceilingA, expertCfg) {
     const arcAgi = 100 * sigmoid(0.6 * r10 - 4.0);
 
     // Автономный горизонт (часы), экспоненциально от agency
-    const autonomousHorizonHours = 0.5 * Math.exp(0.5 * a10);
+    const autonomousHorizonHours = Math.min(365 * 24, 0.5 * Math.exp(0.5 * a10)); // cap at 1 year
 
     // Стоимость 1M токенов ($), падает с ростом reasoning
     const costPerM = Math.max(0.01, 10.0 * Math.exp(-0.3 * r10));
@@ -78,6 +78,9 @@ const EXPERT_CONFIG = {
   // Категория 6: Бенчмарки
   toolUseVsAutonomyWeight: 0.6     // Вес agency в SWE-bench (0=только reasoning, 1=только agency)
 };
+
+// Default values for Expert Sandbox (single source of truth)
+const DEFAULT_EXPERT_CONFIG = JSON.parse(JSON.stringify(EXPERT_CONFIG));
 
 // ============================================================================
 // v3.0 — BAYESIAN PARTICLE FILTER (Исправлено: Якорь на 2023 год + Inference)
@@ -127,28 +130,76 @@ function v3SimulateToYear(particle, targetYear, cfg) {
   const hwK = Math.log(2) / Math.max(1.0, particle.hw_months / 12.0);
   const algoK = Math.log(2) / Math.max(1.0, particle.algo_months / 12.0);
 
+  // Paradigm shift state (deterministic — no shocks)
+  let paradigmGeneration = 0;
+  let lastShiftYear = cfg.BASE_YEAR;
+  let algoKMult = 1.0;
+  let ceilingR = cfg.DIMENSIONS.reasoning.ceiling;
+  let ceilingA = particle.agency_ceiling;
+
   for (let step = 0; step < steps; step++) {
     const currentYear = cfg.BASE_YEAR + step * dt;
     const logDiff = flopsLog + algoLog - baseLog;
     
-    let rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cfg.DIMENSIONS.reasoning.ceiling);
-    let rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, particle.agency_ceiling);
+    let rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, ceilingR);
+    let rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, ceilingA);
     
     let reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
     let agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
+    const cap = Math.min(reasoning, agency);
 
+    // Deterministic paradigm shift (same logic as MC, but no randomness — threshold-based)
+    const canShift = (paradigmGeneration === 0 && currentYear > 2026.5)
+                   || (paradigmGeneration > 0 && currentYear > lastShiftYear + 4.0);
+    if (canShift) {
+      const saturation = Math.max(reasoning / ceilingR, agency / ceilingA);
+      if (saturation > cfg.EXPERT.saturationThreshold) {
+        paradigmGeneration++;
+        lastShiftYear = currentYear;
+        let shiftMult = Math.max(
+          cfg.EXPERT.minShiftMultiplier,
+          cfg.EXPERT.baseShiftMultiplier - ((paradigmGeneration - 1) * cfg.EXPERT.paradigmDecayRate)
+        );
+        if (particle.world_model === 'slow_takeoff' && paradigmGeneration === 1) {
+          shiftMult = Math.max(shiftMult, 5.0);
+        }
+        if (particle.world_model === 'hard_wall') {
+          shiftMult = 1.001; // almost no shift
+        }
+        ceilingA *= shiftMult;
+        ceilingR *= shiftMult;
+        algoKMult = 2.0;
+      }
+    }
+
+    // Decay algoK multiplier
+    if (algoKMult > 1.0) {
+      algoKMult -= (1.0 / 4.0) * dt;
+      if (algoKMult < 1.0) algoKMult = 1.0;
+    }
+
+    // Economic bottleneck
     let damping = 1.0;
     if (currentYear > cfg.BOTTLENECKS.econ_wall_start) {
       const gap = reasoning - agency;
       if (gap > 2.0) damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (gap - 2.0));
     }
+
+    // RSI (deterministic)
+    let rsi = 0;
+    if (reasoning >= cfg.EXPERT.rsiTriggerReasoning && agency >= cfg.EXPERT.rsiTriggerAgency) {
+      const _coordF = cfg.EXPERT.coordinationFriction;
+      const friction = 1.0 / (1.0 + _coordF * Math.max(0, cap - 10.0));
+      rsi = Math.min(2.0, 0.15 * Math.pow(Math.max(0, cap - cfg.EXPERT.rsiTriggerAgency), 1.2) * cfg.EXPERT.rsiMultiplier * friction);
+    }
+
     flopsLog += hwK * damping * dt;
-    algoLog += algoK * damping * dt;
+    algoLog += (algoK * algoKMult * damping + rsi) * dt;
   }
   
   const logDiff = flopsLog + algoLog - baseLog;
-  let rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cfg.DIMENSIONS.reasoning.ceiling);
-  let rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, particle.agency_ceiling);
+  let rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, ceilingR);
+  let rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, ceilingA);
   
   return {
     reasoning: v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap),
@@ -166,9 +217,13 @@ class BayesianTracker {
     for (let i = 0; i < this.n; i++) {
       const rand = Math.random();
       const w = EXPERT_CONFIG.worldModels;
+      // Normalize world model probabilities (defensive against UI drift)
+      const totalWM = (w.cascade || 0) + (w.hardWall || 0) + (w.slowTakeoff || 0);
+      const normC = totalWM > 0 ? (w.cascade || 0) / totalWM : 0.6;
+      const normH = totalWM > 0 ? (w.hardWall || 0) / totalWM : 0.25;
       let worldModel = 'cascade';
-      if (rand > w.cascade && rand <= w.cascade + w.hardWall) worldModel = 'hard_wall';
-      else if (rand > w.cascade + w.hardWall) worldModel = 'slow_takeoff';
+      if (rand > normC && rand <= normC + normH) worldModel = 'hard_wall';
+      else if (rand > normC + normH) worldModel = 'slow_takeoff';
 
       this.particles.push({
         hw_months: Math.max(3.0, randnRange(7.5, 1.5)),
@@ -430,7 +485,7 @@ class BayesianTracker {
         // ИИ может начать оптимизировать себя только при высокой автономности
         if (reasoning >= _rsiTR && agency >= _rsiTA) {
           // Базовый RSI потенциал
-          let baseRsi = 0.15 * Math.pow(cap - _rsiTA, 1.2) * _rsiM;
+          let baseRsi = 0.15 * Math.pow(Math.max(0, cap - _rsiTA), 1.2) * _rsiM;
 
           // Координационное трение (Закон Амдала / Брукса для AI-агентов)
           // Чем выше capability, тем сложнее агентам координироваться
@@ -462,13 +517,13 @@ class BayesianTracker {
         if (gpuBubbleBurst) dynamicHwK *= 0.2;
 
         // Физический предел роста железа (Material Cycle)
-        // Когнитивный цикл может быть быстрым, но бетон, АЭС и литография — это физика
         dynamicHwK = Math.min(dynamicHwK, this.cfg.EXPERT.maxPhysicalHwGrowth);
 
+        // Shock damping applied symmetrically to both hw and algo
         flopsLog += dynamicHwK * shockDamping * dt;
 
-        // Применяем локальный мультипликатор к скорости алгоритмов
-        let currentAlgoK = algoK * algoKMultiplier;
+        // Algo progress: includes paradigm multiplier, data exhaustion, economic damping, and shock damping
+        let currentAlgoK = algoK * algoKMultiplier * damping;
         if (dataExhaustionHit) currentAlgoK *= 0.5;
         algoLog += (currentAlgoK * (isWinter ? 0.4 : 1.0) * shockDamping + rsi) * dt;
       }
@@ -597,18 +652,37 @@ class BayesianTracker {
 
   runDecomposition() {
     const cfg = this.cfg;
-    const p = this.particles[0];
-    let flopsLog = cfg.BASE_LOG_FLOPS, algoLog = 0;
-    let baseLog = flopsLog;
-    const hwK = Math.log(2) / Math.max(1.0, p.hw_months / 12.0);
-    const algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
-    let cR = cfg.DIMENSIONS.reasoning.ceiling;
-    let cA = p.agency_ceiling;
-
+    // Use weighted average particle instead of particles[0] (which may have negligible weight)
+    const totalW = this.weights.reduce((a, b) => a + b, 0);
+    let avgHw = 0, avgAlgo = 0, avgCeiling = 0;
+    if (totalW > 0) {
+      for (let i = 0; i < this.n; i++) {
+        const w = this.weights[i] / totalW;
+        avgHw += this.particles[i].hw_months * w;
+        avgAlgo += this.particles[i].algo_months * w;
+        avgCeiling += this.particles[i].agency_ceiling * w;
+      }
+    } else {
+      // Fallback: unweighted average
+      for (let i = 0; i < this.n; i++) {
+        avgHw += this.particles[i].hw_months;
+        avgAlgo += this.particles[i].algo_months;
+        avgCeiling += this.particles[i].agency_ceiling;
+      }
+      avgHw /= this.n;
+      avgAlgo /= this.n;
+      avgCeiling /= this.n;
+    }
     const dt = 1.0 / 12.0;
     const steps = 40 * 12;
     const years = [], hwComp = [], algoComp = [], paradigmComp = [], rsiComp = [];
     let accumulatedParadigm = 0, accumulatedRsi = 0;
+    let flopsLog = cfg.BASE_LOG_FLOPS, algoLog = 0;
+    let baseLog = flopsLog;
+    const hwK = Math.log(2) / Math.max(1.0, avgHw / 12.0);
+    const algoK = Math.log(2) / Math.max(1.0, avgAlgo / 12.0);
+    let cR = cfg.DIMENSIONS.reasoning.ceiling;
+    let cA = avgCeiling;
 
     for (let step = 0; step < steps; step++) {
       const y = cfg.BASE_YEAR + step * dt;
@@ -2226,10 +2300,24 @@ function eventHorizonReset() {
   ehDraw();
 }
 
-window.addEventListener('load', () => { setTimeout(liveSwarmInit, 300); });
-
-
-window.addEventListener('load', () => { setTimeout(swarmInit, 100); });
+// ===== SINGLE LOAD HANDLER (ordered initialization) =====
+window.addEventListener('load', () => {
+  // 1. Language first (so all UI text is correct)
+  setLang('ru');
+  // 2. Swarm canvases (need DOM ready)
+  setTimeout(swarmInit, 100);
+  setTimeout(liveSwarmInit, 300);
+  // 3. Event horizon canvas
+  setTimeout(ehInitCanvas, 200);
+  setTimeout(ehDraw, 250);
+  // 4. Main simulation (last, heaviest)
+  setTimeout(() => {
+    const tracker = v3GetTracker();
+    v3UpdateUI(tracker);
+  }, 50);
+  // 5. Auto-run simulation after everything is ready
+  setTimeout(runSimulation, 800);
+});
 
 function setLang(lang) {
   window._lang = lang;
@@ -2288,8 +2376,8 @@ function expertWorldUpdate() {
 }
 
 function expertResetDefaults() {
-  // Сбросить EXPERT_CONFIG к дефолтам
-  Object.assign(EXPERT_CONFIG, {
+  // Reset to defaults from single source of truth
+  Object.assign(EXPERT_CONFIG, JSON.parse(JSON.stringify(DEFAULT_EXPERT_CONFIG)));
     ceilingReasoningBase: 15.0,
     hypeGracePeriod: 2.5,
     saturationThreshold: 0.7,
@@ -2317,14 +2405,6 @@ function expertResetDefaults() {
     'alignmentCooldown', 'maxCapitalMultiplier',
     'priorAgencyMean', 'priorAgencyStd', 'toolUseVsAutonomyWeight'
   ];
-  const defValues = {
-    ceilingReasoningBase: 15, hypeGracePeriod: 2.5, saturationThreshold: 0.70, overhangShiftMultiplier: 0.20,
-    baseShiftMultiplier: 3.0, paradigmDecayRate: 0.5, minShiftMultiplier: 1.2,
-    rsiMultiplier: 1.0, rsiTriggerReasoning: 8.0, rsiTriggerAgency: 8.0, hwCoDesignBonus: 1.5,
-    coordinationFriction: 0.05, maxPhysicalHwGrowth: 1.5, bubbleBurstRisk: 0.20,
-    alignmentCooldown: 1.5, maxCapitalMultiplier: 2.5,
-    priorAgencyMean: 8.0, priorAgencyStd: 3.0, toolUseVsAutonomyWeight: 0.60
-  };
   const formats = {
     ceilingReasoningBase: v => v.toFixed(1),
     hypeGracePeriod: v => v.toFixed(1),
@@ -2347,8 +2427,8 @@ function expertResetDefaults() {
     toolUseVsAutonomyWeight: v => v.toFixed(2)
   };
   for (const f of fields) {
-    document.getElementById('e-' + f).value = defValues[f];
-    document.getElementById('ev-' + f).textContent = formats[f](defValues[f]);
+    document.getElementById('e-' + f).value = DEFAULT_EXPERT_CONFIG[f];
+    document.getElementById('ev-' + f).textContent = formats[f](DEFAULT_EXPERT_CONFIG[f]);
   }
   document.getElementById('e-world-cascade').value = 60;
   document.getElementById('e-world-hardWall').value = 25;
@@ -2364,7 +2444,6 @@ function expertApplyAndRun() {
   setTimeout(runSimulation, 100);
 }
 
-window.addEventListener('load', () => { setTimeout(runSimulation, 800); });
 
 function v3QuickWarning() {
   const tracker = v3Tracker || v3GetTracker();
