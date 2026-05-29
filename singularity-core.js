@@ -41,8 +41,8 @@ function mapToObservables(reasoning, agency, ceilingR, ceilingA, expertCfg) {
         sweBench: sweBench.toFixed(1) + '%',
         arcAgi: arcAgi.toFixed(1) + '%',
         horizon: autonomousHorizonHours > 24
-            ? (autonomousHorizonHours / 24).toFixed(1) + ' дней'
-            : autonomousHorizonHours.toFixed(1) + ' часов',
+            ? (autonomousHorizonHours / 24).toFixed(1) + (expertCfg && expertCfg._lang === 'en' ? ' days' : ' дней')
+            : autonomousHorizonHours.toFixed(1) + (expertCfg && expertCfg._lang === 'en' ? ' hours' : ' часов'),
         cost: '$' + costPerM.toFixed(3)
     };
 }
@@ -981,20 +981,24 @@ const LANG = {
     fY_suffix:' лет', fY_gt:'> 40 лет',
     // About
     about_title:'О модели v3',
-    about_intro:'Модель v3 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных Artificial Analysis. Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения AA обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге.',
+    about_intro:'Модель v3 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных Artificial Analysis. Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения AA обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге. Панель Expert Sandbox позволяет настраивать 18+ параметров модели и проверять гипотезы о будущем в реальном времени.',
     defs_label:'Архитектура модели',
     arch_tracker_title:'Байесовский трекер',
-    arch_tracker_desc:'1000 частиц с априорными распределениями на hw_months, algo_months, agency_ceiling. Каждое наблюдение AA (Intelligence + Agentic) обновляет веса через гауссово правдоподобие. ESS-ресэмплинг предотвращает вырождение.',
+    arch_tracker_desc:'1000 частиц с настраиваемыми априорными распределениями: hw_months, algo_months, agency_ceiling (mean/std через Expert Sandbox). Каждое наблюдение AA (Intelligence + Agentic) обновляет веса через гауссово правдоподобие. ESS-ресэмплинг предотвращает вырождение. Поддержка трёх World Models: Cascade, Hard Wall, Slow Takeoff.',
     arch_dims_title:'Два измерения интеллекта',
-    arch_dims_desc:'Reasoning (slope 0.35, ceiling 15.0) и Agency (slope 0.25, ceiling — параметр частицы). Capability = min(Reasoning, Agency). Оба растут логистически от log(FLOPs), но упираются в потолки.',
+    arch_dims_desc:'Reasoning (slope 0.35, ceiling настраивается) и Agency (slope 0.25, ceiling — параметр частицы). Capability = min(Reasoning, Agency). Оба растут логистически от log(FLOPs), но упираются в потолки. Эпистемическая неопределённость: каждая частица верит в свою «физику мира».',
     arch_paradigm_title:'Смена парадигмы',
-    arch_paradigm_desc:'После 2026.30 каждый месяц с вероятностью ~1.7% происходит сдвиг: оба потолка ×3, базовый уровень FLOPs сдвигается. Это позволяет модели преодолеть текущие ограничения трансформеров.',
+    arch_paradigm_desc:'Переход происходит при saturation > threshold (настраивается) + compute overhang bonus. Убывающая отдача: 1-й сдвиг ×3.0, 2-й ×2.5... World Models модифицируют вероятность: Hard Wall подавляет сдвиги, Slow Takeoff даёт огромный первый скачок.',
     arch_rsi_title:'RSI — рекурсивное самоулучшение',
-    arch_rsi_desc:'При capability >= 5.0 включается обратная связь: рост алгоритмов ускоряется пропорционально текущему уровню. Чем выше агентность — тем быстрее прогресс. Это ключевой механизм для достижения ASI.',
+    arch_rsi_desc:'Запускается при reasoning >= 8.0 AND agency >= 8.0 (настраивается). Базовый потенциал растёт от (cap - threshold)^1.2, но ограничивается координационным трением: 1/(1 + friction * max(0, cap-10)). Множитель RSI масштабирует эффект. Максимум 2.0.',
     arch_bottlenecks_title:'Бутылочные горлышки',
-    arch_bottlenecks_desc:'Экономическая стена: если Reasoning обгоняет Agency более чем на 2.0, инвестиции падают. Энергетическая стена: с 2026 года дефицит инфраструктуры тормозит рост compute.',
+    arch_bottlenecks_desc:'Экономическая стена: если Reasoning обгоняет Agency > 2.0 — инвестиции экспоненциально падают. GPU-пузырь может лопнуть при agency < 4. Alignment incident замораживает масштабирование на 1.5 года. Физический предел роста hardware (maxPhysicalHwGrowth) — даже сверхразум не строит fabs мгновенно.',
     arch_mc_title:'Monte Carlo прогноз',
     arch_mc_desc:'3000 прогонов из апостериорного распределения. Каждый прогон — симуляция от 2023 до 2068 года с месячным шагом. Результат: распределение лет до AGI (cap >= 10) и ASI (cap >= 100).',
+    arch_expert_title:'Expert Sandbox',
+    arch_expert_desc:'18+ настраиваемых параметров: априорные допущения (agency mean/std), пороги RSI, координационное трение, физический предел hardware, compute overhang, вероятности World Models, вес autonomy в бенчмарках. Превращает модель из прогноза в эпистемологический симулятор.',
+    arch_shocks_title:'Шоки и Black Swans',
+    arch_shocks_desc:'Типы шоков: Data Wall (исчерпание данных), Alignment Incident (регуляторная заморозка), GPU Bubble Burst (обвал инвестиций), AI Winter (разрыв reasoning-agency). Вероятности зависят от текущего состояния системы.',
     defs_intro:'В модели v3 используются строгие операциональные определения на основе двухмерной шкалы (Reasoning, Agency). Шкала логарифмическая: GPT-4 (конец 2023) ~ 3.0 по Reasoning и ~0.2 по Agency, текущие модели середины 2026 ~ 6.5 по Reasoning и ~6.5 по Agency. AGI = 10.0, ASI = 100.0.',
     agi_def_title:'AGI — Artificial General Intelligence',
     agi_def_score:'min(Reasoning, Agency) = 10.0',
@@ -1051,6 +1055,12 @@ const LANG = {
     expert_world_desc:'Априорные вероятности гипотез о структуре реальности. Сумма = 100%.',
     expert_reset:'Сбросить по умолчанию',
     expert_apply:'Применить и перезапустить',
+    // Observable Metrics
+    obs_current:'Прогноз при текущих I/A:',
+    obs_swe:'SWE-bench',
+    obs_arc:'ARC-AGI',
+    obs_horizon:'Автономность',
+    obs_cost:'Стоимость 1M токенов',
     // Footer
     footer_note:'Данные оценочные',
     // Loading
@@ -1103,20 +1113,24 @@ const LANG = {
     fY_suffix:' yrs', fY_gt:'> 40 yrs',
     // About
     about_title:'About v3 Model',
-    about_intro:'The v3 model uses a Bayesian Particle Filter to calibrate predictions on real Artificial Analysis data. Each particle is a hypothesis about the future: hardware growth rate, algorithm progress, and agency ceiling. AA observations update particle weights via likelihood, and unlikely hypotheses die during resampling.',
+    about_intro:'The v3 model uses a Bayesian Particle Filter to calibrate predictions on real Artificial Analysis data. Each particle is a hypothesis about the future: hardware growth rate, algorithm progress, and agency ceiling. AA observations update particle weights via likelihood, and unlikely hypotheses die during resampling. Expert Sandbox panel provides 18+ tunable parameters for real-time hypothesis testing.',
     defs_label:'Model Architecture',
     arch_tracker_title:'Bayesian Tracker',
-    arch_tracker_desc:'1000 particles with priors on hw_months, algo_months, agency_ceiling. Each AA observation (Intelligence + Agentic) updates weights via Gaussian likelihood. ESS resampling prevents degeneracy.',
+    arch_tracker_desc:'1000 particles with tunable priors: hw_months, algo_months, agency_ceiling (mean/std via Expert Sandbox). Each AA observation updates weights via Gaussian likelihood. ESS resampling prevents degeneracy. Three World Models supported: Cascade, Hard Wall, Slow Takeoff.',
     arch_dims_title:'Two Dimensions of Intelligence',
-    arch_dims_desc:'Reasoning (slope 0.35, ceiling 15.0) and Agency (slope 0.25, ceiling — particle parameter). Capability = min(Reasoning, Agency). Both grow logistic from log(FLOPs) but hit ceilings.',
+    arch_dims_desc:'Reasoning (slope 0.35, ceiling configurable) and Agency (slope 0.25, ceiling — particle parameter). Capability = min(Reasoning, Agency). Both grow logistic from log(FLOPs) but hit ceilings. Epistemic uncertainty: each particle believes in its own "physics of the world".',
     arch_paradigm_title:'Paradigm Shift',
-    arch_paradigm_desc:'After 2026.30 each month has ~1.7% chance of a shift: both ceilings ×3, base FLOPs level shifts. This allows the model to overcome current transformer limitations.',
+    arch_paradigm_desc:'Transition triggers when saturation > threshold (configurable) + compute overhang bonus. Diminishing returns: 1st shift ×3.0, 2nd ×2.5... World Models modify probability: Hard Wall suppresses shifts, Slow Takeoff gives massive first jump.',
     arch_rsi_title:'RSI — Recursive Self-Improvement',
-    arch_rsi_desc:'At capability >= 5.0, feedback kicks in: algorithm growth accelerates proportional to current level. Higher agency → faster progress. Key mechanism for reaching ASI.',
+    arch_rsi_desc:'Activates when reasoning >= 8.0 AND agency >= 8.0 (configurable). Base potential grows from (cap - threshold)^1.2, but limited by coordination friction: 1/(1 + friction * max(0, cap-10)). RSI multiplier scales the effect. Maximum 2.0.',
     arch_bottlenecks_title:'Bottlenecks',
-    arch_bottlenecks_desc:'Economic wall: if Reasoning leads Agency by more than 2.0, investment drops. Energy wall: from 2026, infrastructure deficit slows compute growth.',
+    arch_bottlenecks_desc:'Economic wall: if Reasoning leads Agency > 2.0, investment drops exponentially. GPU bubble can burst when agency < 4. Alignment incident freezes scaling for 1.5 years. Physical HW growth limit (maxPhysicalHwGrowth) — even superintelligence doesn\'t build fabs instantly.',
     arch_mc_title:'Monte Carlo Forecast',
     arch_mc_desc:'3000 runs from the posterior distribution. Each run simulates 2023 to 2068 at monthly resolution. Result: distribution of years to AGI (cap >= 10) and ASI (cap >= 100).',
+    arch_expert_title:'Expert Sandbox',
+    arch_expert_desc:'18+ tunable parameters: philosophical priors (agency mean/std), RSI thresholds, coordination friction, physical HW growth limit, compute overhang, World Models probabilities, benchmark autonomy weight. Transforms the model from a predictor into an epistemological simulator.',
+    arch_shocks_title:'Shocks & Black Swans',
+    arch_shocks_desc:'Shock types: Data Wall (data exhaustion, slows algorithms), Alignment Incident (regulatory freeze), GPU Bubble Burst (investment crash), AI Winter (reasoning-agency gap). Probabilities depend on current system state.',
     defs_intro:'The v3 model uses strict operational definitions based on a two-dimensional scale (Reasoning, Agency). The scale is logarithmic: GPT-4 (late 2023) ~ 3.0 in Reasoning and ~0.2 in Agency, current mid-2026 models ~ 6.5 in Reasoning and ~6.5 in Agency. AGI = 10.0, ASI = 100.0.',
     agi_def_title:'AGI — Artificial General Intelligence',
     agi_def_score:'min(Reasoning, Agency) = 10.0',
@@ -1173,6 +1187,12 @@ const LANG = {
     expert_world_desc:'Prior probabilities about structure of reality. Sum = 100%.',
     expert_reset:'Reset to Defaults',
     expert_apply:'Apply & Restart',
+    // Observable Metrics
+    obs_current:'Forecast at current I/A:',
+    obs_swe:'SWE-bench',
+    obs_arc:'ARC-AGI',
+    obs_horizon:'Autonomy',
+    obs_cost:'Cost per 1M tokens',
     // Footer
     footer_note:'Data is estimated',
     // Loading
@@ -2135,7 +2155,8 @@ function updateObsMetrics() {
   const reasoningModel = (intel / 100) * ceilingR;
   const agencyModel = (agentic / 100) * agencyCeiling;
 
-  const m = mapToObservables(reasoningModel, agencyModel, ceilingR, agencyCeiling, EXPERT_CONFIG);
+  const _cfg = Object.assign({}, EXPERT_CONFIG, { _lang: window._lang || 'ru' });
+  const m = mapToObservables(reasoningModel, agencyModel, ceilingR, agencyCeiling, _cfg);
 
   const el = document.getElementById('obsMetrics');
   if (el) el.style.display = 'block';

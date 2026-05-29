@@ -542,11 +542,11 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 
 <!-- ===== OBSERVABLE METRICS ===== -->
 <div id="obsMetrics" style="display:none;background:var(--bg-card);border-bottom:1px solid var(--border);padding:10px 32px;font-size:.72rem;color:var(--text-secondary);font-family:var(--mono)">
-  <span style="color:var(--text-muted);margin-right:16px">Прогноз при текущих I/A:</span>
-  <span style="margin-right:16px">SWE-bench: <b id="omSWE" style="color:var(--accent)">—</b></span>
-  <span style="margin-right:16px">ARC-AGI: <b id="omARC" style="color:var(--accent)">—</b></span>
-  <span style="margin-right:16px">Автономность: <b id="omHorizon" style="color:var(--orange)">—</b></span>
-  <span>Стоимость 1M токенов: <b id="omCost" style="color:var(--green)">—</b></span>
+  <span style="color:var(--text-muted);margin-right:16px" data-i18n="obs_current">Прогноз при текущих I/A:</span>
+  <span style="margin-right:16px"><span data-i18n="obs_swe">SWE-bench</span>: <b id="omSWE" style="color:var(--accent)">—</b></span>
+  <span style="margin-right:16px"><span data-i18n="obs_arc">ARC-AGI</span>: <b id="omARC" style="color:var(--accent)">—</b></span>
+  <span style="margin-right:16px"><span data-i18n="obs_horizon">Автономность</span>: <b id="omHorizon" style="color:var(--orange)">—</b></span>
+  <span><span data-i18n="obs_cost">Стоимость 1M токенов</span>: <b id="omCost" style="color:var(--green)">—</b></span>
 </div>
 
 <!-- ===== v3 PARAMS ===== -->
@@ -683,43 +683,51 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 <div style="padding:0 32px;max-width:1100px;margin:0 auto;width:100%">
   <div class="about" id="aboutSection">
     <h2 data-i18n="about_title">О модели v3</h2>
-    <p data-i18n="about_intro">Модель v3 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных Artificial Analysis. Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения AA обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге.</p>
+    <p data-i18n="about_intro">Модель v3 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных Artificial Analysis. Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения AA обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге. Панель Expert Sandbox позволяет настраивать 18+ параметров модели и проверять гипотезы о будущем в реальном времени.</p>
     <div class="sec-label" data-i18n="defs_label">Архитектура модели</div>
     <div class="fgrid">
       <div class="fc">
         <h4 data-i18n="arch_tracker_title">Байесовский трекер</h4>
-        <p data-i18n="arch_tracker_desc">1000 частиц с априорными распределениями на hw_months, algo_months, agency_ceiling. Каждое наблюдение AA (Intelligence + Agentic) обновляет веса через гауссово правдоподобие. ESS-ресэмплинг предотвращает вырождение.</p>
+        <p data-i18n="arch_tracker_desc">1000 частиц с настраиваемыми априорными распределениями: hw_months, algo_months, agency_ceiling (mean/std через Expert Sandbox). Каждое наблюдение AA (Intelligence + Agentic) обновляет веса через гауссово правдоподобие. ESS-ресэмплинг предотвращает вырождение. Поддержка трёх World Models: Cascade, Hard Wall, Slow Takeoff.</p>
       </div>
       <div class="fc">
         <h4 data-i18n="arch_dims_title">Два измерения интеллекта</h4>
-        <p data-i18n="arch_dims_desc">Reasoning (slope 0.35, ceiling 15.0) и Agency (slope 0.25, ceiling — параметр частицы). Capability = min(Reasoning, Agency). Оба растут логистически от log(FLOPs), но упираются в потолки.</p>
+        <p data-i18n="arch_dims_desc">Reasoning (slope 0.35, ceiling настраивается) и Agency (slope 0.25, ceiling — параметр частицы). Capability = min(Reasoning, Agency). Оба растут логистически от log(FLOPs), но упираются в потолки. Эпистемическая неопределённость: каждая частица верит в свою «физику мира».</p>
       </div>
       <div class="fc">
         <h4 data-i18n="arch_paradigm_title">Смена парадигмы</h4>
-        <p data-i18n="arch_paradigm_desc">После 2026.30 каждый месяц с вероятностью ~1.7% происходит сдвиг: оба потолка ×3, базовый уровень FLOPs сдвигается. Это позволяет модели преодолеть текущие ограничения трансформеров.</p>
+        <p data-i18n="arch_paradigm_desc">Переход происходит при saturation > threshold (настраивается) + compute overhang bonus. Убывающая отдача: 1-й сдвиг ×3.0, 2-й ×2.5... World Models модифицируют вероятность: Hard Wall подавляет сдвиги, Slow Takeoff даёт огромный первый скачок.</p>
       </div>
       <div class="fc">
         <h4 data-i18n="arch_rsi_title">RSI — рекурсивное самоулучшение</h4>
-        <p data-i18n="arch_rsi_desc">При capability >= 5.0 включается обратная связь: рост алгоритмов ускоряется пропорционально текущему уровню. Чем выше агентность — тем быстрее прогресс. Это ключевой механизм для достижения ASI.</p>
+        <p data-i18n="arch_rsi_desc">Запускается при reasoning >= 8.0 AND agency >= 8.0 (настраивается). Базовый потенциал растёт от (cap - threshold)^1.2, но ограничивается координационным трением: 1/(1 + friction * max(0, cap-10)). Множитель RSI масштабирует эффект. Максимум 2.0.</p>
       </div>
       <div class="fc">
         <h4 data-i18n="arch_bottlenecks_title">Бутылочные горлышки</h4>
-        <p data-i18n="arch_bottlenecks_desc">Экономическая стена: если Reasoning обгоняет Agency более чем на 2.0, инвестиции падают. Энергетическая стена: с 2026 года дефицит инфраструктуры тормозит рост compute.</p>
+        <p data-i18n="arch_bottlenecks_desc">Экономическая стена: если Reasoning обгоняет Agency > 2.0 — инвестиции экспоненциально падают. GPU-пузырь может лопнуть при agency < 4. Alignment incident замораживает масштабирование на 1.5 года. Физический предел роста hardware (maxPhysicalHwGrowth) — даже сверхразум не строит fabs мгновенно.</p>
       </div>
       <div class="fc">
         <h4 data-i18n="arch_mc_title">Monte Carlo прогноз</h4>
-        <p data-i18n="arch_mc_desc">3000 прогонов из апостериорного распределения. Каждый прогон — симуляция от 2023 до 2068 года с месячным шагом. Результат: распределение лет до AGI (cap >= 10) и ASI (cap >= 100).</p>
+        <p data-i18n="arch_mc_desc">N прогонов из апостериорного распределения (500–10000). Каждый прогон — симуляция от 2023 до 2068+ с месячным шагом. Шоки: data wall, alignment incident, GPU bubble burst. Результат: распределение лет до AGI (cap >= 10) и ASI (cap >= 100).</p>
+      </div>
+      <div class="fc">
+        <h4 data-i18n="arch_expert_title">Expert Sandbox</h4>
+        <p data-i18n="arch_expert_desc">18+ настраиваемых параметров: априорные допущения (agency mean/std), пороги RSI, координационное трение, физический предел hardware, compute overhang, вероятности World Models, вес autonomy в бенчмарках. Превращает модель из прогноза в эпистемологический симулятор.</p>
+      </div>
+      <div class="fc">
+        <h4 data-i18n="arch_shocks_title">Шоки и Black Swans</h4>
+        <p data-i18n="arch_shocks_desc">Типы шоков: Data Wall (исчерпание данных, тормозит алгоритмы), Alignment Incident (регуляторная заморозка), GPU Bubble Burst (обвал инвестиций), AI Winter (разрыв reasoning-agency). Вероятности зависят от текущего состояния системы.</p>
       </div>
     </div>
   </div>
 
   <div class="about" id="defsSection">
     <div class="sec-label" data-i18n="defs_label">Определения: что такое AGI и ASI в этой модели</div>
-    <p style="font-size:.82rem;color:#9898b0;margin-bottom:14px" data-i18n="defs_intro">В модели v2.5 используются строгие операциональные определения на основе трёхмерной шкалы (Reasoning, Agency, Reliability), где текущие передовые модели начала 2026 года = 1.0.</p>
+    <p style="font-size:.82rem;color:#9898b0;margin-bottom:14px" data-i18n="defs_intro">В модели v3 используются строгие операциональные определения на основе двухмерной шкалы (Reasoning, Agency). Шкала логарифмическая: GPT-4 (конец 2023) ~ 3.0 по Reasoning и ~0.2 по Agency, текущие модели середины 2026 ~ 6.5 по Reasoning и ~6.5 по Agency. AGI = 10.0, ASI = 100.0.</p>
     <div class="defs-grid">
       <div class="def-card">
         <h4>🤖 <span data-i18n="agi_def_title">AGI — Artificial General Intelligence</span></h4>
-        <div class="score" style="color:var(--orange)" data-i18n="agi_def_score">min(Reasoning, Agency, Reliability) = 10.0</div>
+        <div class="score" style="color:var(--orange)" data-i18n="agi_def_score">min(Reasoning, Agency) = 10.0</div>
         <p data-i18n="agi_def_text1">Автономный ИИ-исследователь уровня PhD. Демонстрирует истинное обобщение, способен к сложному планированию и надёжной работе (>99%). Может автономно проводить эксперименты, писать продакшен-код и находить ошибки в чужих статьях.</p>
         <p data-i18n="agi_def_text2" style="color:#666680;font-size:.72rem;margin-top:6px">Роль в модели: триггер для RSI и геополитической реакции. Без достаточного уровня Agency невозможен.</p>
       </div>
