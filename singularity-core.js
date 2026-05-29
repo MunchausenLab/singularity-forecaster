@@ -1111,7 +1111,7 @@ const LANG = {
     // Loading
     loading:'Байесовское прогнозирование v3...',
     // Swarm
-    swarm_title:'Анимация: «Сжатие роя»',
+    swarm_title:'Визуализация обучения и прогноза',
     swarm_desc:'Интерактивная визуализация байесовского обучения. Режим «Обучение» показывает как наблюдения убивают слабые гипотезы. Режим «Прогноз» разворачивает выжившие гипотезы в предсказания AGI/ASI.',
     swarm_play:'Запуск', swarm_reset:'Сброс', swarm_hint:'Нажмите «Запуск» или перетаскивайте ползунок',
     swarm_mode_learn:'Обучение', swarm_mode_forecast:'Прогноз',
@@ -1251,7 +1251,7 @@ const LANG = {
     // Loading
     loading:'Running Bayesian v3 forecast...',
     // Swarm
-    swarm_title:'Bayesian Particle Swarm',
+    swarm_title:'Learning & Forecast Visualization',
     swarm_desc:'Interactive visualization of Bayesian learning. "Learning" mode shows how observations kill weak hypotheses. "Forecast" mode unfolds surviving hypotheses into AGI/ASI predictions.',
     swarm_play:'Play', swarm_reset:'Reset', swarm_hint:'Press Play or drag the slider',
     swarm_mode_learn:'Learning', swarm_mode_forecast:'Forecast',
@@ -1314,6 +1314,7 @@ function swarmInit() {
   swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
   swarm.weights = Array.from(swarm.tracker.weights);
   swarmDraw();
+  swarmStartLive();
 }
 
 function swarmSetMode(m) {
@@ -1628,23 +1629,25 @@ function swarmPlay() {
       swarm.forecastAnimating = false;
       clearTimeout(swarm.forecastRafId);
       document.getElementById('swarmPlayBtn').querySelector('span').textContent = LANG[window._lang||'ru'].swarm_play_forecast || 'Анимация';
+      swarmStartLive(); // resume live updates when stopped
       return;
     }
     swarm.forecastAnimating = true;
+    swarmStopLive(); // pause live during animation
     document.getElementById('swarmPlayBtn').querySelector('span').textContent = '⏸';
-    // Reset ASI animation too
     if (swarm.asiAnimating) { swarm.asiAnimating = false; clearTimeout(swarm.asiRafId); }
     let year = 2020;
     const step = () => {
       if (!swarm.forecastAnimating || year > 2068) {
         swarm.forecastAnimating = false;
         document.getElementById('swarmPlayBtn').querySelector('span').textContent = LANG[window._lang||'ru'].swarm_play_forecast || 'Анимация';
+        swarmStartLive();
         return;
       }
       swarm.forecastSliderMax = year;
       swarmDraw();
       year++;
-      swarm.forecastRafId = setTimeout(step, 150);
+      swarm.forecastRafId = setTimeout(step, 250);
     };
     step();
   } else {
@@ -1653,15 +1656,18 @@ function swarmPlay() {
       swarm.animating = false;
       clearTimeout(swarm.rafId);
       document.getElementById('swarmPlayBtn').querySelector('span').textContent = LANG[window._lang||'ru'].swarm_play || 'Запуск';
+      swarmStartLive();
       return;
     }
     if (swarm.obsIdx >= AA_FRONTIER_DATA.length) { swarm.obsIdx = 0; swarmInit(); }
     swarm.animating = true;
+    swarmStopLive();
     document.getElementById('swarmPlayBtn').querySelector('span').textContent = '⏸';
     function step() {
       if (!swarm.animating || swarm.obsIdx >= AA_FRONTIER_DATA.length) {
         swarm.animating = false;
         document.getElementById('swarmPlayBtn').querySelector('span').textContent = LANG[window._lang||'ru'].swarm_play || 'Запуск';
+        swarmStartLive();
         return;
       }
       swarm.obsIdx++;
@@ -1669,7 +1675,7 @@ function swarmPlay() {
       swarm.weights = Array.from(swarm.tracker.weights);
       swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
       swarmDraw();
-      swarm.rafId = setTimeout(step, 800);
+      swarm.rafId = setTimeout(step, 250);
     }
     step();
   }
@@ -1678,11 +1684,27 @@ function swarmPlay() {
 function swarmReset() {
   swarm.animating = false; clearTimeout(swarm.rafId);
   swarm.forecastAnimating = false; clearTimeout(swarm.forecastRafId);
+  swarmStopLive();
   swarm.obsIdx = 0; swarmInit();
   document.getElementById('swarmPlayBtn').innerHTML = '<span>' + (LANG[window._lang||'ru'].swarm_play||'Запуск') + '</span>';
   const playFBtn = document.getElementById('swarmPlayForecastBtn');
   if (playFBtn) playFBtn.innerHTML = '<span>' + (LANG[window._lang||'ru'].swarm_play_forecast||'Анимация') + '</span>';
   document.getElementById('swarmOverlay').style.opacity = '0';
+  swarmStartLive();
+}
+
+// Live background redraw every 250ms (no learning progress)
+let _swarmLiveTimer = null;
+function swarmStartLive() {
+  swarmStopLive();
+  _swarmLiveTimer = setInterval(() => {
+    if (!swarm.animating && !swarm.forecastAnimating) {
+      swarmDraw();
+    }
+  }, 250);
+}
+function swarmStopLive() {
+  if (_swarmLiveTimer) { clearInterval(_swarmLiveTimer); _swarmLiveTimer = null; }
 }
 
 // ===== LIVE SWARM: AGI (blue) + ASI (red) side by side =====
