@@ -629,24 +629,24 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <div class="desc-card">
     <span class="card-tag" style="background:rgba(88,166,255,.15);color:var(--accent)">Swarm Learning</span>
     <div class="desc-body">
-      <p>Interactive visualization of real-time Bayesian learning. Each point is a world hypothesis (particle): hardware growth rate <em>hw_months</em> and agency ceiling <em>agency_ceiling</em>.</p>
-      <p><b>&quot;Learning&quot; mode:</b> the slider applies AA observations one by one. At each observation, weights are recalculated:</p>
+      <p data-i18n="swarm_learn_p1">Интерактивная визуализация байесовского обучения в реальном времени. Каждая точка — гипотеза о мире (частица): скорость роста железа <em>hw_months</em> и потолок агентности <em>agency_ceiling</em>.</p>
+      <p data-i18n="swarm_learn_p2"><b>Режим «Обучение» (Learn):</b> ползунок прикладывает наблюдения AA одно за другим. При каждом наблюдении пересчитываются веса:</p>
       <div class="formula">log w<sub>i</sub> &prop; &minus;0.5 &times; ((I<sub>obs</sub> &minus; R<sub>i</sub>)/&sigma;)<sup>2</sup> &minus; 0.5 &times; ((A<sub>obs</sub> &minus; Ag<sub>i</sub>)/&sigma;)<sup>2</sup></div>
-      <p>where R<sub>i</sub> and Ag<sub>i</sub> are particle i predictions for the observation year, &sigma; is the noise-free likelihood. Particles whose predictions are far from the observation lose weight exponentially.</p>
-      <p><b>&quot;Forecast&quot; mode:</b> all observations applied. The slider filters hypotheses by AGI year &mdash; showing which particles predict AGI by the selected year.</p>
-      <p><b>Visual language:</b> bright areas = high weight density; orange circle = swarm median; red = current observation. At rest the swarm &quot;breathes&quot; &mdash; rebuilds from a new MC run every 0.25s.</p>
-      <p><b>What affects it:</b> number and accuracy of AA observations, philosophical priors (priorAgencyMean/Std in Expert Sandbox), the particle composition itself.</p></div>
+      <p data-i18n="swarm_learn_p3">где R<sub>i</sub> и Ag<sub>i</sub> — предсказания частицы i на год наблюдения, &sigma; — нешумящее правдоподобие. Частицы, чьи предсказания далеки от наблюдения, экспоненциально теряют вес.</p>
+      <p data-i18n="swarm_learn_p4"><b>Режим «Прогноз» (Forecast):</b> все наблюдения применены. Ползунок фильтрует гипотезы по году AGI — показывая, какие частицы предсказывают AGI до выбранного года.</p>
+      <p data-i18n="swarm_learn_p5"><b>Визуальный язык:</b> яркие области = высокая плотность весов; оранжевый круг = медиана роя; красный = текущее наблюдение. В режиме покой рой «дышит» — перестраивается из нового MC прогона каждые 0.25 сек.</p>
+      <p data-i18n="swarm_learn_p6"><b>Что влияет:</b> количество и точность наблюдений AA, априорные допущения (priorAgencyMean/Std в Expert Sandbox), сам состав частиц.</p></div>
   </div>
 
   <!-- ROW 2: Live Swarm (описание | график) -->
   <div class="desc-card">
     <span class="card-tag" style="background:rgba(239,68,68,.15);color:var(--real-time)">Live Swarm</span>
     <div class="desc-body">
-      <p>Two parallel simulations &mdash; AGI and ASI &mdash; updating every 0.25s from a new Monte Carlo run. Shows the &quot;live&quot; posterior without needing to press Play.</p>
-      <p><b>Points:</b> each particle = one <code>runMonteCarloForecast(500)</code> run. Color encodes AGI/ASI year: blue = early, yellow = mid, red = late. Opacity = particle weight.</p>
-      <p><b>AGI/ASI year formula:</b> for each of 500 runs, a trajectory is modeled from BASE_YEAR (2023) to 2068 at monthly resolution. AGI = first year where <code>cap &ge; 10.0</code>. ASI = first year where <code>cap &ge; 100.0</code>.</p>
-      <p>Stats on the right: median, P10&ndash;P90, particle count. Updates in real time &mdash; you can see posterior variance.</p>
-      <p><b>What affects it:</b> current observation set, particle weights, MC run randomness. Stable picture = model confidence. Chaos = high uncertainty.</p></div>
+      <p data-i18n="live_swarm_p1">Две параллельные симуляции — AGI и ASI — обновляются каждые 0.25 сек из нового прогона Monte Carlo. Показывает «живой» posterior без необходимости нажимать «Запуск».</p>
+      <p data-i18n="live_swarm_p2"><b>Точки:</b> каждая частица = один прогон <code>runMonteCarloForecast(500)</code>. Цвет кодирует год AGI/ASI: голубой = ранний, жёлтый = средний, красный = поздний. Прозрачность = вес частицы.</p>
+      <p data-i18n="live_swarm_p3"><b>Формула AGI/ASI year:</b> для каждого из 500 прогонов моделируется траектория от BASE_YEAR (2023) до 2068 с месячным шагом. AGI = первый год, где <code>cap &ge; 10.0</code>. ASI = первый год, где <code>cap &ge; 100.0</code>.</p>
+      <p data-i18n="live_swarm_p4">Статистика справа: медиана, P10–P90, количество частиц. Обновляется в реальном времени — видна дисперсия posterior.</p>
+      <p data-i18n="live_swarm_p5"><b>Что влияет:</b> текущий набор наблюдений, веса частиц, случайность MC прогона. Стабильность картинки ← уверенность модели. Хаотичность ← высокая неопределённость.</p></div>
   </div>
 
   <div class="card" id="liveSwarmSection">
@@ -681,23 +681,23 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <div class="desc-card">
     <span class="card-tag">Scenario Distribution</span>
     <div class="desc-body">
-      <p>Results of 3000 Monte Carlo runs from the posterior distribution. X-axis = year, Y-axis = number of runs where AGI/ASI is reached in that year.</p>
-      <p><b>Key equation:</b> each run is sampled from particle weights (systematic resampling), then a full trajectory to 2068 is simulated:</p>
-      <div class="formula">cap(t) = min(R(t), Ag(t)), where R(t) = f(log FLOPs(t)), Ag(t) = g(log FLOPs(t))</div>
-      <p><b>Histogram peak</b> = most likely year. Wide distribution = high uncertainty. Bimodality = two competing scenarios (e.g., &quot;fast breakthrough&quot; vs &quot;stagnation&quot;).</p>
-      <p><b>What shifts the histogram:</b> new AA observations (via Bayesian weight update), Expert Sandbox parameters (RSI thresholds, paradigms, ceilings), particle count.</p></div>
+      <p data-i18n="hist_p1">Результат 3000 прогонов Monte Carlo из апостериорного распределения. По оси X — год, по Y — количество прогонов, в которых AGI/ASI достигнут в этот год.</p>
+      <p data-i18n="hist_p2"><b>Ключевое уравнение:</b> каждый прогон выбирается из весов частиц (systematic resampling), затем симулируется полная траектория до 2068:</p>
+      <div class="formula">cap(t) = min(R(t), Ag(t)), где R(t) = f(log FLOPs(t)), Ag(t) = g(log FLOPs(t))</div>
+      <p data-i18n="hist_p3"><b>Пик гистограммы</b> = наиболее вероятный год. Широкое распределение = высокая неопределённость. Бимодальность = два конкурирующих сценария (например, «быстрый прорыв» vs «стагнация»).</p>
+      <p data-i18n="hist_p4"><b>Что сдвигает гистограмму:</b> новые наблюдения AA (через байесовское обновление весов), параметры Expert Sandbox (пороги RSI, парадигмы, потолки), количество частиц.</p></div>
   </div>
 
   <!-- ROW 4: Кумулятивная (описание | график) -->
   <div class="desc-card">
     <span class="card-tag">Cumulative Probability</span>
     <div class="desc-body">
-      <p>Cumulative distribution function: P(AGI &le; X) and P(ASI &le; X). Answers the question &quot;what is the probability AGI happens no later than year X?&quot;</p>
-      <p><b>Computed from</b> the same 3000 runs. For each year T:</p>
-      <div class="formula">P(AGI &le; T) = (# runs where AGI_year &le; T) / (total runs) &times; 100%</div>
-      <p><b>Steep step</b> = forecasts concentrated in a narrow window. <b>Plateau</b> = bottleneck (data wall, energy, regulation). <b>Sharp jump</b> = nearly all particles converge on one scenario.</p>
-      <p><b>ASI curve</b> always lies to the right of AGI &mdash; ASI requires cap &ge; 100. Distance between curves = time between AGI and ASI.</p>
-      <p><b>What affects it:</b> same factors as the histogram. The curves complement each other &mdash; histogram shows &quot;where is the peak&quot;, cumulative shows &quot;what is the probability by year X&quot;.</p></div>
+      <p data-i18n="cum_p1">Накопленная функция распределения: P(AGI &le; X) и P(ASI &le; X). Отвечает на вопрос «какова вероятность, что AGI случится не позднее года X?»</p>
+      <p data-i18n="cum_p2"><b>Вычисление:</b> из тех же 3000 прогонов. Для каждого года T:</p>
+      <div class="formula">P(AGI &le; T) = (# прогонов, где AGI_year &le; T) / (всего прогонов) &times; 100%</div>
+      <p data-i18n="cum_p3"><b>Ступенчатый подъём</b> = концентрация прогнозов в узком окне. <b>Плато</b> = затор (data wall, энергетика, регуляция). <b>Резкий скачок</b> = почти все частицы сходятся в одном сценарии.</p>
+      <p data-i18n="cum_p4"><b>ASI-кривая</b> всегда лежит правее AGI — ASI требует cap &ge; 100. Расстояние между кривыми = время между AGI и ASI.</p>
+      <p data-i18n="cum_p5"><b>Что влияет:</b> те же факторы, что и гистограмма. Кривые дополняют друг друга — гистограмма показывает «где пик», кумулятивная — «какова вероятность к году X».</p></div>
   </div>
 
   <div class="card">
@@ -722,26 +722,26 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <div class="desc-card">
     <span class="card-tag" style="background:rgba(6,182,212,.15);color:var(--cyan)">Sensitivity Map</span>
     <div class="desc-body">
-      <p>Sensitivity map: how the forecast depends on the last Intelligence &times; Agentic observation. Cell (i,j) = median AGI year if the last observation = (Intel=i, Agentic=j).</p>
-      <p><b>Computation:</b> for each (i,j) pair from grid [40,45,...,85] &times; [10,20,...,100], <code>runSensitivityMatrix()</code> is executed &mdash; takes the current tracker, clones particles, replaces the last observation with (i,j), runs MC.</p>
-      <p><b>Color interpretation:</b> blue = early AGI (model &quot;believes&quot; we&apos;re close); red = late AGI (far away). Gradients show which parameter dominates:</p>
+      <p data-i18n="sens_p1">Карта чувствительности: как прогноз зависит от последнего наблюдения Intelligence &times; Agentic. Ячейка (i,j) = медианный год AGI если последнее наблюдение = (Intel=i, Agentic=j).</p>
+      <p data-i18n="sens_p2"><b>Вычисление:</b> для каждой пары (i,j) из сетки [40,45,...,85] &times; [10,20,...,100] выполняется <code>runSensitivityMatrix()</code> — берётся текущий tracker, клонируются частицы, заменяется последнее наблюдение на (i,j), запускается MC.</p>
+      <p data-i18n="sens_p3"><b>Интерпретация цвета:</b> синий = ранний AGI (модель «верит» что мы близко); красный = поздний AGI (далеко). Градиенты показывают, какой параметр доминирует:</p>
       <ul>
-        <li>Vertical gradient &rarr; Intelligence dominates</li>
-        <li>Horizontal gradient &rarr; Agency dominates</li>
-        <li>Diagonal &rarr; both parameters are equally important</li>
+        <li data-i18n="sens_li1">Вертикальный градиент → доминирует Intelligence</li>
+        <li data-i18n="sens_li2">Горизонтальный градиент → доминирует Agency</li>
+        <li data-i18n="sens_li3">Диагональный → оба параметра равноценны</li>
       </ul>
-      <p><b>What affects it:</b> current posterior (after all observations), model architecture (slope reasoning/agency, ceilings). See &mdash; a 1-point shift along which axis moves the forecast most.</p></div>
+      <p data-i18n="sens_p4"><b>Что влияет:</b> текущий posterior (после всех наблюдений), архитектура модели (slope reasoning/agency, потолки). Смотрите — сдвиг на 1 пункт по какой оси сильнее всего сдвигает прогноз.</p></div>
   </div>
 
   <!-- ROW 6: Веер сценариев (описание | график) -->
   <div class="desc-card">
     <span class="card-tag" style="background:rgba(34,197,94,.15);color:var(--green)">Scenario Fan</span>
     <div class="desc-body">
-      <p>30 random runs from the posterior, overlaid semi-transparently. Shows the spread of possible capability paths from 2026 to 2050 (logarithmic scale).</p>
-      <p><b>Each run:</b> a random particle (by weights) is simulated to 2050 at monthly resolution. At each step: paradigm shift, RSI, economic bottlenecks.</p>
+      <p data-i18n="fan_p1">30 случайных прогонов из posterior, наложенных полупрозрачно. Показывает разброс возможных путей capability от 2026 до 2050 года (логарифмическая шкала).</p>
+      <p data-i18n="fan_p2"><b>Каждый прогон:</b> случайная частица (по весам) симулируется до 2050 с месячным шагом. На каждом шаге: paradigm shift, RSI, экономические бутылочные горлышка.</p>
       <div class="formula">cap(t) = min(R<sub>inf</sub>(t), Ag<sub>inf</sub>(t)) + RSI_bonus(t) + paradigm_shift(t)</div>
-      <p><b>Dense bundles</b> = scenarios converge. <b>Spread</b> = high uncertainty. <b>Horizontal lines cap=10 and cap=100:</b> AGI and ASI thresholds respectively.</p>
-      <p><b>What shapes the fan:</b><br>&bull; Width &larr; differences in hw_months, algo_months between particles<br>&bull; Slope &larr; FLOPs-scaling (hwK and algoK)<br>&bull; Bends &larr; paradigm shifts, RSI onset, economic walls</p></div>
+      <p data-i18n="fan_p3"><b>Плотные пучки</b> = сценарии сходятся. <b>Разброс</b> = высокая неопределённость. <b>Горизонтальные линии cap=10 и cap=100:</b> пороги AGI и ASI соответственно.</p>
+      <p data-i18n="fan_p4"><b>Что формирует веер:</b><br>&bull; Ширина ← различие в hw_months, algo_months между частицами<br>&bull; Наклон ← FLOPs-scaling (hwK и algoK)<br>&bull; Изгибы ← paradigm shifts, RSI onset, экономические стены</p></div>
   </div>
 
   <div class="card">
@@ -766,26 +766,26 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <div class="desc-card">
     <span class="card-tag" style="background:rgba(240,136,62,.15);color:var(--orange)">Growth Decomposition</span>
     <div class="desc-body">
-      <p>Stacked area: breakdown of total capability into 4 components. Shows <em>what</em> drives progress at each point in time.</p>
-      <p><b>Components:</b></p>
+      <p data-i18n="decomp_p1">Stacked area: разбивка суммарной capability на 4 компоненты. Показывает, <em>что</em> движет прогрессом в каждый момент времени.</p>
+      <p data-i18n="decomp_p2"><b>Компоненты:</b></p>
       <ul>
-        <li><b style="color:#58a6ff">&bull; Hardware</b> &mdash; log FLOPs growth: FLOPs(t) = FLOPs<sub>0</sub> &times; 2<sup>t/hw_months</sup></li>
-        <li><b style="color:#22c55e">&bull; Algorithms</b> &mdash; algorithmic progress: algo(t) = algo<sub>0</sub> &times; 2<sup>t/algo_months</sup></li>
-        <li><b style="color:#a78bfa">&bull; Paradigm shift</b> &mdash; paradigm change: &times;3.0, &times;2.5, &times;2.0... (diminishing returns)</li>
-        <li><b style="color:#ef4444">&bull; RSI feedback</b> &mdash; recursive self-improvement: (cap &minus; threshold)<sup>1.2</sup> &times; friction</li>
+        <li><b style="color:#58a6ff">• Hardware</b> &mdash; log FLOPs рост: FLOPs(t) = FLOPs<sub>0</sub> &times; 2<sup>t/hw_months</sup></li>
+        <li><b style="color:#22c55e">• Algorithms</b> &mdash; алгоритмический прогресс: algo(t) = algo<sub>0</sub> &times; 2<sup>t/algo_months</sup></li>
+        <li><b style="color:#a78bfa">• Paradigm shift</b> &mdash; смена парадигмы: &times;3.0, &times;2.5, &times;2.0... (убывающая отдача)</li>
+        <li><b style="color:#ef4444">• RSI feedback</b> &mdash; рекурсивное самоулучшение: (cap &minus; threshold)<sup>1.2</sup> &times; friction</li>
       </ul>
-      <p>Computed via <code>runDecomposition()</code> &mdash; averaging over all particles with weights. The transition from &quot;hardware&quot; to &quot;algorithms&quot; to &quot;RSI&quot; = the path to singularity.</p></div>
+      <p data-i18n="decomp_p3">Вычисляется через <code>runDecomposition()</code> &mdash; усреднение по всем частицам с весами. Переход от «железа» к «алгоритмам» к «RSI» = путь к сингулярности.</p></div>
   </div>
 
   <!-- ROW 8: Сфера Сингулярности (описание | график) -->
   <div class="desc-card">
     <span class="card-tag" style="background:rgba(167,139,250,.15);color:var(--purple)">Sphere of Singularity</span>
     <div class="desc-body">
-      <p>Animated visualization of the AGI/ASI distribution. Each particle = one MC run. Flies from center (2026) and freezes at its AGI year orbit.</p>
-      <p><b>Metaphor:</b> dense rings = high probability (many particles predict AGI in that year). Rare dots = unlikely scenarios.</p>
-      <p><b>Mechanics:</b> on launch, particles &quot;take off&quot; from the center with a delay proportional to AGI year. Orange orbits = AGI, red = ASI. Distance from center = particle weight.</p>
+      <p data-i18n="eh_p1">Анимированная визуализация распределения AGI/ASI. Каждая частица = один MC прогон. Вылетает из центра (2026) и застывает на орбите своего года AGI.</p>
+      <p data-i18n="eh_p2"><b>Метафора:</b> плотные кольца = высокая вероятность (много частиц предсказывают AGI в этот год). Редкие точки = маловероятные сценарии.</p>
+      <p data-i18n="eh_p3"><b>Механика:</b> при запуске частицы «взлетают» из центра с задержкой, пропорциональной году AGI. Оранжевые орбиты = AGI, красные = ASI. Расстояние от центр = вес частицы.</p>
       <div class="formula">&theta;(i) = 2&pi; &times; i / N,  r(i) = year_AGI(i),  &alpha;(i) = weight(i)</div>
-      <p><b>What affects it:</b> AGI/ASI year distribution from posterior, MC run randomness. Symmetric sphere = one clear peak. Fractal structure = many competing scenarios. P(AGI by 2068), AGI median &mdash; updated in real time.</p></div>
+      <p data-i18n="eh_p4"><b>Что влияет:</b> распределение AGI/ASI лет из posterior, случайность MC прогона. Симметричная сфера = один чёткий пик. Фрактальная структура = множество конкурирующих сценариев. P(AGI к 2068), медиана AGI — обновляется в реальном времени.</p></div>
   </div>
 
   <div class="card" id="eventHorizonSection">
