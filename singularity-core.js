@@ -2378,24 +2378,6 @@ function expertWorldUpdate() {
 function expertResetDefaults() {
   // Reset to defaults from single source of truth
   Object.assign(EXPERT_CONFIG, JSON.parse(JSON.stringify(DEFAULT_EXPERT_CONFIG)));
-    ceilingReasoningBase: 15.0,
-    hypeGracePeriod: 2.5,
-    saturationThreshold: 0.7,
-    overhangShiftMultiplier: 0.2,
-    rsiMultiplier: 1.0,
-    rsiTriggerReasoning: 8.0,
-    rsiTriggerAgency: 8.0,
-    hwCoDesignBonus: 1.5,
-    coordinationFriction: 0.05,
-    maxPhysicalHwGrowth: 1.5,
-    bubbleBurstRisk: 0.20,
-    alignmentCooldown: 1.5,
-    maxCapitalMultiplier: 2.5,
-    worldModels: { cascade: 0.60, hardWall: 0.25, slowTakeoff: 0.15 },
-    priorAgencyMean: 8.0,
-    priorAgencyStd: 3.0,
-    toolUseVsAutonomyWeight: 0.6
-  });
   // Обновить все UI элементы
   const fields = [
     'ceilingReasoningBase', 'hypeGracePeriod', 'saturationThreshold', 'overhangShiftMultiplier',
