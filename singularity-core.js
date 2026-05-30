@@ -2419,10 +2419,16 @@ let _expertPanelOpen = false;
 function toggleExpertPanel() {
   const panel = document.getElementById('expertPanel');
   const arrow = document.getElementById('expertArrow');
+
   if (panel.classList.contains('collapsed')) {
     // Открыть
     panel.classList.remove('collapsed');
     arrow.classList.add('open');
+
+    // Скролл к панели после того, как она раскроется
+    requestAnimationFrame(() => {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   } else {
     // Закрыть
     panel.classList.add('collapsed');
