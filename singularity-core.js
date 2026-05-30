@@ -5,7 +5,7 @@
 function sigmoid(x) { return 1.0 / (1.0 + Math.exp(-Math.max(-30, Math.min(30, x)))); }
 function randnRange(mean, std) { const u1 = Math.random() || Number.EPSILON, u2 = Math.random(); return mean + std * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2); }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-function percentile(arr, p) { const sorted = arr.slice().sort((a, b) => a - b); const idx = clamp(Math.floor(p / 100 * sorted.length), 0, sorted.length - 1); return sorted[idx]; }
+function percentile(arr, p) { if (!arr || arr.length === 0) return undefined; const sorted = arr.slice().sort((a, b) => a - b); const idx = clamp(Math.floor(p / 100 * sorted.length), 0, sorted.length - 1); return sorted[idx]; }
 function cdf(list, x) { const c = list.filter(v => isFinite(v) && v <= x).length; return list.length ? (c / list.length) * 100 : 0; }
 
 // Перевод латентных переменных (reasoning, agency) в наблюдаемые бенчмарки
@@ -85,7 +85,7 @@ function createV3Config() {
   return {
     BASE_YEAR: 2023.0,          // Якорь (уровень GPT-4)
     BASE_LOG_FLOPS: 24.5,       // Начальные FLOPs в 2023
-    CURRENT_YEAR: 2026.30,      // Откуда рисуем графики прогноза
+    CURRENT_YEAR: new Date().getFullYear() + (new Date().getMonth() / 12), // Динамический текущий год
     THRESHOLDS: { agi: 10.0, asi: 100.0 },
     DIMENSIONS: {
       reasoning: { slope: 0.35, ceiling: EXPERT_CONFIG.ceilingReasoningBase },
@@ -243,7 +243,7 @@ class BayesianTracker {
     for (let i = 0; i < this.n; i++) this.weights[i] /= sum;
 
     const ess = 1.0 / this.weights.reduce((a, b) => a + b * b, 0);
-    if (ess < this.n * 0.5) {
+    if (ess < this.n * 0.3) {
       const newP = [], cumsum = new Float64Array(this.n);
       cumsum[0] = this.weights[0];
       for (let i = 1; i < this.n; i++) cumsum[i] = cumsum[i - 1] + this.weights[i];
@@ -813,8 +813,8 @@ function v3CheckWarning(tracker) {
   const aa = benchmarksToAA(arcVal, horizonVal);
   const tR = aa.intel / 10.0, tA = aa.agency / 10.0;
   let minDist = Infinity;
-  for (let i = 0; i < Math.min(tracker.n, 100); i++) {
-    if (tracker.weights[i] < 0.001) continue;
+  for (let i = 0; i < tracker.n; i += 10) { // Проверяем каждую 10-ю частицу
+    if (tracker.weights[i] < 1e-5) continue; // Снижаем порог веса
     const pred = v3SimulateToYear(tracker.particles[i], tracker.cfg.CURRENT_YEAR, tracker.cfg);
     const dist = Math.sqrt((tR - pred.reasoning) ** 2 + (tA - pred.agency) ** 2);
     if (dist < minDist) minDist = dist;
@@ -915,7 +915,7 @@ function updateUI(r) {
   });
 }
 
-function setVal(id, txt, cls) { const el = document.getElementById(id); el.innerHTML = txt; el.className = 'status-value ' + (cls||''); }
+function setVal(id, txt, cls) { const el = document.getElementById(id); if (el) { el.innerHTML = txt; el.className = 'status-value ' + (cls||''); } }
 function colorProb(id, val) { const el = document.getElementById(id); el.classList.remove('green','orange','red'); el.classList.add(val > 50 ? 'green' : val > 10 ? 'orange' : 'red'); }
 function yearsText(yrs) {
   if (!isFinite(yrs) || yrs > 40) return LANG[window._lang||'ru'].fY_gt;
@@ -2325,12 +2325,6 @@ function setLang(lang) {
   }
 }
 
-window.addEventListener('load', () => setLang('ru'));
-window.addEventListener('load', () => { setTimeout(ehInitCanvas, 200); setTimeout(ehDraw, 250); });
-window.addEventListener('load', () => {
-  const tracker = v3GetTracker();
-  v3UpdateUI(tracker);
-});
 // ===== EXPERT SANDBOX UI =====
 let _expertPanelOpen = false;
 
@@ -2343,6 +2337,9 @@ function toggleExpertPanel() {
 function expertUpdate(key, value) {
   value = parseFloat(value);
   EXPERT_CONFIG[key] = value;
+  if (typeof v3Tracker !== 'undefined' && v3Tracker && v3Tracker.cfg) {
+    v3Tracker.cfg.EXPERT[key] = value;
+  }
   const el = document.getElementById('ev-' + key);
   if (el) {
     el.textContent = (value % 1 === 0) ? value.toFixed(1) : value.toString();
