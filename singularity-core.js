@@ -2559,7 +2559,7 @@ function expertResetDefaults() {
 
 function expertApplyAndRun() {
   // Синхронизируем EXPERT_CONFIG с текущими значениями UI (включая world models)
-  expertWorldUpdate();
+  expertWorldSlider();
   // Сбрасываем трекер и перезапускаем
   v3ResetTracker();
   setTimeout(runSimulation, 100);
