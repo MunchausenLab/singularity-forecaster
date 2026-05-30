@@ -55,7 +55,7 @@ body{font-family:var(--font);background:var(--bg-primary);color:var(--text-prima
 /* ===== STATUS BAR ===== */
 .status-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--border);margin:0}
 .status-item{background:var(--bg-secondary);padding:16px 20px;text-align:center}
-.status-value{font-size:1.4rem;font-weight:700;font-family:var(--mono);color:var(--accent)}
+.status-value{font-size:1.1rem;font-weight:600;font-family:var(--mono);color:var(--accent)}
 .status-value.orange{color:var(--orange)}
 .status-value.red{color:var(--red)}
 .status-value.green{color:var(--green)}
@@ -151,32 +151,6 @@ body{font-family:var(--font);background:var(--bg-primary);color:var(--text-prima
   border-bottom: 1px solid var(--border);
   padding: 20px 32px;
 }
-#expertPanel.collapsed {
-  display: none !important;
-}
-.expert-toggle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  padding: 10px 32px;
-  background: var(--bg-primary);
-}
-.expert-toggle-label {
-  font-size: .78rem;
-  color: var(--purple);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .5px;
-}
-.expert-arrow {
-  font-size: .7rem;
-  color: var(--purple);
-  transition: transform .3s ease;
-  display: inline-block;
-}
-.expert-arrow.open {
-  transform: rotate(180deg);
 }
 .expert-grid {
   display: grid;
@@ -328,11 +302,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 </div>
 
 <!-- ===== EXPERT SANDBOX ===== -->
-<div class="expert-toggle" onclick="toggleExpertPanel()">
-  <span class="expert-arrow" id="expertArrow">▼</span>
-  <span class="expert-toggle-label" data-i18n="expert_toggle">Экспертные настройки</span>
-</div>
-<div class="expert-panel collapsed" id="expertPanel">
+<div class="expert-panel" id="expertPanel">
   <div class="expert-grid">
 
     <!-- ═══════════════════════════════════════════════ -->
