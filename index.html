@@ -150,17 +150,24 @@ body{font-family:var(--font);background:var(--bg-primary);color:var(--text-prima
   display: none;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
-  padding: 20px 32px;
+  padding: 0 32px 20px;
+  overflow: hidden;
+  transition: max-height .3s ease, padding .3s ease;
+  max-height: 0;
 }
 .expert-panel.open {
   display: block;
+  max-height: 5000px;
+  padding-top: 20px;
+  padding-bottom: 20px;
 }
 .expert-toggle {
   display: flex;
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  padding: 10px 0;
+  padding: 10px 32px;
+  background: var(--bg-primary);
 }
 .expert-toggle-label {
   font-size: .78rem;
@@ -173,16 +180,20 @@ body{font-family:var(--font);background:var(--bg-primary);color:var(--text-prima
   font-size: .7rem;
   color: var(--purple);
   transition: transform .3s ease;
+  display: inline-block;
 }
 .expert-arrow.open {
   transform: rotate(180deg);
 }
 .expert-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 16px;
-  margin-top: 16px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
 }
+@media(max-width:1400px){ .expert-grid{grid-template-columns:repeat(4,1fr)} }
+@media(max-width:1100px){ .expert-grid{grid-template-columns:repeat(3,1fr)} }
+@media(max-width:800px){ .expert-grid{grid-template-columns:repeat(2,1fr)} }
+@media(max-width:500px){ .expert-grid{grid-template-columns:1fr} }
 .expert-group {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -242,41 +253,17 @@ body{font-family:var(--font);background:var(--bg-primary);color:var(--text-prima
   align-items: center;
   flex-wrap: wrap;
 }
-.expert-worlds {
-  display: flex;
-  gap: 12px;
-  margin-top: 6px;
-}
-.expert-world-input {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.expert-world-input label {
-  font-size: .65rem;
-  color: var(--text-muted);
-}
-.expert-world-input input {
-  width: 50px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  padding: 3px 6px;
-  border-radius: 4px;
-  font-size: .7rem;
-  font-family: var(--mono);
-  text-align: center;
-}
-.expert-world-input input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
 .expert-world-error {
   font-size: .6rem;
   color: var(--red);
   margin-top: 4px;
   display: none;
 }
+.expert-worlds-slider { display:flex; flex-direction:column; gap:6px; margin-top:4px; }
+.expert-world-slider-row { display:flex; align-items:center; gap:8px; }
+.expert-world-label { font-size:.68rem; color:var(--text-secondary); min-width:82px; font-weight:500; }
+.world-slider { flex:1; accent-color:var(--purple); height:4px; cursor:pointer; }
+.expert-world-pct { font-size:.68rem; color:var(--purple); font-family:var(--mono); min-width:40px; text-align:right; }
 .expert-apply-row {
   display: flex;
   justify-content: flex-end;
@@ -348,14 +335,12 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 </div>
 
 <!-- ===== EXPERT SANDBOX ===== -->
-<div style="padding:0 32px;background:var(--bg-primary)">
-  <div class="expert-toggle" onclick="toggleExpertPanel()">
-    <span class="expert-arrow" id="expertArrow">▼</span>
-    <span class="expert-toggle-label" data-i18n="expert_toggle">Экспертные настройки</span>
-  </div>
+<div class="expert-toggle" onclick="toggleExpertPanel()">
+  <span class="expert-arrow" id="expertArrow">▼</span>
+  <span class="expert-toggle-label" data-i18n="expert_toggle">Экспертные настройки</span>
 </div>
 <div class="expert-panel" id="expertPanel">
-  <div class="expert-grid" style="margin-top:0">
+  <div class="expert-grid">
 
     <!-- ═══════════════════════════════════════════════ -->
     <!-- БЛОК A: Парадигмы и потолки                    -->
@@ -682,21 +667,24 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 
     <div class="expert-group">
       <div class="expert-group-title" data-i18n="expert_blkD4">World Models</div>
-      <div class="expert-worlds">
-        <div class="expert-world-input">
-          <label data-i18n="expert_world_cascade">Каскад %</label>
-          <input type="number" id="e-world-cascade" min="0" max="100" step="5" value="60" oninput="expertWorldUpdate()">
+      <div class="expert-worlds-slider">
+        <div class="expert-world-slider-row">
+          <span class="expert-world-label" data-i18n="expert_world_cascade">Каскад</span>
+          <input type="range" id="e-world-cascade" class="world-slider" min="0" max="100" step="1" value="60" data-idx="0" oninput="expertWorldSlider()">
+          <span class="expert-world-pct" id="ew-cascade">60%</span>
         </div>
-        <div class="expert-world-input">
-          <label data-i18n="expert_world_hardWall">Стена %</label>
-          <input type="number" id="e-world-hardWall" min="0" max="100" step="5" value="25" oninput="expertWorldUpdate()">
+        <div class="expert-world-slider-row">
+          <span class="expert-world-label" data-i18n="expert_world_hardWall">Стена</span>
+          <input type="range" id="e-world-hardWall" class="world-slider" min="0" max="100" step="1" value="25" data-idx="1" oninput="expertWorldSlider()">
+          <span class="expert-world-pct" id="ew-hardWall">25%</span>
         </div>
-        <div class="expert-world-input">
-          <label data-i18n="expert_world_slowTakeoff">Медл.взлёт %</label>
-          <input type="number" id="e-world-slowTakeoff" min="0" max="100" step="5" value="15" oninput="expertWorldUpdate()">
+        <div class="expert-world-slider-row">
+          <span class="expert-world-label" data-i18n="expert_world_slowTakeoff">Медл.взлёт</span>
+          <input type="range" id="e-world-slowTakeoff" class="world-slider" min="0" max="100" step="1" value="15" data-idx="2" oninput="expertWorldSlider()">
+          <span class="expert-world-pct" id="ew-slowTakeoff">15%</span>
         </div>
+        <div class="expert-world-error" id="expertWorldError" data-i18n="expert_world_error">Сумма должна быть 100%</div>
       </div>
-      <div class="expert-world-error" id="expertWorldError" data-i18n="expert_world_error">Сумма должна быть 100%</div>
       <div class="expert-param-desc" style="margin-top:8px" data-i18n="expert_world_desc">Априорные вероятности гипотез о структуре реальности. Сумма = 100%.</div>
     </div>
 

@@ -2434,17 +2434,41 @@ function expertUpdate(key, value) {
   }
 }
 
-function expertWorldUpdate() {
-  const c = parseInt(document.getElementById('e-world-cascade').value) || 0;
-  const h = parseInt(document.getElementById('e-world-hardWall').value) || 0;
-  const s = parseInt(document.getElementById('e-world-slowTakeoff').value) || 0;
-  const sum = c + h + s;
+function expertWorldSlider() {
+  const ids = ['e-world-cascade', 'e-world-hardWall', 'e-world-slowTakeoff'];
+  const pctIds = ['ew-cascade', 'ew-hardWall', 'ew-slowTakeoff'];
+  let vals = ids.map(id => Math.max(0, parseInt(document.getElementById(id).value) || 0));
+  let sum = vals.reduce((a, b) => a + b, 0);
+
+  // Нормализуем до 100% если сумма не нулевая
+  if (sum > 0 && sum !== 100) {
+    vals = vals.map(v => Math.round(v * 100 / sum));
+    // Корректируем ошибку округления
+    const diff = 100 - vals.reduce((a, b) => a + b, 0);
+    if (diff !== 0) {
+      // Добавляем разницу к наибольшему
+      const maxIdx = vals.indexOf(Math.max(...vals));
+      vals[maxIdx] += diff;
+    }
+    // Обновляем слайдеры
+    ids.forEach((id, i) => { document.getElementById(id).value = vals[i]; });
+  }
+
+  // Обновляем метки
+  vals.forEach((v, i) => {
+    const el = document.getElementById(pctIds[i]);
+    if (el) el.textContent = v + '%';
+  });
+
+  // Проверка ошибки
+  const sumCheck = vals.reduce((a, b) => a + b, 0);
   const err = document.getElementById('expertWorldError');
-  if (err) err.style.display = (sum !== 100) ? '' : 'none';
-  if (sum === 100) {
-    EXPERT_CONFIG.worldModels.cascade = c / 100;
-    EXPERT_CONFIG.worldModels.hardWall = h / 100;
-    EXPERT_CONFIG.worldModels.slowTakeoff = s / 100;
+  if (err) err.style.display = (sumCheck !== 100) ? '' : 'none';
+
+  if (sumCheck === 100) {
+    EXPERT_CONFIG.worldModels.cascade = vals[0] / 100;
+    EXPERT_CONFIG.worldModels.hardWall = vals[1] / 100;
+    EXPERT_CONFIG.worldModels.slowTakeoff = vals[2] / 100;
   }
 }
 
@@ -2501,6 +2525,9 @@ function expertResetDefaults() {
   document.getElementById('e-world-cascade').value = 60;
   document.getElementById('e-world-hardWall').value = 25;
   document.getElementById('e-world-slowTakeoff').value = 15;
+  document.getElementById('ew-cascade').textContent = '60%';
+  document.getElementById('ew-hardWall').textContent = '25%';
+  document.getElementById('ew-slowTakeoff').textContent = '15%';
   document.getElementById('expertWorldError').style.display = 'none';
   // Reset simulation parameters
   document.getElementById('e-rN').value = 3000;
