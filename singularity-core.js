@@ -116,7 +116,9 @@ function createV3Config() {
 }
 
 function v3ComputeDim(logDiff, slope, ceiling) {
-  return Math.max(ceiling * (sigmoid(slope * logDiff) - 0.5) + 1.0, 0.01);
+  // Исправлено: при logDiff->inf сигмоида дает 1.0, формула возвращает ceiling.
+  // При logDiff=0 сигмоида дает 0.5, формула возвращает 1.0.
+  return Math.max(1.0 + (ceiling - 1.0) * (sigmoid(slope * logDiff) - 0.5) * 2.0, 0.01);
 }
 
 function v3ApplyInference(rawCap, maxBonus, satCap) {
@@ -141,14 +143,22 @@ function v3SimulateToYear(particle, targetYear, cfg) {
   const baseLog = flopsLog;
   
   const hwK = Math.log(2) / Math.max(1.0, particle.hw_months / 12.0);
-  const algoK = Math.log(2) / Math.max(1.0, particle.algo_months / 12.0);
+  let algoK = Math.log(2) / Math.max(1.0, particle.algo_months / 12.0); // Теперь let!
+
+  let ceilingR = cfg.DIMENSIONS.reasoning.ceiling;
+  let ceilingA = particle.agency_ceiling;
+
+  // ИСПРАВЛЕНО: Применяем априорные World Models до симуляции
+  if (particle.world_model === 'hard_wall') {
+    ceilingA = Math.min(ceilingA, 5.5);
+  } else if (particle.world_model === 'slow_takeoff') {
+    algoK *= 0.6;
+  }
 
   // Paradigm shift state (deterministic — no shocks)
   let paradigmGeneration = 0;
   let lastShiftYear = cfg.BASE_YEAR;
   let algoKMult = 1.0;
-  let ceilingR = cfg.DIMENSIONS.reasoning.ceiling;
-  let ceilingA = particle.agency_ceiling;
 
   for (let step = 0; step < steps; step++) {
     const currentYear = cfg.BASE_YEAR + step * dt;
@@ -262,6 +272,7 @@ class BayesianTracker {
       const newP = [], cumsum = new Float64Array(this.n);
       cumsum[0] = this.weights[0];
       for (let i = 1; i < this.n; i++) cumsum[i] = cumsum[i - 1] + this.weights[i];
+      cumsum[this.n - 1] = 1.0; // ИСПРАВЛЕНИЕ: страхуемся от ошибок округления float
       const u0 = Math.random() / this.n;
       let j = 0;
       for (let i = 0; i < this.n; i++) {
@@ -515,8 +526,9 @@ class BayesianTracker {
         // Algo progress: includes paradigm multiplier, data exhaustion, economic damping, and shock damping
         let currentAlgoK = algoK * algoKMultiplier * damping;
         if (dataExhaustionHit) currentAlgoK *= this.cfg.EXPERT.dataWallPenalty;
-        // ИСПРАВЛЕНИЕ: Используем динамический winterDamping вместо хардкода 0.4
-        algoLog += ((currentAlgoK * (isWinter ? this.cfg.EXPERT.winterDamping : 1.0) + rsi) * shockDamping) * dt;
+        // ИСПРАВЛЕНИЕ: Множитель winterDamping уже включен в переменную damping выше,
+        // поэтому не применяем его второй раз
+        algoLog += ((currentAlgoK + rsi) * shockDamping) * dt;
       }
       
       agiYears.push(agiY !== null ? agiY - this.cfg.CURRENT_YEAR : Infinity);
@@ -632,16 +644,20 @@ class BayesianTracker {
       const years = [], caps = [];
       for (let step = 0; step < steps; step++) {
         const y = cfg.BASE_YEAR + step * dt;
-        if (y > cfg.CURRENT_YEAR && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
-          cA *= cfg.SCALING_LAW.shift_multiplier;
-          cR *= cfg.SCALING_LAW.shift_multiplier;
-          baseLog -= 0.5;
-        }
+
         const logDiff = flopsLog + algoLog - baseLog;
         const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
         const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
         const reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
         const agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
+
+        // ИСПРАВЛЕНИЕ: Сдвиг только при насыщении, и делаем временный откат алгоритмов (как в MC)
+        const saturation = Math.max(reasoning / cR, agency / cA);
+        if (y > cfg.CURRENT_YEAR && saturation > cfg.EXPERT.saturationThreshold && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
+          cA *= cfg.SCALING_LAW.shift_multiplier;
+          cR *= cfg.SCALING_LAW.shift_multiplier;
+          algoLog -= 0.5; // Откат для будущего роста
+        }
         years.push(y);
         caps.push(Math.min(reasoning, agency));
 
@@ -695,20 +711,24 @@ class BayesianTracker {
 
     for (let step = 0; step < steps; step++) {
       const y = cfg.BASE_YEAR + step * dt;
-      let paradigmBonus = 0, rsiBonus = 0;
-      if (y > cfg.CURRENT_YEAR && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
-        cA *= cfg.SCALING_LAW.shift_multiplier;
-        cR *= cfg.SCALING_LAW.shift_multiplier;
-        baseLog -= 0.5;
-        paradigmBonus = cfg.SCALING_LAW.shift_multiplier;
-        accumulatedParadigm += paradigmBonus;
-      }
+      let paradigmBonus = 0;
+
       const logDiff = flopsLog + algoLog - baseLog;
       const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
       const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
       const reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
       const agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
       const cap = Math.min(reasoning, agency);
+
+      // ИСПРАВЛЕНИЕ: Логика парадигм синхронизирована
+      const saturation = Math.max(reasoning / cR, agency / cA);
+      if (y > cfg.CURRENT_YEAR && saturation > cfg.EXPERT.saturationThreshold && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
+        cA *= cfg.SCALING_LAW.shift_multiplier;
+        cR *= cfg.SCALING_LAW.shift_multiplier;
+        algoLog -= 0.5;
+        paradigmBonus = cfg.SCALING_LAW.shift_multiplier;
+        accumulatedParadigm += paradigmBonus;
+      }
 
       years.push(y);
       hwComp.push(flopsLog - cfg.BASE_LOG_FLOPS);
@@ -2595,3 +2615,4 @@ function updateObsMetrics() {
 }
 // DEPLOY: scroll-to-panel fix
 // cache-bypass: no-spoiler deployed
+// v2026.05.30c: fix expertApplyAndRun worldSlider
