@@ -114,6 +114,13 @@ function v3ApplyInference(rawCap, maxBonus, satCap) {
   return rawCap * (1.0 + bonus);
 }
 
+function v3CalculateRSI(reasoning, agency, cap, expertCfg) {
+  if (reasoning < expertCfg.rsiTriggerReasoning || agency < expertCfg.rsiTriggerAgency) return 0;
+  const baseRsi = 0.15 * Math.pow(Math.max(0, cap - expertCfg.rsiTriggerAgency), 1.2) * expertCfg.rsiMultiplier;
+  const friction = 1.0 / (1.0 + expertCfg.coordinationFriction * Math.max(0, cap - 10.0));
+  return Math.min(2.0, baseRsi * friction);
+}
+
 function v3SimulateToYear(particle, targetYear, cfg) {
   const dt = 1.0 / 12.0;
   const steps = Math.max(1, Math.floor((targetYear - cfg.BASE_YEAR) * 12));
@@ -180,12 +187,8 @@ function v3SimulateToYear(particle, targetYear, cfg) {
     }
 
     // RSI (deterministic)
-    let rsi = 0;
-    if (reasoning >= cfg.EXPERT.rsiTriggerReasoning && agency >= cfg.EXPERT.rsiTriggerAgency) {
-      const _coordF = cfg.EXPERT.coordinationFriction;
-      const friction = 1.0 / (1.0 + _coordF * Math.max(0, cap - 10.0));
-      rsi = Math.min(2.0, 0.15 * Math.pow(Math.max(0, cap - cfg.EXPERT.rsiTriggerAgency), 1.2) * cfg.EXPERT.rsiMultiplier * friction);
-    }
+    // RSI (deterministic)
+    const rsi = v3CalculateRSI(reasoning, agency, cap, cfg.EXPERT);
 
     flopsLog += hwK * damping * dt;
     algoLog += (algoK * algoKMult * damping + rsi) * dt;
@@ -469,27 +472,8 @@ class BayesianTracker {
           }
         }
 
-        // Стадийный RSI: дискретные уровни с порогами reasoning + agency
-        let rsi = 0;
-        const _rsiM = this.cfg.EXPERT.rsiMultiplier;
-        const _rsiTR = this.cfg.EXPERT.rsiTriggerReasoning;
-        const _rsiTA = this.cfg.EXPERT.rsiTriggerAgency;
-        const _coordF = this.cfg.EXPERT.coordinationFriction;
-
-        // ИИ может начать оптимизировать себя только при высокой автономности
-        if (reasoning >= _rsiTR && agency >= _rsiTA) {
-          // Базовый RSI потенциал
-          let baseRsi = 0.15 * Math.pow(Math.max(0, cap - _rsiTA), 1.2) * _rsiM;
-
-          // Координационное трение (Закон Амдала / Брукса для AI-агентов)
-          // Чем выше capability, тем сложнее агентам координироваться
-          const friction = 1.0 / (1.0 + _coordF * Math.max(0, cap - 10.0));
-
-          rsi += baseRsi * friction;
-        }
-
-        // Защита от бесконечности
-        rsi = Math.min(rsi, 2.0);
+        // Единый расчет RSI
+        const rsi = v3CalculateRSI(reasoning, agency, cap, this.cfg.EXPERT);
         
         // dataExhaustionHit обрабатывается ниже в currentAlgoK
         // Экономика исследований: динамический hwK зависит от ROI
@@ -519,7 +503,8 @@ class BayesianTracker {
         // Algo progress: includes paradigm multiplier, data exhaustion, economic damping, and shock damping
         let currentAlgoK = algoK * algoKMultiplier * damping;
         if (dataExhaustionHit) currentAlgoK *= 0.5;
-        algoLog += (currentAlgoK * (isWinter ? 0.4 : 1.0) * shockDamping + rsi) * dt;
+        // ИСПРАВЛЕНИЕ: RSI также замораживается при shockDamping (alignment incident)
+        algoLog += ((currentAlgoK * (isWinter ? 0.4 : 1.0) + rsi) * shockDamping) * dt;
       }
       
       agiYears.push(agiY !== null ? agiY - this.cfg.CURRENT_YEAR : Infinity);
@@ -630,12 +615,8 @@ class BayesianTracker {
         if (y > cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
           damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
         }
-        let rsi = 0;
         const cap = Math.min(reasoning, agency);
-        if (cap >= 5.0) {
-          const progress = Math.max(0, Math.min(1.0, (cap - 5.0) / 35.0));
-          rsi = 0.08 * progress * Math.log(1.0 + cap);
-        }
+        const rsi = v3CalculateRSI(reasoning, agency, cap, cfg.EXPERT);
         flopsLog += hwK * damping * dt;
         algoLog += (algoK * damping + rsi) * dt;
       }
@@ -704,12 +685,8 @@ class BayesianTracker {
       if (y > cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
         damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
       }
-      let rsi = 0;
-      if (cap >= 5.0) {
-        const progress = Math.max(0, Math.min(1.0, (cap - 5.0) / 35.0));
-        rsi = 0.08 * progress * Math.log(1.0 + cap);
-        accumulatedRsi += rsi * dt;
-      }
+      const rsi = v3CalculateRSI(reasoning, agency, cap, cfg.EXPERT);
+      accumulatedRsi += rsi * dt;
       rsiComp.push(accumulatedRsi);
       flopsLog += hwK * damping * dt;
       algoLog += (algoK * damping + rsi) * dt;
