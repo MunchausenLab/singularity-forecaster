@@ -103,7 +103,8 @@ function createV3Config() {
       reasoning: { slope: EXPERT_CONFIG.reasoningScalingSlope, ceiling: EXPERT_CONFIG.ceilingReasoningBase },
       agency:    { slope: EXPERT_CONFIG.agencyScalingSlope }, // Потолок определяет частица
     },
-    EXPERT: EXPERT_CONFIG,
+    // Глубокое копирование защищает текущую симуляцию от live-мутаций ползунков
+    EXPERT: JSON.parse(JSON.stringify(EXPERT_CONFIG)),
     INFERENCE_SCALING: {
       max_bonus_reasoning: EXPERT_CONFIG.maxInferenceBonusReasoning,
       max_bonus_agency: EXPERT_CONFIG.maxInferenceBonusAgency,
@@ -208,7 +209,6 @@ function v3SimulateToYear(particle, targetYear, cfg) {
       if (gap > 2.0) damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (gap - 2.0));
     }
 
-    // RSI (deterministic)
     // RSI (deterministic)
     const rsi = v3CalculateRSI(reasoning, agency, cap, cfg.EXPERT);
 
@@ -581,7 +581,7 @@ class BayesianTracker {
       const row = [];
       for (const agentic of agenticRange) {
         this.restoreState(state);
-        this.observeAAData(baseObs.year, intel, agentic, 1.0);
+        this.observeAAData(baseObs.year, intel, agentic, this.cfg.EXPERT.observationNoiseSigma);
         const mc = this.runMonteCarloForecast(300);
         const finite = mc.agiYears.filter(isFinite);
         row.push(finite.length > 0 ? percentile(finite, 50) : 40);
@@ -590,31 +590,6 @@ class BayesianTracker {
       // Отдаём управление браузеру после каждой строки матрицы, чтобы UI не зависал
       await new Promise(r => setTimeout(r, 0));
     }
-    this.restoreState(state);
-    return results;
-  }
-
-  runSensitivityMatrix(intelRange, agenticRange) {
-    // Clone the current posterior (all points share same particle hypotheses)
-    const baseObs = AA_FRONTIER_DATA[AA_FRONTIER_DATA.length - 1];
-    const state = this.cloneState();
-
-    const results = [];
-    for (const intel of intelRange) {
-      const row = [];
-      for (const agentic of agenticRange) {
-        // Restore original posterior state for each grid point
-        this.restoreState(state);
-        // Add observation with varied parameters
-        this.observeAAData(baseObs.year, intel, agentic, 1.0);
-        // Run forecast with same particles, different observation
-        const mc = this.runMonteCarloForecast(300);
-        const finite = mc.agiYears.filter(isFinite);
-        row.push(finite.length > 0 ? percentile(finite, 50) : 40);
-      }
-      results.push(row);
-    }
-    // Restore original state after all sensitivity runs
     this.restoreState(state);
     return results;
   }
@@ -811,7 +786,8 @@ function v3AddObservation() {
   const arcVal = +document.getElementById('v3ARC').value;
   const horizonVal = +document.getElementById('v3Horizon').value;
   const aa = benchmarksToAA(arcVal, horizonVal);
-  const y = 2026.5;
+  // Используем CURRENT_YEAR трекера, если он есть, иначе берем системное время
+  const y = v3Tracker ? v3Tracker.cfg.CURRENT_YEAR : (new Date().getFullYear() + new Date().getMonth() / 12);
   const i = aa.intel;
   const a = aa.agency;
   v3Observations = v3Observations.filter(o => o.year < y - 0.01);
@@ -875,7 +851,7 @@ async function runSimulation() {
     const arcVal = +document.getElementById('v3ARC').value;
     const horizonVal = +document.getElementById('v3Horizon').value;
     const aa = benchmarksToAA(arcVal, horizonVal);
-    const currentY = 2026.5;
+    const currentY = v3Tracker ? v3Tracker.cfg.CURRENT_YEAR : (new Date().getFullYear() + new Date().getMonth() / 12);
     const currentI = aa.intel;
     const currentA = aa.agency;
     v3Tracker = new BayesianTracker(1000);
@@ -2434,7 +2410,6 @@ function setLang(lang) {
 }
 
 // ===== EXPERT SANDBOX UI =====
-let _expertPanelOpen = false;
 
 function toggleExpertPanel() {
   const panel = document.getElementById('expertPanel');
@@ -2616,3 +2591,4 @@ function updateObsMetrics() {
 // DEPLOY: scroll-to-panel fix
 // cache-bypass: no-spoiler deployed
 // v2026.05.30c: fix expertApplyAndRun worldSlider
+// v2026.05.30d: physics patches
