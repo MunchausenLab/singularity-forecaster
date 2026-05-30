@@ -29,7 +29,8 @@ function mapToObservables(r10, a10, expertCfg) {
     const autonomousHorizonHours = Math.min(365 * 24, 0.5 * Math.exp(0.5 * a10)); // cap at 1 year
 
     // Стоимость 1M токенов ($), падает с ростом reasoning
-    const costPerM = Math.max(0.01, 10.0 * Math.exp(-0.3 * r10));
+    // Калибровка: r10=0 → $19.6, r10=7 → $0.30, r10=10 → $0.05
+    const costPerM = Math.max(0.005, 19.625 * Math.exp(-0.5973 * r10));
 
     return {
         sweBench: sweBench.toFixed(1) + '%',
