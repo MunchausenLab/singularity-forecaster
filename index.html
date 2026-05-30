@@ -147,19 +147,18 @@ body{font-family:var(--font);background:var(--bg-primary);color:var(--text-prima
 
 /* ===== EXPERT SANDBOX ===== */
 .expert-panel {
-  display: none;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
-  padding: 0 32px 20px;
-  overflow: hidden;
-  transition: max-height .3s ease, padding .3s ease;
-  max-height: 0;
+  padding: 0 32px;
+  transition: max-height .35s ease, opacity .25s ease, padding .35s ease;
 }
 .expert-panel.open {
-  display: block;
-  max-height: 5000px;
-  padding-top: 20px;
-  padding-bottom: 20px;
+  max-height: 4000px;
+  opacity: 1;
+  padding: 20px 32px;
 }
 .expert-toggle {
   display: flex;
