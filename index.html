@@ -578,6 +578,94 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
       <div class="expert-param-desc" data-i18n="expert_d_simulations">Количество Monte Carlo прогонов (500-10000)</div>
     </div>
   </div>
+
+  <!-- Категория 7: Углубленные настройки -->
+  <div class="expert-group" style="grid-column:span 2">
+    <div class="expert-group-title" data-i18n="expert_cat7new">Углубленные настройки (TTC, штрафы, шум)</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_maxInferenceBonusReasoning">Макс. TTC бонус (Reasoning)</span>
+          <span class="expert-param-value" id="ev-maxInferenceBonusReasoning">2.00</span>
+        </div>
+        <input type="range" id="e-maxInferenceBonusReasoning" min="0.5" max="5" step="0.1" value="2.0" oninput="expertUpdate('maxInferenceBonusReasoning',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_maxInferenceBonusReasoning">Максимальный множитель Test-Time Compute для логики</div>
+      </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_maxInferenceBonusAgency">Макс. TTC бонус (Agency)</span>
+          <span class="expert-param-value" id="ev-maxInferenceBonusAgency">1.50</span>
+        </div>
+        <input type="range" id="e-maxInferenceBonusAgency" min="0.5" max="5" step="0.1" value="1.5" oninput="expertUpdate('maxInferenceBonusAgency',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_maxInferenceBonusAgency">Максимальный множитель Test-Time Compute для автономности</div>
+      </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_inferenceSaturationCap">Порог насыщения TTC</span>
+          <span class="expert-param-value" id="ev-inferenceSaturationCap">5.0</span>
+        </div>
+        <input type="range" id="e-inferenceSaturationCap" min="1" max="15" step="0.5" value="5.0" oninput="expertUpdate('inferenceSaturationCap',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_inferenceSaturationCap">Базовый интеллект, где CoT перестаёт давать бонус</div>
+      </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_reasoningScalingSlope">Наклон Reasoning</span>
+          <span class="expert-param-value" id="ev-reasoningScalingSlope">0.35</span>
+        </div>
+        <input type="range" id="e-reasoningScalingSlope" min="0.05" max="1.0" step="0.01" value="0.35" oninput="expertUpdate('reasoningScalingSlope',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_reasoningScalingSlope">Наклон кривой масштабирования FLOPs → Reasoning</div>
+      </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_agencyScalingSlope">Наклон Agency</span>
+          <span class="expert-param-value" id="ev-agencyScalingSlope">0.25</span>
+        </div>
+        <input type="range" id="e-agencyScalingSlope" min="0.05" max="1.0" step="0.01" value="0.25" oninput="expertUpdate('agencyScalingSlope',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_agencyScalingSlope">Наклон кривой масштабирования FLOPs → Agency</div>
+      </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_dataWallPenalty">Штраф Стены Данных</span>
+          <span class="expert-param-value" id="ev-dataWallPenalty">0.50</span>
+        </div>
+        <input type="range" id="e-dataWallPenalty" min="0.05" max="1.0" step="0.05" value="0.50" oninput="expertUpdate('dataWallPenalty',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_dataWallPenalty">Множитель скорости алгоритмов при исчерпании данных</div>
+      </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_hypeGapThreshold">Порог разрыва (Зима ИИ)</span>
+          <span class="expert-param-value" id="ev-hypeGapThreshold">4.0</span>
+        </div>
+        <input type="range" id="e-hypeGapThreshold" min="1" max="10" step="0.5" value="4.0" oninput="expertUpdate('hypeGapThreshold',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_hypeGapThreshold">Разрыв reasoning-agency для старта Зимы ИИ</div>
+      </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_winterDamping">Строгость Зимы ИИ</span>
+          <span class="expert-param-value" id="ev-winterDamping">0.10</span>
+        </div>
+        <input type="range" id="e-winterDamping" min="0.01" max="1.0" step="0.01" value="0.10" oninput="expertUpdate('winterDamping',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_winterDamping">Множитель инвестиций и алгоритмов в Зиму ИИ</div>
+      </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_observationNoiseSigma">Шум наблюдений (σ)</span>
+          <span class="expert-param-value" id="ev-observationNoiseSigma">1.50</span>
+        </div>
+        <input type="range" id="e-observationNoiseSigma" min="0.1" max="5.0" step="0.1" value="1.5" oninput="expertUpdate('observationNoiseSigma',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_observationNoiseSigma">Уровень доверия к бенчмаркам (меньше = строже фильтр)</div>
+      </div>
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_asiThreshold">Порог ASI</span>
+          <span class="expert-param-value" id="ev-asiThreshold">100.0</span>
+        </div>
+        <input type="range" id="e-asiThreshold" min="20" max="500" step="10" value="100" oninput="expertUpdate('asiThreshold',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_asiThreshold">Уровень capability для наступления ASI (Сверхразум)</div>
+      </div>
+    </div>
+  </div>
+
   <div class="expert-apply-row">
     <button class="btn btn-secondary btn-sm" onclick="expertResetDefaults()" data-i18n="expert_reset">Сбросить по умолчанию</button>
     <button class="btn btn-primary btn-sm" onclick="expertApplyAndRun()" data-i18n="expert_apply">Применить и перезапустить</button>

@@ -71,7 +71,18 @@ const EXPERT_CONFIG = {
   priorAgencyMean: 8.0,            // Априорное среднее agency_ceiling
   priorAgencyStd: 3.0,             // Априорный разброс
   // Категория 6: Бенчмарки
-  toolUseVsAutonomyWeight: 0.6     // Вес agency в SWE-bench (0=только reasoning, 1=только agency)
+  toolUseVsAutonomyWeight: 0.6,    // Вес agency в SWE-bench (0=только reasoning, 1=только agency)
+  // Категория 7: Углубленные настройки (Test-Time Compute, Штрафы, Шум)
+  maxInferenceBonusReasoning: 2.0, // Макс. бонус Test-Time Compute для логики
+  maxInferenceBonusAgency: 1.5,    // Макс. бонус Test-Time Compute для автономности
+  inferenceSaturationCap: 5.0,     // Порог базового интеллекта, где CoT перестает давать бонус
+  reasoningScalingSlope: 0.35,     // Наклон кривой масштабирования (FLOPs -> Reasoning)
+  agencyScalingSlope: 0.25,        // Наклон кривой масштабирования (FLOPs -> Agency)
+  dataWallPenalty: 0.5,            // Множитель скорости алгоритмов при исчерпании данных (0.5 = падение в 2 раза)
+  hypeGapThreshold: 4.0,           // Разрыв между логикой и агентностью для старта Зимы ИИ
+  winterDamping: 0.1,              // Строгость Зимы ИИ (множитель инвестиций и алгоритмов)
+  observationNoiseSigma: 1.5,      // Уровень доверия к бенчмаркам (меньше = строже фильтр)
+  asiThreshold: 100.0              // Порог наступления ASI (Сверхразум)
 };
 
 // Default values for Expert Sandbox (single source of truth)
@@ -87,16 +98,16 @@ function createV3Config() {
     BASE_YEAR: 2023.0,          // Якорь (уровень GPT-4)
     BASE_LOG_FLOPS: 24.5,       // Начальные FLOPs в 2023
     CURRENT_YEAR: new Date().getFullYear() + (new Date().getMonth() / 12), // Динамический текущий год
-    THRESHOLDS: { agi: 10.0, asi: 100.0 },
+    THRESHOLDS: { agi: 10.0, asi: EXPERT_CONFIG.asiThreshold },
     DIMENSIONS: {
-      reasoning: { slope: 0.35, ceiling: EXPERT_CONFIG.ceilingReasoningBase },
-      agency:    { slope: 0.25 }, // Потолок определяет частица
+      reasoning: { slope: EXPERT_CONFIG.reasoningScalingSlope, ceiling: EXPERT_CONFIG.ceilingReasoningBase },
+      agency:    { slope: EXPERT_CONFIG.agencyScalingSlope }, // Потолок определяет частица
     },
     EXPERT: EXPERT_CONFIG,
     INFERENCE_SCALING: {
-      max_bonus_reasoning: 2.0,
-      max_bonus_agency: 1.5,
-      saturation_cap: 5.0
+      max_bonus_reasoning: EXPERT_CONFIG.maxInferenceBonusReasoning,
+      max_bonus_agency: EXPERT_CONFIG.maxInferenceBonusAgency,
+      saturation_cap: EXPERT_CONFIG.inferenceSaturationCap
     },
     SCALING_LAW: { paradigm_shift_prob: 0.20, shift_multiplier: 3.0,
                    endo_base: 0.05, endo_pressure: 0.8, endo_exhaust: 0.5 },
@@ -454,14 +465,14 @@ class BayesianTracker {
         // Проверка на лопнувший пузырь (AI Winter)
         if (!isWinter && currentYear > 2026.5) {
           const hypeGap = reasoning - agency;
-          if (hypeGap > 4.0 && Math.random() < 0.10 * dt) {
+          if (hypeGap > this.cfg.EXPERT.hypeGapThreshold && Math.random() < 0.10 * dt) {
             isWinter = true;
           }
         }
 
         if (isWinter) {
           // Зима ИИ: инвестиции в железо падают, алгоритмы развиваются медленнее
-          damping = 0.1;
+          damping = this.cfg.EXPERT.winterDamping;
           // Выход из зимы: если RSI дотянет agency до reasoning
           if (agency >= reasoning - 1.0) {
             isWinter = false;
@@ -503,9 +514,9 @@ class BayesianTracker {
 
         // Algo progress: includes paradigm multiplier, data exhaustion, economic damping, and shock damping
         let currentAlgoK = algoK * algoKMultiplier * damping;
-        if (dataExhaustionHit) currentAlgoK *= 0.5;
-        // ИСПРАВЛЕНИЕ: RSI также замораживается при shockDamping (alignment incident)
-        algoLog += ((currentAlgoK * (isWinter ? 0.4 : 1.0) + rsi) * shockDamping) * dt;
+        if (dataExhaustionHit) currentAlgoK *= this.cfg.EXPERT.dataWallPenalty;
+        // ИСПРАВЛЕНИЕ: Используем динамический winterDamping вместо хардкода 0.4
+        algoLog += ((currentAlgoK * (isWinter ? this.cfg.EXPERT.winterDamping : 1.0) + rsi) * shockDamping) * dt;
       }
       
       agiYears.push(agiY !== null ? agiY - this.cfg.CURRENT_YEAR : Infinity);
@@ -751,7 +762,7 @@ const AA_FRONTIER_DATA = [
 function v3GetTracker() {
   if (!v3Tracker) {
     v3Tracker = new BayesianTracker(1000);
-    AA_FRONTIER_DATA.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 1.5));
+    AA_FRONTIER_DATA.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, EXPERT_CONFIG.observationNoiseSigma));
   }
   return v3Tracker;
 }
@@ -786,8 +797,8 @@ function v3AddObservation() {
   v3Observations = v3Observations.filter(o => o.year < y - 0.01);
   v3Observations.push({ year: y, intel: i, agentic: a });
   v3Tracker = new BayesianTracker(1000);
-  AA_FRONTIER_DATA.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 1.5));
-  v3Observations.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 2.0));
+  AA_FRONTIER_DATA.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, EXPERT_CONFIG.observationNoiseSigma));
+  v3Observations.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, EXPERT_CONFIG.observationNoiseSigma));
   v3UpdateUI(v3Tracker);
 }
 
@@ -848,11 +859,11 @@ async function runSimulation() {
     const currentI = aa.intel;
     const currentA = aa.agency;
     v3Tracker = new BayesianTracker(1000);
-    AA_FRONTIER_DATA.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 1.5));
-    v3Observations.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, 2.0));
+    AA_FRONTIER_DATA.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, EXPERT_CONFIG.observationNoiseSigma));
+    v3Observations.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, EXPERT_CONFIG.observationNoiseSigma));
     v3Observations = v3Observations.filter(o => o.year < currentY - 0.01);
     v3Observations.push({ year: currentY, intel: currentI, agentic: currentA });
-    v3Tracker.observeAAData(currentY, currentI, currentA, 2.0);
+    v3Tracker.observeAAData(currentY, currentI, currentA, EXPERT_CONFIG.observationNoiseSigma);
     const tracker = v3Tracker;
     const runData = tracker.runMonteCarloForecast(n);
     const agiList = runData.agiYears;
@@ -1188,6 +1199,28 @@ const LANG = {
     expert_d_arc_agi:'Текущий уровень ARC-AGI для наблюдений',
     expert_p_horizon:'Автономность (часов)',
     expert_d_horizon:'Горизонт автономности для текущих бенчмарков',
+    // Category 7: Deep Settings
+    expert_cat7new:'Углубленные настройки (TTC, штрафы, шум)',
+    expert_p_maxInferenceBonusReasoning:'Макс. TTC бонус (Reasoning)',
+    expert_d_maxInferenceBonusReasoning:'Максимальный множитель Test-Time Compute для логики',
+    expert_p_maxInferenceBonusAgency:'Макс. TTC бонус (Agency)',
+    expert_d_maxInferenceBonusAgency:'Максимальный множитель Test-Time Compute для автономности',
+    expert_p_inferenceSaturationCap:'Порог насыщения TTC',
+    expert_d_inferenceSaturationCap:'Базовый интеллект, где CoT перестаёт давать бонус',
+    expert_p_reasoningScalingSlope:'Наклон Reasoning',
+    expert_d_reasoningScalingSlope:'Наклон кривой масштабирования FLOPs → Reasoning',
+    expert_p_agencyScalingSlope:'Наклон Agency',
+    expert_d_agencyScalingSlope:'Наклон кривой масштабирования FLOPs → Agency',
+    expert_p_dataWallPenalty:'Штраф Стены Данных',
+    expert_d_dataWallPenalty:'Множитель скорости алгоритмов при исчерпании данных',
+    expert_p_hypeGapThreshold:'Порог разрыва (Зима ИИ)',
+    expert_d_hypeGapThreshold:'Разрыв reasoning-agency для старта Зимы ИИ',
+    expert_p_winterDamping:'Строгость Зимы ИИ',
+    expert_d_winterDamping:'Множитель инвестиций и алгоритмов в Зиму ИИ',
+    expert_p_observationNoiseSigma:'Шум наблюдений (σ)',
+    expert_d_observationNoiseSigma:'Уровень доверия к бенчмаркам (меньше = строже фильтр)',
+    expert_p_asiThreshold:'Порог ASI',
+    expert_d_asiThreshold:'Уровень capability для наступления ASI (Сверхразум)',
     // Observable Metrics
     obs_current:'Прогноз при текущих бенчмарках:',
     obs_swe:'SWE-bench',
@@ -1403,6 +1436,28 @@ const LANG = {
     expert_d_arc_agi:'Current ARC-AGI level for observations',
     expert_p_horizon:'Autonomy (hours)',
     expert_d_horizon:'Autonomy horizon for current benchmarks',
+    // Category 7: Deep Settings
+    expert_cat7new:'Deep Settings (TTC, Penalties, Noise)',
+    expert_p_maxInferenceBonusReasoning:'Max TTC Bonus (Reasoning)',
+    expert_d_maxInferenceBonusReasoning:'Maximum Test-Time Compute multiplier for reasoning',
+    expert_p_maxInferenceBonusAgency:'Max TTC Bonus (Agency)',
+    expert_d_maxInferenceBonusAgency:'Maximum Test-Time Compute multiplier for agency',
+    expert_p_inferenceSaturationCap:'TTC Saturation Cap',
+    expert_d_inferenceSaturationCap:'Base intelligence where CoT stops giving bonus',
+    expert_p_reasoningScalingSlope:'Reasoning Slope',
+    expert_d_reasoningScalingSlope:'Slope of FLOPs → Reasoning scaling curve',
+    expert_p_agencyScalingSlope:'Agency Slope',
+    expert_d_agencyScalingSlope:'Slope of FLOPs → Agency scaling curve',
+    expert_p_dataWallPenalty:'Data Wall Penalty',
+    expert_d_dataWallPenalty:'Algorithm speed multiplier when data is exhausted',
+    expert_p_hypeGapThreshold:'Hype Gap Threshold (AI Winter)',
+    expert_d_hypeGapThreshold:'Reasoning-agency gap to trigger AI Winter',
+    expert_p_winterDamping:'AI Winter Damping',
+    expert_d_winterDamping:'Investment and algorithm multiplier during AI Winter',
+    expert_p_observationNoiseSigma:'Observation Noise (σ)',
+    expert_d_observationNoiseSigma:'Trust level in benchmarks (lower = stricter filter)',
+    expert_p_asiThreshold:'ASI Threshold',
+    expert_d_asiThreshold:'Capability level for ASI (Superintelligence)',
     // Observable Metrics
     obs_current:'Forecast at current benchmarks:',
     obs_swe:'SWE-bench',
@@ -2381,7 +2436,10 @@ function expertResetDefaults() {
     'rsiMultiplier', 'rsiTriggerReasoning', 'rsiTriggerAgency', 'hwCoDesignBonus',
     'coordinationFriction', 'maxPhysicalHwGrowth', 'bubbleBurstRisk',
     'alignmentCooldown', 'maxCapitalMultiplier',
-    'priorAgencyMean', 'priorAgencyStd', 'toolUseVsAutonomyWeight'
+    'priorAgencyMean', 'priorAgencyStd', 'toolUseVsAutonomyWeight',
+    'maxInferenceBonusReasoning', 'maxInferenceBonusAgency', 'inferenceSaturationCap',
+    'reasoningScalingSlope', 'agencyScalingSlope', 'dataWallPenalty',
+    'hypeGapThreshold', 'winterDamping', 'observationNoiseSigma', 'asiThreshold'
   ];
   const formats = {
     ceilingReasoningBase: v => v.toFixed(1),
@@ -2402,7 +2460,17 @@ function expertResetDefaults() {
     maxCapitalMultiplier: v => v.toFixed(1),
     priorAgencyMean: v => v.toFixed(1),
     priorAgencyStd: v => v.toFixed(1),
-    toolUseVsAutonomyWeight: v => v.toFixed(2)
+    toolUseVsAutonomyWeight: v => v.toFixed(2),
+    maxInferenceBonusReasoning: v => v.toFixed(2),
+    maxInferenceBonusAgency: v => v.toFixed(2),
+    inferenceSaturationCap: v => v.toFixed(1),
+    reasoningScalingSlope: v => v.toFixed(2),
+    agencyScalingSlope: v => v.toFixed(2),
+    dataWallPenalty: v => v.toFixed(2),
+    hypeGapThreshold: v => v.toFixed(1),
+    winterDamping: v => v.toFixed(2),
+    observationNoiseSigma: v => v.toFixed(2),
+    asiThreshold: v => v.toFixed(1)
   };
   for (const f of fields) {
     document.getElementById('e-' + f).value = DEFAULT_EXPERT_CONFIG[f];
