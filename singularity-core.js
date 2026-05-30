@@ -2417,9 +2417,17 @@ function setLang(lang) {
 let _expertPanelOpen = false;
 
 function toggleExpertPanel() {
-  _expertPanelOpen = !_expertPanelOpen;
-  document.getElementById('expertPanel').classList.toggle('open', _expertPanelOpen);
-  document.getElementById('expertArrow').classList.toggle('open', _expertPanelOpen);
+  const panel = document.getElementById('expertPanel');
+  const arrow = document.getElementById('expertArrow');
+  if (panel.classList.contains('collapsed')) {
+    // Открыть
+    panel.classList.remove('collapsed');
+    arrow.classList.add('open');
+  } else {
+    // Закрыть
+    panel.classList.add('collapsed');
+    arrow.classList.remove('open');
+  }
 }
 
 function expertUpdate(key, value) {

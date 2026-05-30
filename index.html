@@ -147,18 +147,12 @@ body{font-family:var(--font);background:var(--bg-primary);color:var(--text-prima
 
 /* ===== EXPERT SANDBOX ===== */
 .expert-panel {
-  max-height: 0;
-  overflow: hidden;
-  opacity: 0;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   padding: 0 32px;
-  transition: max-height .35s ease, opacity .25s ease, padding .35s ease;
 }
-.expert-panel.open {
-  max-height: 4000px;
-  opacity: 1;
-  padding: 20px 32px;
+.expert-panel.collapsed {
+  display: none;
 }
 .expert-toggle {
   display: flex;
@@ -338,7 +332,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <span class="expert-arrow" id="expertArrow">▼</span>
   <span class="expert-toggle-label" data-i18n="expert_toggle">Экспертные настройки</span>
 </div>
-<div class="expert-panel" id="expertPanel">
+<div class="expert-panel collapsed" id="expertPanel">
   <div class="expert-grid">
 
     <!-- ═══════════════════════════════════════════════ -->
