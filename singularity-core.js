@@ -1199,7 +1199,18 @@ const LANG = {
     expert_d_arc_agi:'Текущий уровень ARC-AGI для наблюдений',
     expert_p_horizon:'Автономность (часов)',
     expert_d_horizon:'Горизонт автономности для текущих бенчмарков',
-    // Category 7: Deep Settings
+    // Block headers
+    expert_blkA:'Парадигмы и потолки',
+    expert_blkA2:'Смена парадигм',
+    expert_blkB:'Самоулучшение (RSI)',
+    expert_blkB2:'Железо',
+    expert_blkC:'Кризисы и штрафы',
+    expert_blkD:'Бенчмарки и наблюдения',
+    expert_blkD2:'Test-Time Compute',
+    expert_blkD3:'Априорные допущения',
+    expert_blkD4:'World Models',
+    expert_blkD5:'Симуляция',
+    // Deep params (kept for backward compat with expertResetDefaults)
     expert_cat7new:'Углубленные настройки (TTC, штрафы, шум)',
     expert_p_maxInferenceBonusReasoning:'Макс. TTC бонус (Reasoning)',
     expert_d_maxInferenceBonusReasoning:'Максимальный множитель Test-Time Compute для логики',
@@ -1436,7 +1447,18 @@ const LANG = {
     expert_d_arc_agi:'Current ARC-AGI level for observations',
     expert_p_horizon:'Autonomy (hours)',
     expert_d_horizon:'Autonomy horizon for current benchmarks',
-    // Category 7: Deep Settings
+    // Block headers
+    expert_blkA:'Paradigms & Ceilings',
+    expert_blkA2:'Paradigm Shifts',
+    expert_blkB:'Self-Improvement (RSI)',
+    expert_blkB2:'Hardware',
+    expert_blkC:'Crises & Penalties',
+    expert_blkD:'Benchmarks & Observations',
+    expert_blkD2:'Test-Time Compute',
+    expert_blkD3:'Philosophical Priors',
+    expert_blkD4:'World Models',
+    expert_blkD5:'Simulation',
+    // Deep params (kept for backward compat)
     expert_cat7new:'Deep Settings (TTC, Penalties, Noise)',
     expert_p_maxInferenceBonusReasoning:'Max TTC Bonus (Reasoning)',
     expert_d_maxInferenceBonusReasoning:'Maximum Test-Time Compute multiplier for reasoning',
