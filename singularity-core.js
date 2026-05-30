@@ -193,6 +193,8 @@ function v3SimulateToYear(particle, targetYear, cfg) {
         ceilingA *= shiftMult;
         ceilingR *= shiftMult;
         algoKMult = 2.0;
+        // ДОБАВЛЕНО: откат логарифма при смене парадигмы, чтобы физика совпадала с Монте-Карло
+        algoLog -= (0.4 + paradigmGeneration * 0.1);
       }
     }
 
@@ -677,7 +679,7 @@ class BayesianTracker {
     const steps = 40 * 12;
     const years = [], hwComp = [], algoComp = [], paradigmComp = [], rsiComp = [];
     let accumulatedParadigm = 0, accumulatedRsi = 0;
-    let flopsLog = cfg.BASE_LOG_FLOPS, algoLog = 0;
+    let flopsLog = cfg.BASE_LOG_FLOPS, algoLog = 0, pureAlgoLog = 0;
     let baseLog = flopsLog;
     const hwK = Math.log(2) / Math.max(1.0, avgHw / 12.0);
     const algoK = Math.log(2) / Math.max(1.0, avgAlgo / 12.0);
@@ -707,7 +709,7 @@ class BayesianTracker {
 
       years.push(y);
       hwComp.push(flopsLog - cfg.BASE_LOG_FLOPS);
-      algoComp.push(algoLog);
+      algoComp.push(pureAlgoLog);
       paradigmComp.push(accumulatedParadigm);
 
       let damping = 1.0;
@@ -719,6 +721,7 @@ class BayesianTracker {
       rsiComp.push(accumulatedRsi);
       flopsLog += hwK * damping * dt;
       algoLog += (algoK * damping + rsi) * dt;
+      pureAlgoLog += (algoK * damping) * dt;
     }
     return { years, hwComp, algoComp, paradigmComp, rsiComp };
   }
@@ -2592,3 +2595,4 @@ function updateObsMetrics() {
 // cache-bypass: no-spoiler deployed
 // v2026.05.30c: fix expertApplyAndRun worldSlider
 // v2026.05.30d: physics patches
+// v2026.05.30e: year-fix, deep-copy, noise-sensitivity, cleanup
