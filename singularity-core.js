@@ -2593,3 +2593,4 @@ function updateObsMetrics() {
   if (e3) e3.textContent = m.horizon;
   if (e4) e4.textContent = m.cost;
 }
+// DEPLOY: scroll-to-panel fix
