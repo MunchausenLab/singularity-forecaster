@@ -548,6 +548,28 @@ class BayesianTracker {
     this.n = this.particles.length;
   }
 
+  async runSensitivityMatrixAsync(intelRange, agenticRange) {
+    const baseObs = AA_FRONTIER_DATA[AA_FRONTIER_DATA.length - 1];
+    const state = this.cloneState();
+
+    const results = [];
+    for (const intel of intelRange) {
+      const row = [];
+      for (const agentic of agenticRange) {
+        this.restoreState(state);
+        this.observeAAData(baseObs.year, intel, agentic, 1.0);
+        const mc = this.runMonteCarloForecast(300);
+        const finite = mc.agiYears.filter(isFinite);
+        row.push(finite.length > 0 ? percentile(finite, 50) : 40);
+      }
+      results.push(row);
+      // Отдаём управление браузеру после каждой строки матрицы, чтобы UI не зависал
+      await new Promise(r => setTimeout(r, 0));
+    }
+    this.restoreState(state);
+    return results;
+  }
+
   runSensitivityMatrix(intelRange, agenticRange) {
     // Clone the current posterior (all points share same particle hypotheses)
     const baseObs = AA_FRONTIER_DATA[AA_FRONTIER_DATA.length - 1];
@@ -837,7 +859,7 @@ async function runSimulation() {
     const finite = agiList.filter(isFinite);
     const finiteAsi = asiList.filter(isFinite);
     
-    const CUR_Y = 2026.30;
+    const CUR_Y = tracker.cfg.CURRENT_YEAR;
     const yq = [];
     for (let y = 0.25; y <= 10; y += 0.25) yq.push(+y.toFixed(4));
     for (let y = 11; y <= 40; y++) yq.push(y);
@@ -882,9 +904,9 @@ function updateUI(r) {
   }
   plotHistogram(r.histogram); plotCumulative(r.cumulative);
   // Advanced charts (async-like, yield between heavy plots)
-  requestAnimationFrame(() => {
+  requestAnimationFrame(async () => {
     const tracker = v3GetTracker();
-    plotSensitivityHeatmap(tracker);
+    await plotSensitivityHeatmap(tracker);
     requestAnimationFrame(() => {
       plotScenarioFan(tracker);
       plotDecomposition(tracker);
@@ -917,7 +939,8 @@ function buildHistogramBins(listAgi, listAsi = []) {
       if (idx >= 0 && idx < hAsi.length) hAsi[idx]++; 
     }
   }
-  const CUR_Y = 2026.30;
+  const tracker = v3GetTracker();
+  const CUR_Y = tracker ? tracker.cfg.CURRENT_YEAR : new Date().getFullYear();
   return { 
     labels: bins.slice(0, -1).map((_, i) => (CUR_Y + (bins[i] + bins[i + 1]) / 2).toFixed(1)), 
     agi: hAgi, asi: hAsi,
@@ -956,13 +979,20 @@ function plotCumulative(c) {
 
 // ===== ADVANCED PLOT FUNCTIONS =====
 
-function plotSensitivityHeatmap(tracker) {
+async function plotSensitivityHeatmap(tracker) {
+  const c5 = document.getElementById('c5');
+  if (c5) {
+    c5.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666680;font-family:monospace;">' + (LANG[window._lang || 'ru'].ch5_loading || 'Вычисление матрицы (асинхронно)...') + '</div>';
+  }
+
   const t = LANG[window._lang || 'ru'];
   const intelRange = [40, 45, 50, 55, 60, 65, 70, 75, 80, 85];
   const agenticRange = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 
-  // Run sensitivity matrix (this is expensive, limit grid)
-  const matrix = tracker.runSensitivityMatrix(intelRange, agenticRange);
+  // Ждём результат, не блокируя UI
+  const matrix = await tracker.runSensitivityMatrixAsync(intelRange, agenticRange);
+
+  if (!document.getElementById('c5')) return;
 
   const textMatrix = matrix.map((row, i) =>
     row.map((v, j) => `Intel=${intelRange[i]}, Agentic=${agenticRange[j]}<br>${t.ch5_label}: ${v.toFixed(1)} лет`)
@@ -1061,7 +1091,7 @@ const LANG = {
     tip7:'Разбивка capability на составляющие: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Показывает, что двигает прогресс.',
     ch1_xlabel:'Год', ch1_ylabel:'Прогонов',
     ch3_xlabel:'Год', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
-    ch5_label:'Лет до AGI', ch5_colorbar:'Лет до AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score',
+    ch5_label:'Лет до AGI', ch5_colorbar:'Лет до AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score', ch5_loading:'Вычисление матрицы (асинхронно)...',
     ch7_ylabel:'Суммарный вклад (log FLOPs)',
     fY_suffix:' лет', fY_gt:'> 40 лет',
     // About
@@ -1276,7 +1306,7 @@ const LANG = {
     tip7:'Breakdown of capability into components: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Shows what drives progress.',
     ch1_xlabel:'Year', ch1_ylabel:'Runs',
     ch3_xlabel:'Year', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
-    ch5_label:'Years to AGI', ch5_colorbar:'Years to AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score',
+    ch5_label:'Years to AGI', ch5_colorbar:'Years to AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score', ch5_loading:'Computing matrix (async)...',
     ch7_ylabel:'Cumulative contribution (log FLOPs)',
     fY_suffix:' yrs', fY_gt:'> 40 yrs',
     // About
