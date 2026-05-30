@@ -893,6 +893,9 @@ async function runSimulation() {
 function updateUI(r) {
   const s = r.summary, fmt = yearsText;
   setVal('vAGI', fmt(s.agiMedian), 'agiyears'); setVal('vASI', fmt(s.asiMedian), 'asiyears');
+  // Скрыть/показать предупреждение "AGI не достигнут"
+  const noAgiEl = document.getElementById('v3NoAgi');
+  if (noAgiEl) noAgiEl.style.display = isFinite(s.agiMedian) ? 'none' : '';
   const tracker = v3GetTracker();
   if (tracker) {
     const sum = tracker.getSummary();
