@@ -2594,3 +2594,4 @@ function updateObsMetrics() {
   if (e4) e4.textContent = m.cost;
 }
 // DEPLOY: scroll-to-panel fix
+// cache-bypass: no-spoiler deployed
