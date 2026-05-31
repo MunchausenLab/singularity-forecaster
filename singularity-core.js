@@ -65,6 +65,20 @@ const EXPERT_CONFIG = {
   bubbleBurstRisk: 0.20,           // Риск схлопывания GPU-пузыря
   alignmentCooldown: 1.5,          // Штраф за инцидент безопасности (лет)
   maxCapitalMultiplier: 2.5,       // Эластичность капитала
+
+  // --- ПОРОГИ ЭТАПОВ СИНГУЛЯРНОСТИ (Динамические настройки) ---
+  t1Threshold: 8.0,                // T1: Потеря понимания
+  t2Threshold: 10.0,               // T2: Потеря предсказуемости
+  t3Threshold: 25.0,               // T3: Потеря контроля
+  t4Threshold: 100.0,              // T4: Потеря влияния
+
+  // --- 5 СТЕН РЕАЛЬНОСТИ (Социотехнические барьеры) ---
+  barrierAtomsLimit: 1.2,          // [Проклятие атомов] Макс. удвоений HW в год
+  barrierEnergyLog: 27.5,          // [Термодинамика] Предел FLOPs
+  barrierGeopoliticsRisk: 0.25,    // [Монополия на насилие] Шанс государственного шока после T2
+  barrierNashFriction: 0.15,       // [Конкуренция ИИ] Координационная деградация после T3
+  barrierDemandGrace: 5.0,         // [Смысловой предел] Лет на адаптацию экономики к T2
+
   // Категория 4: Эпистемология (World Models)
   worldModels: { cascade: 0.60, hardWall: 0.25, slowTakeoff: 0.15 },
   // Категория 5: Априорные допущения (Philosophical Priors)
@@ -82,10 +96,6 @@ const EXPERT_CONFIG = {
   hypeGapThreshold: 4.0,           // Разрыв между логикой и агентностью для старта Зимы ИИ
   winterDamping: 0.1,              // Строгость Зимы ИИ (множитель инвестиций и алгоритмов)
   observationNoiseSigma: 1.5,      // Уровень доверия к бенчмаркам (меньше = строже фильтр)
-  t1Ceiling: 8.0,                  // Порог T1: Понимание
-  t2Ceiling: 10.0,                 // Порог T2: Предсказуемость
-  t3Ceiling: 25.0,                 // Порог T3: Контроль
-  t4Ceiling: 100.0                 // Порог T4: Влияние (ASI)
 };
 
 // Default values for Expert Sandbox (single source of truth)
@@ -101,7 +111,7 @@ function createV3Config() {
     BASE_YEAR: 2023.0,          // Якорь (уровень GPT-4)
     BASE_LOG_FLOPS: 24.5,       // Начальные FLOPs в 2023
     CURRENT_YEAR: new Date().getFullYear() + (new Date().getMonth() / 12), // Динамический текущий год
-    THRESHOLDS: { t1: EXPERT_CONFIG.t1Ceiling, t2: EXPERT_CONFIG.t2Ceiling, t3: EXPERT_CONFIG.t3Ceiling, t4: EXPERT_CONFIG.t4Ceiling },
+    THRESHOLDS: { t1: EXPERT_CONFIG.t1Threshold, t2: EXPERT_CONFIG.t2Threshold, t3: EXPERT_CONFIG.t3Threshold, t4: EXPERT_CONFIG.t4Threshold },
     DIMENSIONS: {
       reasoning: { slope: EXPERT_CONFIG.reasoningScalingSlope, ceiling: EXPERT_CONFIG.ceilingReasoningBase },
       agency:    { slope: EXPERT_CONFIG.agencyScalingSlope }, // Потолок определяет частица
@@ -177,6 +187,8 @@ function v3SimulateToYear(particle, targetYear, cfg) {
   let paradigmGeneration = 0;
   let lastShiftYear = cfg.BASE_YEAR;
   let algoKMult = 1.0;
+  let stateIntervention = false;
+  let interventionCooldown = 0;
 
   for (let step = 0; step < steps; step++) {
     const currentYear = cfg.BASE_YEAR + step * dt;
@@ -228,11 +240,33 @@ function v3SimulateToYear(particle, targetYear, cfg) {
       if (gap > 2.0) damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (gap - 2.0));
     }
 
+    // --- БАРЬЕР 3: Геополитика (государственный шок после T2) ---
+    if (cap >= cfg.THRESHOLDS.t2 && !stateIntervention && Math.random() < cfg.EXPERT.barrierGeopoliticsRisk * dt) {
+      stateIntervention = true;
+      interventionCooldown = 3.0;
+    }
+    if (stateIntervention) {
+      interventionCooldown -= dt;
+      if (interventionCooldown <= 0) stateIntervention = false;
+    }
+
+    // --- БАРЬЕР 4: Конкуренция ИИ (Эффект Черной Королевы после T3) ---
+    let nashDamping = 1.0;
+    if (cap >= cfg.THRESHOLDS.t3) {
+      nashDamping = 1.0 / (1.0 + cfg.EXPERT.barrierNashFriction * (cap - cfg.THRESHOLDS.t3));
+    }
+
+    // --- БАРЬЕР 5: Смысловой предел (Шок спроса) ---
+    let demandDamping = 1.0;
+    if (cap >= cfg.THRESHOLDS.t2 && (currentYear - 2026.0) < cfg.EXPERT.barrierDemandGrace) {
+      demandDamping = 0.6;
+    }
+
     // RSI (deterministic)
     const rsi = v3CalculateRSI(reasoning, agency, cap, cfg.EXPERT);
 
-    flopsLog += hwK * damping * dt;
-    algoLog += (algoK * algoKMult * damping + rsi) * dt;
+    flopsLog += hwK * damping * nashDamping * demandDamping * dt;
+    algoLog += (algoK * algoKMult * damping * nashDamping * demandDamping + rsi) * dt;
   }
   
   const logDiff = flopsLog + algoLog - baseLog;
@@ -388,6 +422,8 @@ class BayesianTracker {
       let dataExhaustionHit = false;
       let gpuBubbleBurst = false;
       let alignmentIncidentCooldown = 0;
+      let stateIntervention = false;
+      let interventionCooldown = 0;
 
       // --- Каскадные парадигмы ---
       let paradigmGeneration = 0;    // 0 = Трансформеры, 1 = первая смена, 2 = вторая...
@@ -500,6 +536,28 @@ class BayesianTracker {
         if (gpuBubbleBurst) {
           shockDamping *= 0.2; // Инвестиции рухнули
         }
+
+        // --- БАРЬЕР 3: Геополитика (государственный шок после T2) ---
+        if (cap >= this.cfg.THRESHOLDS.t2 && !stateIntervention && Math.random() < this.cfg.EXPERT.barrierGeopoliticsRisk * dt) {
+          stateIntervention = true;
+          interventionCooldown = 3.0; // 3 года жесточайшей регуляции / заморозки
+        }
+        if (stateIntervention) {
+          interventionCooldown -= dt;
+          if (interventionCooldown <= 0) stateIntervention = false;
+        }
+
+        // --- БАРЬЕР 4: Конкуренция ИИ (Эффект Черной Королевы после T3) ---
+        let nashDamping = 1.0;
+        if (cap >= this.cfg.THRESHOLDS.t3) {
+          nashDamping = 1.0 / (1.0 + this.cfg.EXPERT.barrierNashFriction * (cap - this.cfg.THRESHOLDS.t3));
+        }
+
+        // --- БАРЬЕР 5: Смысловой предел (Шок спроса) ---
+        let demandDamping = 1.0;
+        if (cap >= this.cfg.THRESHOLDS.t2 && (currentYear - 2026.0) < this.cfg.EXPERT.barrierDemandGrace) {
+          demandDamping = 0.6;
+        }
         
         if (currentYear >= this.cfg.CURRENT_YEAR && plotIdx < plotSteps) {
             trajYears[plotIdx] = currentYear;
@@ -558,7 +616,7 @@ class BayesianTracker {
         // Центр сигмоиды настраиваем на reasoning=7.5 (модели уровня o1/GPT-5).
         const hwAct = sigmoid(1.0 * (reasoning - 7.5)) * sigmoid(1.0 * (agency - 5.0));
         let hardwareCoDesign = 1.0 + (this.cfg.EXPERT.hwCoDesignBonus - 1.0) * hwAct;
-        let dynamicHwK = hwK * capitalMultiplier * hardwareCoDesign * damping;
+        let dynamicHwK = hwK * capitalMultiplier * hardwareCoDesign * damping * nashDamping * demandDamping;
         if (gpuBubbleBurst) dynamicHwK *= 0.2;
 
         // Физический предел роста железа (Material Cycle)
@@ -567,11 +625,9 @@ class BayesianTracker {
         // Shock damping applied symmetrically to both hw and algo
         flopsLog += dynamicHwK * shockDamping * dt;
 
-        // Algo progress: includes paradigm multiplier, data exhaustion, economic damping, and shock damping
-        let currentAlgoK = algoK * algoKMultiplier * damping;
+        // Algo progress: includes paradigm multiplier, data exhaustion, economic damping, nash, demand, and shock damping
+        let currentAlgoK = algoK * algoKMultiplier * damping * nashDamping * demandDamping;
         if (dataExhaustionHit) currentAlgoK *= this.cfg.EXPERT.dataWallPenalty;
-        // ИСПРАВЛЕНИЕ: Множитель winterDamping уже включен в переменную damping выше,
-        // поэтому не применяем его второй раз
         algoLog += ((currentAlgoK + rsi) * shockDamping) * dt;
       }
       
@@ -1215,11 +1271,12 @@ function plotScenarioFan(tracker) {
   }));
 
   const yrRange = [2026, 2055];
+  const lim = tracker.cfg.THRESHOLDS;
   traces.push(
-    { x: yrRange, y: [8.0, 8.0],   type: 'scatter', mode: 'lines', name: t.ch_t1, line: { color: '#eab308', dash: 'dot', width: 1 } },
-    { x: yrRange, y: [10.0, 10.0], type: 'scatter', mode: 'lines', name: t.ch_t2, line: { color: '#f97316', dash: 'dot', width: 1 } },
-    { x: yrRange, y: [25.0, 25.0], type: 'scatter', mode: 'lines', name: t.ch_t3, line: { color: '#ef4444', dash: 'dot', width: 1 } },
-    { x: yrRange, y: [100.0, 100.0], type: 'scatter', mode: 'lines', name: t.ch_t4, line: { color: '#8b5cf6', dash: 'dot', width: 1 } }
+    { x: yrRange, y: [lim.t1, lim.t1], type: 'scatter', mode: 'lines', name: t.ch_t1, line: { color: '#eab308', dash: 'dot', width: 1 } },
+    { x: yrRange, y: [lim.t2, lim.t2], type: 'scatter', mode: 'lines', name: t.ch_t2, line: { color: '#f97316', dash: 'dot', width: 1 } },
+    { x: yrRange, y: [lim.t3, lim.t3], type: 'scatter', mode: 'lines', name: t.ch_t3, line: { color: '#ef4444', dash: 'dot', width: 1 } },
+    { x: yrRange, y: [lim.t4, lim.t4], type: 'scatter', mode: 'lines', name: t.ch_t4, line: { color: '#8b5cf6', dash: 'dot', width: 1 } }
   );
 
   Plotly.newPlot('c6', traces, {
@@ -1384,6 +1441,7 @@ const LANG = {
     expert_blkD3:'Априорные допущения',
     expert_blkD4:'World Models',
     expert_blkD5:'Симуляция',
+    expert_blkE:'Барьеры реальности',
     // Deep params (kept for backward compat with expertResetDefaults)
     expert_cat7new:'Углубленные настройки (TTC, штрафы, шум)',
     expert_p_maxInferenceBonusReasoning:'Макс. TTC бонус (Reasoning)',
@@ -1406,14 +1464,24 @@ const LANG = {
     expert_d_observationNoiseSigma:'Уровень доверия к бенчмаркам (меньше = строже фильтр)',
     expert_p_asiThreshold:'Порог ASI',
     expert_d_asiThreshold:'Уровень capability для наступления ASI (Сверхразум)',
-    expert_p_t1Ceiling:'Потолок T1',
-    expert_d_t1Ceiling:'Порог capability для T1 (Понимание)',
-    expert_p_t2Ceiling:'Потолок T2',
-    expert_d_t2Ceiling:'Порог capability для T2 (Предсказуемость)',
-    expert_p_t3Ceiling:'Потолок T3',
-    expert_d_t3Ceiling:'Порог capability для T3 (Контроль)',
-    expert_p_t4Ceiling:'Потолок T4',
-    expert_d_t4Ceiling:'Порог capability для T4 (Влияние)',
+    expert_p_t1Threshold:'Порог T1',
+    expert_d_t1Threshold:'Порог capability для T1 (Понимание)',
+    expert_p_t2Threshold:'Порог T2',
+    expert_d_t2Threshold:'Порог capability для T2 (Предсказуемость)',
+    expert_p_t3Threshold:'Порог T3',
+    expert_d_t3Threshold:'Порог capability для T3 (Контроль)',
+    expert_p_t4Threshold:'Порог T4',
+    expert_d_t4Threshold:'Порог capability для T4 (Влияние)',
+    expert_p_barrierAtomsLimit:'Проклятие атомов',
+    expert_d_barrierAtomsLimit:'Макс. удвоений HW в год',
+    expert_p_barrierEnergyLog:'Термодинамика',
+    expert_d_barrierEnergyLog:'Предел FLOPs (log)',
+    expert_p_barrierGeopoliticsRisk:'Геополитика',
+    expert_d_barrierGeopoliticsRisk:'Шанс государственного шока после T2',
+    expert_p_barrierNashFriction:'Конкуренция ИИ',
+    expert_d_barrierNashFriction:'Координационная деградация после T3',
+    expert_p_barrierDemandGrace:'Смысловой предел',
+    expert_d_barrierDemandGrace:'Лет на адаптацию экономики к T2',
     // Observable Metrics
     obs_current:'Прогноз при текущих бенчмарках:',
     obs_swe:'SWE-bench',
@@ -1646,6 +1714,7 @@ const LANG = {
     expert_blkD3:'Philosophical Priors',
     expert_blkD4:'World Models',
     expert_blkD5:'Simulation',
+    expert_blkE:'Reality Barriers',
     // Deep params (kept for backward compat)
     expert_cat7new:'Deep Settings (TTC, Penalties, Noise)',
     expert_p_maxInferenceBonusReasoning:'Max TTC Bonus (Reasoning)',
@@ -1668,14 +1737,24 @@ const LANG = {
     expert_d_observationNoiseSigma:'Trust level in benchmarks (lower = stricter filter)',
     expert_p_asiThreshold:'ASI Threshold',
     expert_d_asiThreshold:'Capability level for ASI (Superintelligence)',
-    expert_p_t1Ceiling:'T1 Ceiling',
-    expert_d_t1Ceiling:'Capability threshold for T1 (Understanding)',
-    expert_p_t2Ceiling:'T2 Ceiling',
-    expert_d_t2Ceiling:'Capability threshold for T2 (Predictability)',
-    expert_p_t3Ceiling:'T3 Ceiling',
-    expert_d_t3Ceiling:'Capability threshold for T3 (Control)',
-    expert_p_t4Ceiling:'T4 Ceiling',
-    expert_d_t4Ceiling:'Capability threshold for T4 (Influence)',
+    expert_p_t1Threshold:'T1 Threshold',
+    expert_d_t1Threshold:'Capability threshold for T1 (Understanding)',
+    expert_p_t2Threshold:'T2 Threshold',
+    expert_d_t2Threshold:'Capability threshold for T2 (Predictability)',
+    expert_p_t3Threshold:'T3 Threshold',
+    expert_d_t3Threshold:'Capability threshold for T3 (Control)',
+    expert_p_t4Threshold:'T4 Threshold',
+    expert_d_t4Threshold:'Capability threshold for T4 (Influence)',
+    expert_p_barrierAtomsLimit:'Atoms Curse',
+    expert_d_barrierAtomsLimit:'Max HW doublings per year',
+    expert_p_barrierEnergyLog:'Thermodynamics',
+    expert_d_barrierEnergyLog:'FLOPs limit (log)',
+    expert_p_barrierGeopoliticsRisk:'Geopolitics',
+    expert_d_barrierGeopoliticsRisk:'Government shock chance after T2',
+    expert_p_barrierNashFriction:'AI Competition',
+    expert_d_barrierNashFriction:'Coordination degradation after T3',
+    expert_p_barrierDemandGrace:'Meaning Limit',
+    expert_d_barrierDemandGrace:'Years for economy to adapt to T2',
     // Observable Metrics
     obs_current:'Forecast at current benchmarks:',
     obs_swe:'SWE-bench',
@@ -2695,7 +2774,8 @@ function expertResetDefaults() {
     'maxInferenceBonusReasoning', 'maxInferenceBonusAgency', 'inferenceSaturationCap',
     'reasoningScalingSlope', 'agencyScalingSlope', 'dataWallPenalty',
     'hypeGapThreshold', 'winterDamping', 'observationNoiseSigma',
-    't1Ceiling', 't2Ceiling', 't3Ceiling', 't4Ceiling'
+    't1Threshold', 't2Threshold', 't3Threshold', 't4Threshold',
+    'barrierAtomsLimit', 'barrierEnergyLog', 'barrierGeopoliticsRisk', 'barrierNashFriction', 'barrierDemandGrace'
   ];
   const formats = {
     ceilingReasoningBase: v => v.toFixed(1),
@@ -2726,10 +2806,15 @@ function expertResetDefaults() {
     hypeGapThreshold: v => v.toFixed(1),
     winterDamping: v => v.toFixed(2),
     observationNoiseSigma: v => v.toFixed(2),
-    t1Ceiling: v => v.toFixed(1),
-    t2Ceiling: v => v.toFixed(1),
-    t3Ceiling: v => v.toFixed(1),
-    t4Ceiling: v => v.toFixed(1)
+    t1Threshold: v => v.toFixed(1),
+    t2Threshold: v => v.toFixed(1),
+    t3Threshold: v => v.toFixed(1),
+    t4Threshold: v => v.toFixed(1),
+    barrierAtomsLimit: v => v.toFixed(2),
+    barrierEnergyLog: v => v.toFixed(1),
+    barrierGeopoliticsRisk: v => v.toFixed(2),
+    barrierNashFriction: v => v.toFixed(2),
+    barrierDemandGrace: v => v.toFixed(1)
   };
   for (const f of fields) {
     document.getElementById('e-' + f).value = DEFAULT_EXPERT_CONFIG[f];

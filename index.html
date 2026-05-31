@@ -331,38 +331,38 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name" data-i18n="expert_p_t1Ceiling">Потолок T1 (Понимание)</span>
-          <span class="expert-param-value" id="ev-t1Ceiling">8.0</span>
+          <span class="expert-param-name" data-i18n="expert_p_t1Threshold">Порог T1 (Понимание)</span>
+          <span class="expert-param-value" id="ev-t1Threshold">8.0</span>
         </div>
-        <input type="range" id="e-t1Ceiling" min="3" max="15" step="0.5" value="8" oninput="expertUpdate('t1Ceiling',this.value)">
-        <div class="expert-param-desc" data-i18n="expert_d_t1Ceiling">Порог capability для T1</div>
+        <input type="range" id="e-t1Threshold" min="3" max="15" step="0.5" value="8" oninput="expertUpdate('t1Threshold',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_t1Threshold">Порог capability для T1</div>
       </div>
 
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name" data-i18n="expert_p_t2Ceiling">Потолок T2 (Предсказуемость)</span>
-          <span class="expert-param-value" id="ev-t2Ceiling">10.0</span>
+          <span class="expert-param-name" data-i18n="expert_p_t2Threshold">Порог T2 (Предсказуемость)</span>
+          <span class="expert-param-value" id="ev-t2Threshold">10.0</span>
         </div>
-        <input type="range" id="e-t2Ceiling" min="5" max="20" step="0.5" value="10" oninput="expertUpdate('t2Ceiling',this.value)">
-        <div class="expert-param-desc" data-i18n="expert_d_t2Ceiling">Порог capability для T2</div>
+        <input type="range" id="e-t2Threshold" min="5" max="20" step="0.5" value="10" oninput="expertUpdate('t2Threshold',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_t2Threshold">Порог capability для T2</div>
       </div>
 
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name" data-i18n="expert_p_t3Ceiling">Потолок T3 (Контроль)</span>
-          <span class="expert-param-value" id="ev-t3Ceiling">25.0</span>
+          <span class="expert-param-name" data-i18n="expert_p_t3Threshold">Порог T3 (Контроль)</span>
+          <span class="expert-param-value" id="ev-t3Threshold">25.0</span>
         </div>
-        <input type="range" id="e-t3Ceiling" min="10" max="50" step="1" value="25" oninput="expertUpdate('t3Ceiling',this.value)">
-        <div class="expert-param-desc" data-i18n="expert_d_t3Ceiling">Порог capability для T3</div>
+        <input type="range" id="e-t3Threshold" min="10" max="50" step="1" value="25" oninput="expertUpdate('t3Threshold',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_t3Threshold">Порог capability для T3</div>
       </div>
 
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name" data-i18n="expert_p_t4Ceiling">Потолок T4 (Влияние)</span>
-          <span class="expert-param-value" id="ev-t4Ceiling">100.0</span>
+          <span class="expert-param-name" data-i18n="expert_p_t4Threshold">Порог T4 (Влияние)</span>
+          <span class="expert-param-value" id="ev-t4Threshold">100.0</span>
         </div>
-        <input type="range" id="e-t4Ceiling" min="30" max="200" step="5" value="100" oninput="expertUpdate('t4Ceiling',this.value)">
-        <div class="expert-param-desc" data-i18n="expert_d_t4Ceiling">Порог capability для T4 (ASI)</div>
+        <input type="range" id="e-t4Threshold" min="30" max="200" step="5" value="100" oninput="expertUpdate('t4Threshold',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_t4Threshold">Порог capability для T4 (ASI)</div>
       </div>
 
       <div class="expert-param">
@@ -696,6 +696,55 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
         </div>
         <input type="range" id="e-rN" min="500" max="10000" step="500" value="3000" oninput="document.getElementById('ev-rN').textContent=this.value;document.getElementById('rN').value=this.value">
         <div class="expert-param-desc" data-i18n="expert_d_simulations">Количество Monte Carlo прогонов (500-10000)</div>
+      </div>
+    </div>
+
+    <div class="expert-group">
+      <div class="expert-group-title" data-i18n="expert_blkE">Барьеры реальности</div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_barrierAtomsLimit">Проклятие атомов</span>
+          <span class="expert-param-value" id="ev-barrierAtomsLimit">1.20</span>
+        </div>
+        <input type="range" id="e-barrierAtomsLimit" min="0.5" max="3.0" step="0.05" value="1.2" oninput="expertUpdate('barrierAtomsLimit',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_barrierAtomsLimit">Макс. удвоений HW в год</div>
+      </div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_barrierEnergyLog">Термодинамика</span>
+          <span class="expert-param-value" id="ev-barrierEnergyLog">27.5</span>
+        </div>
+        <input type="range" id="e-barrierEnergyLog" min="20" max="35" step="0.5" value="27.5" oninput="expertUpdate('barrierEnergyLog',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_barrierEnergyLog">Предел FLOPs (log)</div>
+      </div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_barrierGeopoliticsRisk">Геополитика</span>
+          <span class="expert-param-value" id="ev-barrierGeopoliticsRisk">0.25</span>
+        </div>
+        <input type="range" id="e-barrierGeopoliticsRisk" min="0" max="1.0" step="0.05" value="0.25" oninput="expertUpdate('barrierGeopoliticsRisk',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_barrierGeopoliticsRisk">Шанс государственного шока после T2</div>
+      </div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_barrierNashFriction">Конкуренция ИИ</span>
+          <span class="expert-param-value" id="ev-barrierNashFriction">0.15</span>
+        </div>
+        <input type="range" id="e-barrierNashFriction" min="0" max="1.0" step="0.01" value="0.15" oninput="expertUpdate('barrierNashFriction',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_barrierNashFriction">Координационная деградация после T3</div>
+      </div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_barrierDemandGrace">Смысловой предел</span>
+          <span class="expert-param-value" id="ev-barrierDemandGrace">5.0</span>
+        </div>
+        <input type="range" id="e-barrierDemandGrace" min="0" max="15" step="0.5" value="5" oninput="expertUpdate('barrierDemandGrace',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_barrierDemandGrace">Лет на адаптацию экономики к T2</div>
       </div>
     </div>
 
