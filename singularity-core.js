@@ -130,10 +130,24 @@ function v3ApplyInference(rawCap, maxBonus, satCap) {
 }
 
 function v3CalculateRSI(reasoning, agency, cap, expertCfg) {
-  if (reasoning < expertCfg.rsiTriggerReasoning || agency < expertCfg.rsiTriggerAgency) return 0;
-  const baseRsi = 0.15 * Math.pow(Math.max(0, cap - expertCfg.rsiTriggerAgency), 1.2) * expertCfg.rsiMultiplier;
+  // 1. Непрерывная активация (S-кривая). 
+  // Мы сдвигаем центр сигмоиды на -2.0 пункта от порогов в UI.
+  // Это значит, что при пороге 8.0, модели уровня 6.0 (сегодняшний фронтир) 
+  // уже имеют 50% активации от своего текущего (небольшого) потенциала.
+  const actR = sigmoid(1.2 * (reasoning - (expertCfg.rsiTriggerReasoning - 2.0)));
+  const actA = sigmoid(1.2 * (agency - (expertCfg.rsiTriggerAgency - 2.0)));
+  const rsiActivation = actR * actA;
+
+  // 2. Базовый потенциал растет экспоненциально от общего интеллекта (cap).
+  // При cap=6 (код-ассистенты) baseRsi ~ 0.22
+  // При cap=10 (AGI) baseRsi ~ 0.47
+  const baseRsi = 0.015 * Math.pow(Math.max(0, cap), 1.5) * expertCfg.rsiMultiplier;
+
+  // 3. Координационное трение (замедление при развертывании миллиардов агентов)
   const friction = 1.0 / (1.0 + expertCfg.coordinationFriction * Math.max(0, cap - 10.0));
-  return Math.min(2.0, baseRsi * friction);
+
+  // Итоговый RSI плавно нарастает от ~0.05 сейчас до 2.0 в эпоху ASI
+  return Math.min(2.0, baseRsi * rsiActivation * friction);
 }
 
 function v3SimulateToYear(particle, targetYear, cfg) {
@@ -536,11 +550,10 @@ class BayesianTracker {
         if (paradigmGeneration > 0 && hypeGracePeriod > 0) {
           capitalMultiplier = Math.max(capitalMultiplier, 2.0);
         }
-        // Hardware co-design: продвинутый ИИ сам проектирует чипы
-        let hardwareCoDesign = 1.0;
-        if (reasoning >= 10.0 && agency >= 8.0) {
-          hardwareCoDesign = this.cfg.EXPERT.hwCoDesignBonus;
-        }
+        // Hardware co-design: непрерывное внедрение ИИ в EDA (проектирование чипов).
+        // Центр сигмоиды настраиваем на reasoning=7.5 (модели уровня o1/GPT-5).
+        const hwAct = sigmoid(1.0 * (reasoning - 7.5)) * sigmoid(1.0 * (agency - 5.0));
+        let hardwareCoDesign = 1.0 + (this.cfg.EXPERT.hwCoDesignBonus - 1.0) * hwAct;
         let dynamicHwK = hwK * capitalMultiplier * hardwareCoDesign * damping;
         if (gpuBubbleBurst) dynamicHwK *= 0.2;
 
