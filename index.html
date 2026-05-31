@@ -269,11 +269,11 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     <div class="logo"><span class="logo-infinity">∞</span></div>
     <div>
       <h1 id="hdr_title" data-i18n="hdr_title">Singularity <span style="color:var(--accent)">Forecaster</span></h1>
-      <div class="subtitle" id="hdr_sub" data-i18n="hdr_sub">v3 Bayesian Tracker</div>
+      <div class="subtitle" id="hdr_sub" data-i18n="hdr_sub">v4 — Четыре стадии отлучения</div>
     </div>
   </div>
     <div class="header-right">
-      <div class="version" id="version">v3</div>
+      <div class="version" id="version">v4</div>
     <div class="lang-toggle">
       <button class="lang-btn active" id="lang_ru" onclick="setLang('ru')">RU</button>
       <button class="lang-btn" id="lang_en" onclick="setLang('en')">EN</button>
@@ -284,28 +284,20 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 <!-- ===== STATUS BAR ===== -->
 <div class="status-bar" id="statusBar">
   <div class="status-item">
-    <div class="status-value" id="vAGI">—</div>
-    <div class="status-label" data-i18n="sb_agi">AGI медиана</div>
+    <div class="status-value" id="vT1">—</div>
+    <div class="status-label" data-i18n="sb_t1">Медиана T1 (Понимание)</div>
   </div>
   <div class="status-item">
-    <div class="status-value orange" id="vASI">—</div>
-    <div class="status-label" data-i18n="sb_asi">ASI медиана</div>
+    <div class="status-value orange" id="vT2">—</div>
+    <div class="status-label" data-i18n="sb_t2">Медиана T2 (Предсказуемость)</div>
   </div>
   <div class="status-item">
-    <div class="status-value" id="vHW">—</div>
-    <div class="status-label" data-i18n="sb_hw">Удвоение HW</div>
+    <div class="status-value" id="vT3">—</div>
+    <div class="status-label" data-i18n="sb_t3">Медиана T3 (Контроль)</div>
   </div>
   <div class="status-item">
-    <div class="status-value" id="vAlgo">—</div>
-    <div class="status-label" data-i18n="sb_algo">Удвоение Algo</div>
-  </div>
-  <div class="status-item">
-    <div class="status-value orange" id="vAgency">—</div>
-    <div class="status-label" data-i18n="sb_agency">Потолок Agency</div>
-  </div>
-  <div class="status-item">
-    <div class="status-value" id="vESS">—</div>
-    <div class="status-label" data-i18n="sb_ess">ESS</div>
+    <div class="status-value red" id="vT4">—</div>
+    <div class="status-label" data-i18n="sb_t4">Медиана T4 (Влияние)</div>
   </div>
 </div>
 
@@ -339,11 +331,38 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 
       <div class="expert-param">
         <div class="expert-param-label">
-          <span class="expert-param-name" data-i18n="expert_p_asiThreshold">Порог ASI</span>
-          <span class="expert-param-value" id="ev-asiThreshold">100.0</span>
+          <span class="expert-param-name" data-i18n="expert_p_t1Ceiling">Потолок T1 (Понимание)</span>
+          <span class="expert-param-value" id="ev-t1Ceiling">8.0</span>
         </div>
-        <input type="range" id="e-asiThreshold" min="20" max="500" step="10" value="100" oninput="expertUpdate('asiThreshold',this.value)">
-        <div class="expert-param-desc" data-i18n="expert_d_asiThreshold">Уровень capability для наступления ASI (Сверхразум)</div>
+        <input type="range" id="e-t1Ceiling" min="3" max="15" step="0.5" value="8" oninput="expertUpdate('t1Ceiling',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_t1Ceiling">Порог capability для T1</div>
+      </div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_t2Ceiling">Потолок T2 (Предсказуемость)</span>
+          <span class="expert-param-value" id="ev-t2Ceiling">10.0</span>
+        </div>
+        <input type="range" id="e-t2Ceiling" min="5" max="20" step="0.5" value="10" oninput="expertUpdate('t2Ceiling',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_t2Ceiling">Порог capability для T2</div>
+      </div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_t3Ceiling">Потолок T3 (Контроль)</span>
+          <span class="expert-param-value" id="ev-t3Ceiling">25.0</span>
+        </div>
+        <input type="range" id="e-t3Ceiling" min="10" max="50" step="1" value="25" oninput="expertUpdate('t3Ceiling',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_t3Ceiling">Порог capability для T3</div>
+      </div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_t4Ceiling">Потолок T4 (Влияние)</span>
+          <span class="expert-param-value" id="ev-t4Ceiling">100.0</span>
+        </div>
+        <input type="range" id="e-t4Ceiling" min="30" max="200" step="5" value="100" oninput="expertUpdate('t4Ceiling',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_t4Ceiling">Порог capability для T4 (ASI)</div>
       </div>
 
       <div class="expert-param">

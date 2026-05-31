@@ -82,7 +82,10 @@ const EXPERT_CONFIG = {
   hypeGapThreshold: 4.0,           // Разрыв между логикой и агентностью для старта Зимы ИИ
   winterDamping: 0.1,              // Строгость Зимы ИИ (множитель инвестиций и алгоритмов)
   observationNoiseSigma: 1.5,      // Уровень доверия к бенчмаркам (меньше = строже фильтр)
-  asiThreshold: 100.0              // Порог наступления ASI (Сверхразум)
+  t1Ceiling: 8.0,                  // Порог T1: Понимание
+  t2Ceiling: 10.0,                 // Порог T2: Предсказуемость
+  t3Ceiling: 25.0,                 // Порог T3: Контроль
+  t4Ceiling: 100.0                 // Порог T4: Влияние (ASI)
 };
 
 // Default values for Expert Sandbox (single source of truth)
@@ -98,7 +101,7 @@ function createV3Config() {
     BASE_YEAR: 2023.0,          // Якорь (уровень GPT-4)
     BASE_LOG_FLOPS: 24.5,       // Начальные FLOPs в 2023
     CURRENT_YEAR: new Date().getFullYear() + (new Date().getMonth() / 12), // Динамический текущий год
-    THRESHOLDS: { t1: 8.0, t2: 10.0, t3: 25.0, t4: EXPERT_CONFIG.asiThreshold },
+    THRESHOLDS: { t1: EXPERT_CONFIG.t1Ceiling, t2: EXPERT_CONFIG.t2Ceiling, t3: EXPERT_CONFIG.t3Ceiling, t4: EXPERT_CONFIG.t4Ceiling },
     DIMENSIONS: {
       reasoning: { slope: EXPERT_CONFIG.reasoningScalingSlope, ceiling: EXPERT_CONFIG.ceilingReasoningBase },
       agency:    { slope: EXPERT_CONFIG.agencyScalingSlope }, // Потолок определяет частица
@@ -1029,7 +1032,9 @@ async function runSimulation() {
     const runData = tracker.runMonteCarloForecast(n);
     const t1List = runData.t1Years, t2List = runData.t2Years;
     const t3List = runData.t3Years, t4List = runData.t4Years;
+    const finiteT1 = t1List.filter(isFinite);
     const finiteT2 = t2List.filter(isFinite);
+    const finiteT3 = t3List.filter(isFinite);
     const finiteT4 = t4List.filter(isFinite);
     const finite = finiteT2;
     
@@ -1053,6 +1058,10 @@ async function runSimulation() {
         t3: yq.map(y => cdf(t3List, y)), t4: yq.map(y => cdf(t4List, y))
       },
       summary: {
+        t1Median: percentile(finiteT1, 50),
+        t2Median: percentile(finiteT2, 50),
+        t3Median: percentile(finiteT3, 50),
+        t4Median: percentile(finiteT4, 50),
         agiMedian: percentile(finiteT2, 50),
         asiMedian: percentile(finiteT4, 50),
         pAgi2029: cdf(t2List, 3), pAgi2033: cdf(t2List, 7), pAgi2040: cdf(t2List, 14),
@@ -1070,19 +1079,13 @@ async function runSimulation() {
 
 function updateUI(r) {
   const s = r.summary, fmt = yearsText;
-  setVal('vAGI', fmt(s.agiMedian), 'agiyears'); setVal('vASI', fmt(s.asiMedian), 'asiyears');
+  setVal('vT1', fmt(s.t1Median), 't1years');
+  setVal('vT2', fmt(s.t2Median), 't2years');
+  setVal('vT3', fmt(s.t3Median), 't3years');
+  setVal('vT4', fmt(s.t4Median), 't4years');
   // Скрыть/показать предупреждение "AGI не достигнут"
   const noAgiEl = document.getElementById('v3NoAgi');
   if (noAgiEl) noAgiEl.style.display = isFinite(s.agiMedian) ? 'none' : '';
-  const tracker = v3GetTracker();
-  if (tracker) {
-    const sum = tracker.getSummary();
-    const ess = 1.0 / tracker.weights.reduce((a, b) => a + b * b, 0);
-    setVal('vHW', sum.hwMonths.toFixed(1) + ' мес');
-    setVal('vAlgo', sum.algoMonths.toFixed(1) + ' мес');
-    setVal('vAgency', sum.agencyCeiling.toFixed(2));
-    setVal('vESS', ess.toFixed(0));
-  }
   plotHistogram(r.histogram); plotCumulative(r.cumulative);
   // Advanced charts (async-like, yield between heavy plots)
   requestAnimationFrame(async () => {
@@ -1247,9 +1250,10 @@ window._lang = 'ru';
 const LANG = {
   ru: {
     // Header
-    hdr_title:'Singularity Forecaster', hdr_sub:'v3 Bayesian Tracker',
+    hdr_title:'Singularity Forecaster', hdr_sub:'v4 — Четыре стадии отлучения',
     // Status bar
-    sb_agi:'Медиана T2 (Предсказуемость)', sb_asi:'Медиана T4 (Влияние)',
+    sb_t1:'Медиана T1 (Понимание)', sb_t2:'Медиана T2 (Предсказуемость)',
+    sb_t3:'Медиана T3 (Контроль)', sb_t4:'Медиана T4 (Влияние)',
     sb_pagi_2029:'P(T2 · 2029)', sb_pagi_2033:'P(T2 · 2033)', sb_pagi_2040:'P(T2 · 2040)',
     sb_pasi_2035:'P(T4 · 2035)', sb_pasi_2045:'P(T4 · 2045)',
     sb_hw:'Удвоение HW', sb_algo:'Удвоение Algo', sb_agency:'Потолок Agency', sb_ess:'ESS',
@@ -1402,6 +1406,14 @@ const LANG = {
     expert_d_observationNoiseSigma:'Уровень доверия к бенчмаркам (меньше = строже фильтр)',
     expert_p_asiThreshold:'Порог ASI',
     expert_d_asiThreshold:'Уровень capability для наступления ASI (Сверхразум)',
+    expert_p_t1Ceiling:'Потолок T1',
+    expert_d_t1Ceiling:'Порог capability для T1 (Понимание)',
+    expert_p_t2Ceiling:'Потолок T2',
+    expert_d_t2Ceiling:'Порог capability для T2 (Предсказуемость)',
+    expert_p_t3Ceiling:'Потолок T3',
+    expert_d_t3Ceiling:'Порог capability для T3 (Контроль)',
+    expert_p_t4Ceiling:'Потолок T4',
+    expert_d_t4Ceiling:'Порог capability для T4 (Влияние)',
     // Observable Metrics
     obs_current:'Прогноз при текущих бенчмарках:',
     obs_swe:'SWE-bench',
@@ -1499,9 +1511,11 @@ const LANG = {
     v3_params_title:'Параметры v3', v3_no_agi:'AGI не достигнут ни одной частицей к 2068',
   },
   en: {
-    hdr_title:'Singularity Forecaster', hdr_sub:'v3 Bayesian Tracker',
+    // Header
+    hdr_title:'Singularity Forecaster', hdr_sub:'v4 — Four Stages of Dissolution',
     // Status bar
-    sb_agi:'Median T2 (Predictability)', sb_asi:'Median T4 (Influence)',
+    sb_t1:'Median T1 (Understanding)', sb_t2:'Median T2 (Predictability)',
+    sb_t3:'Median T3 (Control)', sb_t4:'Median T4 (Influence)',
     sb_pagi_2029:'P(T2 · 2029)', sb_pagi_2033:'P(T2 · 2033)', sb_pagi_2040:'P(T2 · 2040)',
     sb_pasi_2035:'P(T4 · 2035)', sb_pasi_2045:'P(T4 · 2045)',
     sb_hw:'HW Doubling', sb_algo:'Algo Doubling', sb_agency:'Agency Ceiling', sb_ess:'ESS',
@@ -1654,6 +1668,14 @@ const LANG = {
     expert_d_observationNoiseSigma:'Trust level in benchmarks (lower = stricter filter)',
     expert_p_asiThreshold:'ASI Threshold',
     expert_d_asiThreshold:'Capability level for ASI (Superintelligence)',
+    expert_p_t1Ceiling:'T1 Ceiling',
+    expert_d_t1Ceiling:'Capability threshold for T1 (Understanding)',
+    expert_p_t2Ceiling:'T2 Ceiling',
+    expert_d_t2Ceiling:'Capability threshold for T2 (Predictability)',
+    expert_p_t3Ceiling:'T3 Ceiling',
+    expert_d_t3Ceiling:'Capability threshold for T3 (Control)',
+    expert_p_t4Ceiling:'T4 Ceiling',
+    expert_d_t4Ceiling:'Capability threshold for T4 (Influence)',
     // Observable Metrics
     obs_current:'Forecast at current benchmarks:',
     obs_swe:'SWE-bench',
@@ -2672,7 +2694,8 @@ function expertResetDefaults() {
     'priorAgencyMean', 'priorAgencyStd', 'toolUseVsAutonomyWeight',
     'maxInferenceBonusReasoning', 'maxInferenceBonusAgency', 'inferenceSaturationCap',
     'reasoningScalingSlope', 'agencyScalingSlope', 'dataWallPenalty',
-    'hypeGapThreshold', 'winterDamping', 'observationNoiseSigma', 'asiThreshold'
+    'hypeGapThreshold', 'winterDamping', 'observationNoiseSigma',
+    't1Ceiling', 't2Ceiling', 't3Ceiling', 't4Ceiling'
   ];
   const formats = {
     ceilingReasoningBase: v => v.toFixed(1),
@@ -2703,7 +2726,10 @@ function expertResetDefaults() {
     hypeGapThreshold: v => v.toFixed(1),
     winterDamping: v => v.toFixed(2),
     observationNoiseSigma: v => v.toFixed(2),
-    asiThreshold: v => v.toFixed(1)
+    t1Ceiling: v => v.toFixed(1),
+    t2Ceiling: v => v.toFixed(1),
+    t3Ceiling: v => v.toFixed(1),
+    t4Ceiling: v => v.toFixed(1)
   };
   for (const f of fields) {
     document.getElementById('e-' + f).value = DEFAULT_EXPERT_CONFIG[f];
