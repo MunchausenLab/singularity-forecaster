@@ -1010,7 +1010,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 <!-- ===== ABOUT ===== -->
 <div style="padding:0 32px;max-width:1100px;margin:0 auto;width:100%">
   <div class="about" id="aboutSection">
-    <h2 data-i18n="about_title">О модели v3</h2>
+    <h2 data-i18n="about_title">О модели v4</h2>
     <p data-i18n="about_intro">Модель v4 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных бенчмарков (ARC-AGI, SWE-bench, Arena Elo). Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге. Панель Expert Sandbox позволяет настраивать 30+ параметров модели и проверять гипотезы о будущем в реальном времени.</p>
     <div class="sec-label" data-i18n="defs_label">Архитектура модели</div>
     <div class="fgrid">
@@ -1055,25 +1055,21 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     <div class="defs-grid">
       <div class="def-card">
         <h4>🤖 <span data-i18n="t1_def_title">T1: Потеря понимания</span></h4>
-        <div class="score" style="color:var(--yellow)" data-i18n="t1_def_score">Потолок: настраиваемый</div>
         <p data-i18n="t1_def_text1">Система сложнее когнитивной модели человека. Пользование становится ритуальным. Мы доверяем интерфейсам, но уже не понимаем причин решений.</p>
         <p data-i18n="t1_def_text2" style="color:#666680;font-size:.72rem;margin-top:6px">Промежуточные стадии: Инструмент → Усилитель → Посредник.</p>
       </div>
       <div class="def-card">
         <h4>🔮 <span data-i18n="t2_def_title">T2: Потеря предсказуемости</span></h4>
-        <div class="score" style="color:var(--orange)" data-i18n="t2_def_score">Потолок: настраиваемый</div>
         <p data-i18n="t2_def_text1">Система выступает как координатор. Никто не способен оценить глобальные последствия действий. Возникает ощущение случайности мира и эрозия человеческой агентности.</p>
         <p data-i18n="t2_def_text2" style="color:#666680;font-size:.72rem;margin-top:6px">Промежуточные стадии: Координатор → Арбитр → Архитектор среды.</p>
       </div>
       <div class="def-card">
         <h4>⚡ <span data-i18n="t3_def_title">T3: Потеря контроля</span></h4>
-        <div class="score" style="color:var(--red)" data-i18n="t3_def_score">Потолок: настраиваемый</div>
         <p data-i18n="t3_def_text1">Система автономна и действует быстрее человеческого цикла. Строит собственную инфраструктуру. Люди, политики и государства становятся функцией инфраструктуры.</p>
         <p data-i18n="t3_def_text2" style="color:#666680;font-size:.72rem;margin-top:6px">Промежуточные стадии: Метасистема → Автономная инфраструктура.</p>
       </div>
       <div class="def-card">
         <h4>🌌 <span data-i18n="t4_def_title">T4: Потеря влияния</span></h4>
-        <div class="score" style="color:var(--purple)" data-i18n="t4_def_score">Потолок: настраиваемый</div>
         <p data-i18n="t4_def_text1">Среда мыслит за человека. Пространство решений полностью сконструировано извне. Цели системы перестают быть человеческими. Цивилизационный фазовый переход.</p>
         <p data-i18n="t4_def_text2" style="color:#666680;font-size:.72rem;margin-top:6px">Промежуточные стадии: Постчеловеческий слой → Цивилизационный фазовый переход.</p>
       </div>
@@ -1082,7 +1078,11 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 </div>
 
 <footer>
-  BelikVCP | Singularity Forecaster v3 | Bayesian Tracker | <span data-i18n="footer_note">Data is estimated</span>
+  <a href="https://github.com/slavabelik79/singularity-forecaster" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">GitHub</a>
+  &nbsp;|&nbsp;
+  <a href="https://t.me/slavabelik" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">Telegram</a>
+  &nbsp;|&nbsp;
+  Singularity Forecaster v4 | Bayesian Particle Filter | <span data-i18n="footer_note">Data is estimated</span>
 </footer>
 
 <!-- ===== OVERLAY ===== -->
