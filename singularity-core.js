@@ -1248,7 +1248,7 @@ async function plotSensitivityHeatmap(tracker) {
     colorscale: [[0, '#0a0a0f'], [0.2, '#1a3a4a'], [0.4, '#0e5e7a'], [0.6, '#f0883e'], [0.8, '#ef4444'], [1, '#ff0040']],
     text: textMatrix,
     hoverinfo: 'text',
-    colorbar: { title: { text: t.ch5_colorbar || 'Лет до AGI' }, thickness: 12, len: 0.8 },
+    colorbar: { title: { text: t.ch5_colorbar || 'Лет до T4' }, thickness: 12, len: 0.8 },
   }], {
     ...LAYOUT_BASE,
     xaxis: { ...LAYOUT_BASE.xaxis, title: { text: 'SWE-bench (%)' } },
@@ -1329,20 +1329,20 @@ const LANG = {
     chart5:'3. Карта чувствительности (Intel × Agentic)',
     chart6:'4. Веер сценариев (Multi-Run Overlay)',
     chart7:'5. Вклад компонент (Stacked Area)',
-    tip1:'Показывает, где группируются 3000 прогонов Монте-Карло. Чем выше столбец — тем больше сценариев привели к AGI/ASI в этом году.',
-    tip3:'P(AGI ≤ X) — шанс, что AGI появится не позднее, чем через X лет. Если кривая круто поднимается — быстрый переход от «почти нет» к «почти точно».',
-    tip5:'Тепловая карта: оси — параметры Intelligence и Agentic последнего наблюдения. Цвет — медианный год AGI. Показывает, какой параметр доминирует в прогнозе.',
+    tip1:'Показывает, где группируются 3000 прогонов Монте-Карло. Чем выше столбец — тем больше сценариев привели к T1/T2/T3/T4 в этом году.',
+    tip3:'P(T2 ≤ X) — шанс, что T2 появится не позднее, чем через X лет. Если кривая круто поднимается — быстрый переход от «почти нет» к «почти точно».',
+    tip5:'Тепловая карта: оси — параметры Intelligence и Agentic последнего наблюдения. Цвет — медианный год T2. Показывает, какой параметр доминирует в прогнозе.',
     tip6:'30 случайных прогонов из апостериорного распределения, наложенных полупрозрачно. Показывает разброс возможных путей к сингулярности.',
     tip7:'Разбивка capability на составляющие: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Показывает, что двигает прогресс.',
     ch_t1:'T1: Понимание', ch_t2:'T2: Предсказуемость', ch_t3:'T3: Контроль', ch_t4:'T4: Влияние',
     ch1_xlabel:'Год', ch1_ylabel:'Прогонов',
-    ch3_xlabel:'Год', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
-    ch5_label:'Лет до AGI', ch5_colorbar:'Лет до AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score', ch5_loading:'Вычисление матрицы (асинхронно)...',
+    ch3_xlabel:'Год', ch3_ylabel:'P(%)', ch3_pagi:'P(T2)', ch3_pasi:'P(T4)',
+    ch5_label:'Лет до T4', ch5_colorbar:'Лет до T4', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score', ch5_loading:'Вычисление матрицы (асинхронно)...',
     ch7_ylabel:'Суммарный вклад (log FLOPs)',
     fY_suffix:' лет', fY_gt:'> 40 лет',
     // About
-    about_title:'О модели v3',
-    about_intro:'Модель v3 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных Artificial Analysis. Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения AA обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге. Панель Expert Sandbox позволяет настраивать 18+ параметров модели и проверять гипотезы о будущем в реальном времени.',
+    about_title:'О модели v4',
+    about_intro:'Модель v4 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных Artificial Analysis. Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения AA обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге. Панель Expert Sandbox позволяет настраивать 18+ параметров модели и проверять гипотезы о будущем в реальном времени.',
     defs_label:'Архитектура модели',
     arch_tracker_title:'Байесовский трекер',
     arch_tracker_desc:'1000 частиц с настраиваемыми априорными распределениями: hw_months, algo_months, agency_ceiling (mean/std через Expert Sandbox). Каждое наблюдение AA (Intelligence + Agentic) обновляет веса через гауссово правдоподобие. ESS-ресэмплинг предотвращает вырождение. Поддержка трёх World Models: Cascade, Hard Wall, Slow Takeoff.',
@@ -1355,12 +1355,12 @@ const LANG = {
     arch_bottlenecks_title:'Бутылочные горлышки',
     arch_bottlenecks_desc:'Экономическая стена: если Reasoning обгоняет Agency > 2.0 — инвестиции экспоненциально падают. GPU-пузырь может лопнуть при agency < 4. Alignment incident замораживает масштабирование на 1.5 года. Физический предел роста hardware (maxPhysicalHwGrowth) — даже сверхразум не строит fabs мгновенно.',
     arch_mc_title:'Monte Carlo прогноз',
-    arch_mc_desc:'3000 прогонов из апостериорного распределения. Каждый прогон — симуляция от 2023 до 2068 года с месячным шагом. Результат: распределение лет до AGI (cap >= 10) и ASI (cap >= 100).',
+    arch_mc_desc:'3000 прогонов из апостериорного распределения. Каждый прогон — симуляция от 2023 до 2068 года с месячным шагом. Результат: распределение лет до T1 (cap >= 8), T2 (cap >= 10), T3 (cap >= 25) и T4 (cap >= 100).',
     arch_expert_title:'Expert Sandbox',
-    arch_expert_desc:'18+ настраиваемых параметров: априорные допущения (agency mean/std), пороги RSI, координационное трение, физический предел hardware, compute overhang, вероятности World Models, вес autonomy в бенчмарках. Превращает модель из прогноза в эпистемологический симулятор.',
+    arch_expert_desc:'30+ настраиваемых параметров: априорные допущения (agency mean/std), пороги RSI, координационное трение, физический предел hardware, compute overhang, вероятности World Models, вес autonomy в бенчмарках. Превращает модель из прогноза в эпистемологический симулятор.',
     arch_shocks_title:'Шоки и Black Swans',
     arch_shocks_desc:'Типы шоков: Data Wall (исчерпание данных), Alignment Incident (регуляторная заморозка), GPU Bubble Burst (обвал инвестиций), AI Winter (разрыв reasoning-agency). Вероятности зависят от текущего состояния системы.',
-    defs_intro:'В модели v3 используются строгие операциональные определения на основе двухмерной шкалы (Reasoning, Agency). Шкала логарифмическая: GPT-4 (конец 2023) ~ 3.0 по Reasoning и ~0.2 по Agency, текущие модели середины 2026 ~ 6.5 по Reasoning и ~6.5 по Agency. AGI = 10.0, ASI = 100.0.',
+    defs_intro:'В модели v4 используется 4-стадийная модель сингулярности на основе двухмерной шкалы (Reasoning, Agency). Шкала логарифмическая: GPT-4 (конец 2023) ~ 3.0 по Reasoning и ~0.2 по Agency. T1 (Понимание) = 8.0, T2 (Предсказуемость) = 10.0, T3 (Контроль) = 25.0, T4 (Влияние) = 100.0.',
     agi_def_title:'T1 & T2: Потеря понимания и предсказуемости',
     agi_def_score:'Capability: 8.0 и 10.0',
     agi_def_text1:'<b>1. Потеря понимания (cap=8.0):</b> Система сложнее когнитивной модели человека. Пользование становится ритуальным. Мы доверяем интерфейсам, но уже не понимаем причин решений.<br><br><b>2. Потеря предсказуемости (cap=10.0):</b> Система выступает как координатор. Никто не способен оценить глобальные последствия действий. Возникает ощущение случайности мира и эрозия человеческой агентности.',
@@ -1402,7 +1402,7 @@ const LANG = {
     expert_p_maxPhysicalHwGrowth:'Макс. рост железа',
     expert_d_maxPhysicalHwGrowth:'Физический предел роста hardware',
     expert_p_hwCoDesignBonus:'HW ко-дизайн',
-    expert_d_hwCoDesignBonus:'Насколько AGI ускоряет закон Мура',
+    expert_d_hwCoDesignBonus:'Насколько AI ускоряет закон Мура',
     expert_p_bubbleBurstRisk:'Риск GPU-пузыря',
     expert_d_bubbleBurstRisk:'Шанс краха инвестиций если agency < 4',
     expert_p_alignmentCooldown:'Инцидент безопасности (лет)',
@@ -1410,7 +1410,7 @@ const LANG = {
     expert_p_maxCapitalMultiplier:'Эластичность капитала',
     expert_d_maxCapitalMultiplier:'Макс. множитель инвестиций при высокой полезности',
     expert_p_priorAgencyMean:'Априорное среднее Agency',
-    expert_d_priorAgencyMean:'Базовое ожидание потолка агентности (=10 это AGI)',
+    expert_d_priorAgencyMean:'Базовое ожидание потолка агентности (=10 это T2)',
     expert_p_priorAgencyStd:'Априорный разброс',
     expert_d_priorAgencyStd:'Разброс мнений о потолке (больше = больше оптимистичных частиц)',
     expert_p_toolUseVsAutonomyWeight:'Вес Autonomy в SWE-bench',
@@ -1491,17 +1491,17 @@ const LANG = {
     // Footer
     footer_note:'Данные оценочные',
     // Loading
-    loading:'Байесовское прогнозирование v3...',
+    loading:'Байесовское прогнозирование v4...',
     // Swarm
     swarm_title:'Визуализация обучения и прогноза',
-    swarm_desc:'Интерактивная визуализация байесовского обучения. Режим «Обучение» показывает как наблюдения убивают слабые гипотезы. Режим «Прогноз» разворачивает выжившие гипотезы в предсказания AGI/ASI.',
+    swarm_desc:'Интерактивная визуализация байесовского обучения. Режим «Обучение» показывает как наблюдения убивают слабые гипотезы. Режим «Прогноз» разворачивает выжившие гипотезы в предсказания T1-T4.',
     swarm_play:'Запуск', swarm_reset:'Сброс', swarm_hint:'Нажмите «Запуск» или перетаскивайте ползунок',
     swarm_mode_learn:'Обучение', swarm_mode_forecast:'Прогноз',
     swarm_play_forecast:'Анимация',
-    forecast_xaxis:'Год AGI', forecast_yaxis:'Удвоение HW (мес)',
-    forecast_pagi:'P(AGI до 2068)', forecast_median:'Медиана AGI',
-    forecast_xaxis_asi:'Год ASI', forecast_median_asi:'Медиана ASI',
-    forecast_overlay:'AGI \u2264', forecast_overlay_desc:'Показаны гипотезы с AGI до',
+    forecast_xaxis:'Год T2', forecast_yaxis:'Удвоение HW (мес)',
+    forecast_pagi:'P(T2 до 2068)', forecast_median:'Медиана T2',
+    forecast_xaxis_asi:'Год T4', forecast_median_asi:'Медиана T4',
+    forecast_overlay:'T2 \u2264', forecast_overlay_desc:'Показаны гипотезы с T2 до',
     live_swarm_title:'Симуляция в реальном времени', live_swarm_desc:'Каждые 0.25 сек рой перерисовывается из нового прогона Monte Carlo.',
     swarm_play_forecast:'Анимация',
     // Event Horizon
@@ -1512,30 +1512,30 @@ const LANG = {
     swarm_learn_p1:'Интерактивная визуализация байесовского обучения в реальном времени. Каждая точка — гипотеза о мире (частица): скорость роста железа <em>hw_months</em> и потолок агентности <em>agency_ceiling</em>.',
     swarm_learn_p2:'<b>Режим «Обучение» (Learn):</b> ползунок прикладывает наблюдения AA одно за другим. При каждом наблюдении пересчитываются веса:',
     swarm_learn_p3:'где R<sub>i</sub> и Ag<sub>i</sub> — предсказания частицы i на год наблюдения, σ — нешумящее правдоподобие. Частицы, чьи предсказания далеки от наблюдения, экспоненциально теряют вес.',
-    swarm_learn_p4:'<b>Режим «Прогноз» (Forecast):</b> все наблюдения применены. Ползунок фильтрует гипотезы по году AGI — показывая, какие частицы предсказывают AGI до выбранного года.',
+    swarm_learn_p4:'<b>Режим «Прогноз» (Forecast):</b> все наблюдения применены. Ползунок фильтрует гипотезы по году T2 — показывая, какие частицы предсказывают T2 до выбранного года.',
     swarm_learn_p5:'<b>Визуальный язык:</b> яркие области = высокая плотность весов; оранжевый круг = медиана роя; красный = текущее наблюдение. В режиме покой рой «дышит» — перестраивается из нового MC прогона каждые 0.25 сек.',
     swarm_learn_p6:'<b>Что влияет:</b> количество и точность наблюдений AA, априорные допущения (priorAgencyMean/Std в Expert Sandbox), сам состав частиц.',
     // Live Swarm desc card
-    live_swarm_p1:'Две параллельные симуляции — AGI и ASI — обновляются каждые 0.25 сек из нового прогона Monte Carlo. Показывает «живой» posterior без необходимости нажимать «Запуск».',
-    live_swarm_p2:'<b>Точки:</b> каждая частица = один прогон <code>runMonteCarloForecast(500)</code>. Цвет кодирует год AGI/ASI: голубой = ранний, жёлтый = средний, красный = поздний. Прозрачность = вес частицы.',
-    live_swarm_p3:'<b>Формула AGI/ASI year:</b> для каждого из 500 прогонов моделируется траектория от BASE_YEAR (2023) до 2068 с месячным шагом. AGI = первый год, где <code>cap ≥ 10.0</code>. ASI = первый год, где <code>cap ≥ 100.0</code>.',
+    live_swarm_p1:'Четыре параллельные симуляции — T1, T2, T3, T4 — обновляются каждые 0.25 сек из нового прогона Monte Carlo. Показывает «живой» posterior без необходимости нажимать «Запуск».',
+    live_swarm_p2:'<b>Точки:</b> каждая частица = один прогон <code>runMonteCarloForecast(500)</code>. Цвет кодирует год этапа: жёлтый = T1, оранжевый = T2, красный = T3, фиолетовый = T4. Прозрачность = вес частицы.',
+    live_swarm_p3:'<b>Формула:</b> для каждого из 500 прогонов моделируется траектория от BASE_YEAR (2023) до 2068 с месячным шагом. T1 = первый год, где <code>cap ≥ 8.0</code>. T2 = <code>cap ≥ 10.0</code>. T3 = <code>cap ≥ 25.0</code>. T4 = <code>cap ≥ 100.0</code>.',
     live_swarm_p4:'Статистика справа: медиана, P10–P90, количество частиц. Обновляется в реальном времени — видна дисперсия posterior.',
     live_swarm_p5:'<b>Что влияет:</b> текущий набор наблюдений, веса частиц, случайность MC прогона. Стабильность картинки ← уверенность модели. Хаотичность ← высокая неопределённость.',
     // Histogram desc
-    hist_p1:'Результат 3000 прогонов Monte Carlo из апостериорного распределения. По оси X — год, по Y — количество прогонов, в которых AGI/ASI достигнут в этот год.',
+    hist_p1:'Результат 3000 прогонов Monte Carlo из апостериорного распределения. По оси X — год, по Y — количество прогонов, в которых T1/T2/T3/T4 достигнут в этот год.',
     hist_p2:'<b>Ключевое уравнение:</b> каждый прогон выбирается из весов частиц (systematic resampling), затем симулируется полная траектория до 2068:',
     hist_p3:'<b>Пик гистограммы</b> = наиболее вероятный год. Широкое распределение = высокая неопределённость. Бимодальность = два конкурирующих сценария (например, «быстрый прорыв» vs «стагнация»).',
     hist_p4:'<b>Что сдвигает гистограмму:</b> новые наблюдения AA (через байесовское обновление весов), параметры Expert Sandbox (пороги RSI, парадигмы, потолки), количество частиц.',
     // Cumulative desc
-    cum_p1:'Накопленная функция распределения: P(AGI ≤ X) и P(ASI ≤ X). Отвечает на вопрос «какова вероятность, что AGI случится не позднее года X?»',
+    cum_p1:'Накопленная функция распределения: P(T2 ≤ X) и P(T4 ≤ X). Отвечает на вопрос «какова вероятность, что T2/T4 случится не позднее года X?»',
     cum_p2:'<b>Вычисление:</b> из тех же 3000 прогонов. Для каждого года T:',
     cum_p3:'<b>Ступенчатый подъём</b> = концентрация прогнозов в узком окне. <b>Плато</b> = затор (data wall, энергетика, регуляция). <b>Резкий скачок</b> = почти все частицы сходятся в одном сценарии.',
-    cum_p4:'<b>ASI-кривая</b> всегда лежит правее AGI — ASI требует cap ≥ 100. Расстояние между кривыми = время между AGI и ASI.',
+    cum_p4:'<b>T4-кривая</b> всегда лежит правее T2 — T4 требует cap ≥ 100. Расстояние между кривыми = время между T2 и T4.',
     cum_p5:'<b>Что влияет:</b> те же факторы, что и гистограмма. Кривые дополняют друг друга — гистограмма показывает «где пик», кумулятивная — «какова вероятность к году X».',
     // Sensitivity desc
-    sens_p1:'Карта чувствительности: как прогноз зависит от последнего наблюдения Intelligence × Agentic. Ячейка (i,j) = медианный год AGI если последнее наблюдение = (Intel=i, Agentic=j).',
+    sens_p1:'Карта чувствительности: как прогноз зависит от последнего наблюдения Intelligence × Agentic. Ячейка (i,j) = медианный год T2 если последнее наблюдение = (Intel=i, Agentic=j).',
     sens_p2:'<b>Вычисление:</b> для каждой пары (i,j) из сетки [40,45,...,85] × [10,20,...,100] выполняется <code>runSensitivityMatrix()</code> — берётся текущий tracker, клонируются частицы, заменяется последнее наблюдение на (i,j), запускается MC.',
-    sens_p3:'<b>Интерпретация цвета:</b> синий = ранний AGI (модель «верит» что мы близко); красный = поздний AGI (далеко). Градиенты показывают, какой параметр доминирует:',
+    sens_p3:'<b>Интерпретация цвета:</b> синий = ранний T2 (модель «верит» что мы близко); красный = поздний T2 (далеко). Градиенты показывают, какой параметр доминирует:',
     sens_li1:'Вертикальный градиент → доминирует Intelligence',
     sens_li2:'Горизонтальный градиент → доминирует Agency',
     sens_li3:'Диагональный → оба параметра равноценны',
@@ -1543,7 +1543,7 @@ const LANG = {
     // Fan desc
     fan_p1:'30 случайных прогонов из posterior, наложенных полупрозрачно. Показывает разброс возможных путей capability от 2026 до 2050 года (логарифмическая шкала).',
     fan_p2:'<b>Каждый прогон:</b> случайная частица (по весам) симулируется до 2050 с месячным шагом. На каждом шаге: paradigm shift, RSI, экономические бутылочные горлышки.',
-    fan_p3:'<b>Плотные пучки</b> = сценарии сходятся. <b>Разброс</b> = высокая неопределённость. <b>Горизонтальные линии cap=10 и cap=100:</b> пороги AGI и ASI соответственно.',
+    fan_p3:'<b>Плотные пучки</b> = сценарии сходятся. <b>Разброс</b> = высокая неопределённость. <b>Горизонтальные линии cap=8, 10, 25, 100:</b> пороги T1, T2, T3, T4 соответственно.',
     fan_p4:'<b>Что формирует веер:</b><br>• Ширина ← различие в hw_months, algo_months между частицами<br>• Наклон ← FLOPs-scaling (hwK и algoK)<br>• Изгибы ← paradigm shifts, RSI onset, экономические стены',
     // Decomposition desc
     decomp_p1:'Stacked area: разбивка суммарной capability на 4 компоненты. Показывает <em>что</em> движет прогрессом в каждый момент времени.',
@@ -1551,9 +1551,9 @@ const LANG = {
     decomp_p3:'Вычисляется через <code>runDecomposition()</code> — усреднение по всем частицам с весами. Переход от «железа» к «алгоритмам» к «RSI» = путь к сингулярности.',
     // Event Horizon desc
     eh_p1_desc:'Анимированная визуализация распределения 4 этапов сингулярности. Каждая частица = один MC прогон. Вылетает из центра (2026) и застывает на орбите T1/T2/T3/T4.',
-    eh_p2_desc:'<b>Метафора:</b> плотные кольца = высокая вероятность (много частиц предсказывают AGI в этом году). Редкие точки = маловероятные сценарии.',
-    eh_p3_desc:'<b>Механика:</b> при запуске частицы «взлетают» из центра с задержкой, пропорциональной году AGI. Оранжевые орбиты = AGI, красные = ASI. Расстояние от центр = вес частицы.',
-    eh_p4_desc:'<b>Что влияет:</b> распределение AGI/ASI лет из posterior, случайность MC прогона. Симметричная сфера = один чёткий пик. Фрактальная структура = множество конкурирующих сценариев. P(AGI к 2068), медиана AGI — обновляется в реальном времени.',
+    eh_p2_desc:'<b>Метафора:</b> плотные кольца = высокая вероятность (много частиц предсказывают этап в этот год). Редкие точки = маловероятные сценарии.',
+    eh_p3_desc:'<b>Механика:</b> при запуске частицы «взлетают» из центра с задержкой, пропорциональной году этапа. Жёлтые орбиты = T1, оранжевые = T2, красные = T3, фиолетовые = T4. Расстояние от центра = вес частицы.',
+    eh_p4_desc:'<b>Что влияет:</b> распределение T1-T4 лет из posterior, случайность MC прогона. Симметричная сфера = один чёткий пик. Фрактальная структура = множество конкурирующих сценариев.',
 
     eh_play:'Запуск', eh_reset:'Сброс',
     eh_legend_agi:'достигнут', eh_legend_asi:'достигнут', eh_legend_flight:'в полёте',
@@ -1576,7 +1576,7 @@ const LANG = {
     data_panel_year:'Год', data_panel_event:'Модель', data_panel_source:'Источники',
     data_panel_loading:'Данные загружаются...',
     // v3 params panel
-    v3_params_title:'Параметры v3', v3_no_agi:'AGI не достигнут ни одной частицей к 2068',
+    v3_params_title:'Параметры v4', v3_no_agi:'T4 не достигнут ни одной частицей к 2068',
   },
   en: {
     // Header
@@ -1602,20 +1602,20 @@ const LANG = {
     chart5:'3. Sensitivity Heatmap (Intel × Agentic)',
     chart6:'4. Scenario Fan (Multi-Run Overlay)',
     chart7:'5. Component Decomposition (Stacked Area)',
-    tip1:'Shows where 3000 Monte Carlo runs cluster. Higher bar = more scenarios led to AGI/ASI in that year.',
-    tip3:'P(AGI ≤ X) — chance that AGI appears no later than X years. Steep rise = fast transition from "almost no" to "almost certain".',
-    tip5:'Heatmap: axes are Intelligence and Agentic scores of the last observation. Color = median AGI year. Shows which parameter dominates the forecast.',
+    tip1:'Shows where 3000 Monte Carlo runs cluster. Higher bar = more scenarios led to T1/T2/T3/T4 in that year.',
+    tip3:'P(T2 ≤ X) — chance that T2 appears no later than X years. Steep rise = fast transition from "almost no" to "almost certain".',
+    tip5:'Heatmap: axes are Intelligence and Agentic scores of the last observation. Color = median T2 year. Shows which parameter dominates the forecast.',
     tip6:'30 random runs from the posterior distribution, overlaid semi-transparently. Shows the spread of possible paths to singularity.',
     tip7:'Breakdown of capability into components: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Shows what drives progress.',
     ch_t1:'T1: Understanding', ch_t2:'T2: Predictability', ch_t3:'T3: Control', ch_t4:'T4: Influence',
     ch1_xlabel:'Year', ch1_ylabel:'Runs',
-    ch3_xlabel:'Year', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
-    ch5_label:'Years to AGI', ch5_colorbar:'Years to AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score', ch5_loading:'Computing matrix (async)...',
+    ch3_xlabel:'Year', ch3_ylabel:'P(%)', ch3_pagi:'P(T2)', ch3_pasi:'P(T4)',
+    ch5_label:'Years to T4', ch5_colorbar:'Years to T4', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score', ch5_loading:'Computing matrix (async)...',
     ch7_ylabel:'Cumulative contribution (log FLOPs)',
     fY_suffix:' yrs', fY_gt:'> 40 yrs',
     // About
-    about_title:'About v3 Model',
-    about_intro:'The v3 model uses a Bayesian Particle Filter to calibrate predictions on real Artificial Analysis data. Each particle is a hypothesis about the future: hardware growth rate, algorithm progress, and agency ceiling. AA observations update particle weights via likelihood, and unlikely hypotheses die during resampling. Expert Sandbox panel provides 18+ tunable parameters for real-time hypothesis testing.',
+    about_title:'About v4 Model',
+    about_intro:'The v4 model uses a Bayesian Particle Filter to calibrate predictions on real Artificial Analysis data. Each particle is a hypothesis about the future: hardware growth rate, algorithm progress, and agency ceiling. AA observations update particle weights via likelihood, and unlikely hypotheses die during resampling. Expert Sandbox panel provides 30+ tunable parameters for real-time hypothesis testing.',
     defs_label:'Model Architecture',
     arch_tracker_title:'Bayesian Tracker',
     arch_tracker_desc:'1000 particles with tunable priors: hw_months, algo_months, agency_ceiling (mean/std via Expert Sandbox). Each AA observation updates weights via Gaussian likelihood. ESS resampling prevents degeneracy. Three World Models supported: Cascade, Hard Wall, Slow Takeoff.',
@@ -1628,12 +1628,12 @@ const LANG = {
     arch_bottlenecks_title:'Bottlenecks',
     arch_bottlenecks_desc:'Economic wall: if Reasoning leads Agency > 2.0, investment drops exponentially. GPU bubble can burst when agency < 4. Alignment incident freezes scaling for 1.5 years. Physical HW growth limit (maxPhysicalHwGrowth) — even superintelligence doesn\'t build fabs instantly.',
     arch_mc_title:'Monte Carlo Forecast',
-    arch_mc_desc:'3000 runs from the posterior distribution. Each run simulates 2023 to 2068 at monthly resolution. Result: distribution of years to AGI (cap >= 10) and ASI (cap >= 100).',
+    arch_mc_desc:'3000 runs from the posterior distribution. Each run simulates 2023 to 2068 at monthly resolution. Result: distribution of years to T1 (cap >= 8), T2 (cap >= 10), T3 (cap >= 25) and T4 (cap >= 100).',
     arch_expert_title:'Expert Sandbox',
-    arch_expert_desc:'18+ tunable parameters: philosophical priors (agency mean/std), RSI thresholds, coordination friction, physical HW growth limit, compute overhang, World Models probabilities, benchmark autonomy weight. Transforms the model from a predictor into an epistemological simulator.',
+    arch_expert_desc:'30+ tunable parameters: philosophical priors (agency mean/std), RSI thresholds, coordination friction, physical HW growth limit, compute overhang, World Models probabilities, benchmark autonomy weight. Transforms the model from a predictor into an epistemological simulator.',
     arch_shocks_title:'Shocks & Black Swans',
     arch_shocks_desc:'Shock types: Data Wall (data exhaustion, slows algorithms), Alignment Incident (regulatory freeze), GPU Bubble Burst (investment crash), AI Winter (reasoning-agency gap). Probabilities depend on current system state.',
-    defs_intro:'The v3 model uses strict operational definitions based on a two-dimensional scale (Reasoning, Agency). The scale is logarithmic: GPT-4 (late 2023) ~ 3.0 in Reasoning and ~0.2 in Agency, current mid-2026 models ~ 6.5 in Reasoning and ~6.5 in Agency. AGI = 10.0, ASI = 100.0.',
+    defs_intro:'The v4 model uses a 4-stage singularity framework based on a two-dimensional scale (Reasoning, Agency). The scale is logarithmic: GPT-4 (late 2023) ~ 3.0 in Reasoning and ~0.2 in Agency. T1 (Understanding) = 8.0, T2 (Predictability) = 10.0, T3 (Control) = 25.0, T4 (Influence) = 100.0.',
     agi_def_title:'T1 & T2: Loss of Understanding & Predictability',
     agi_def_score:'Capability: 8.0 and 10.0',
     agi_def_text1:'Autonomous AI researcher at PhD level. Demonstrates true generalization, capable of complex planning and reliable work (>99%). Can autonomously conduct experiments, write production code, and find errors in others\' papers.',
@@ -1764,50 +1764,50 @@ const LANG = {
     // Footer
     footer_note:'Data is estimated',
     // Loading
-    loading:'Running Bayesian v3 forecast...',
+    loading:'Running Bayesian v4 forecast...',
     // Swarm
     swarm_title:'Learning & Forecast Visualization',
-    swarm_desc:'Interactive visualization of Bayesian learning. "Learning" mode shows how observations kill weak hypotheses. "Forecast" mode unfolds surviving hypotheses into AGI/ASI predictions.',
+    swarm_desc:'Interactive visualization of Bayesian learning. "Learning" mode shows how observations kill weak hypotheses. "Forecast" mode unfolds surviving hypotheses into T1-T4 predictions.',
     swarm_play:'Play', swarm_reset:'Reset', swarm_hint:'Press Play or drag the slider',
     swarm_mode_learn:'Learning', swarm_mode_forecast:'Forecast',
     swarm_play_forecast:'Animate',
-    forecast_xaxis:'AGI Year', forecast_yaxis:'HW Doubling (mo)',
-    forecast_pagi:'P(AGI by 2068)', forecast_median:'AGI Median',
-    forecast_xaxis_asi:'ASI Year', forecast_median_asi:'ASI Median',
-    forecast_overlay:'AGI \u2264', forecast_overlay_desc:'Showing hypotheses with AGI by',
+    forecast_xaxis:'T2 Year', forecast_yaxis:'HW Doubling (mo)',
+    forecast_pagi:'P(T2 by 2068)', forecast_median:'T2 Median',
+    forecast_xaxis_asi:'T4 Year', forecast_median_asi:'T4 Median',
+    forecast_overlay:'T2 \u2264', overlay_desc:'Showing hypotheses with T2 by',
     live_swarm_title:'Real-time Simulation', live_swarm_desc:'Every 0.25s the swarm redraws from a new Monte Carlo run.',
     // Event Horizon
     eh_title:'Visualization: "Sphere of Singularity"',
-    eh_desc:'Each particle is one Monte Carlo run. Flies from center (2026) and freezes at its AGI year orbit. Dense rings = high probability. Orange orbits — AGI, red — ASI.',
+    eh_desc:'Each particle is one Monte Carlo run. Flies from center (2026) and freezes at its T1/T2/T3/T4 year orbit. Dense rings = high probability. Yellow orbits = T1, orange = T2, red = T3, purple = T4.',
 
     // Swarm Learning desc card
     swarm_learn_p1:'Interactive visualization of real-time Bayesian learning. Each point is a world hypothesis (particle): hardware growth rate <em>hw_months</em> and agency ceiling <em>agency_ceiling</em>.',
     swarm_learn_p2:'<b>"Learning" mode:</b> the slider applies AA observations one by one. At each observation, weights are recalculated:',
     swarm_learn_p3:'where R<sub>i</sub> and Ag<sub>i</sub> are particle i predictions for the observation year, &sigma; is the noise-free likelihood. Particles whose predictions are far from the observation lose weight exponentially.',
-    swarm_learn_p4:'<b>"Forecast" mode:</b> all observations applied. The slider filters hypotheses by AGI year &mdash; showing which particles predict AGI by the selected year.',
+    swarm_learn_p4:'<b>"Forecast" mode:</b> all observations applied. The slider filters hypotheses by T2 year &mdash; showing which particles predict T2 by the selected year.',
     swarm_learn_p5:'<b>Visual language:</b> bright areas = high weight density; orange circle = swarm median; red = current observation. At rest the swarm &quot;breathes&quot; &mdash; rebuilds from a new MC run every 0.25s.',
     swarm_learn_p6:'<b>What affects it:</b> number and accuracy of AA observations, philosophical priors (priorAgencyMean/Std in Expert Sandbox), the particle composition itself.',
     // Live Swarm desc card
-    live_swarm_p1:'Two parallel simulations &mdash; AGI and ASI &mdash; updating every 0.25s from a new Monte Carlo run. Shows the &quot;live&quot; posterior without needing to press Play.',
-    live_swarm_p2:'<b>Points:</b> each particle = one <code>runMonteCarloForecast(500)</code> run. Color encodes AGI/ASI year: blue = early, yellow = mid, red = late. Opacity = particle weight.',
-    live_swarm_p3:'<b>AGI/ASI year formula:</b> for each of 500 runs, a trajectory is modeled from BASE_YEAR (2023) to 2068 at monthly resolution. AGI = first year where <code>cap &ge; 10.0</code>. ASI = first year where <code>cap &ge; 100.0</code>.',
+    live_swarm_p1:'Four parallel simulations &mdash; T1, T2, T3, T4 &mdash; updating every 0.25s from a new Monte Carlo run. Shows the &quot;live&quot; posterior without needing to press Play.',
+    live_swarm_p2:'<b>Points:</b> each particle = one <code>runMonteCarloForecast(500)</code> run. Color encodes stage year: yellow = T1, orange = T2, red = T3, purple = T4. Opacity = particle weight.',
+    live_swarm_p3:'<b>Formula:</b> for each of 500 runs, a trajectory is modeled from BASE_YEAR (2023) to 2068 at monthly resolution. T1 = first year where <code>cap &ge; 8.0</code>. T2 = <code>cap &ge; 10.0</code>. T3 = <code>cap &ge; 25.0</code>. T4 = <code>cap &ge; 100.0</code>.',
     live_swarm_p4:'Stats on the right: median, P10&ndash;P90, particle count. Updates in real time &mdash; you can see posterior variance.',
     live_swarm_p5:'<b>What affects it:</b> current observation set, particle weights, MC run randomness. Stable picture = model confidence. Chaos = high uncertainty.',
     // Histogram desc
-    hist_p1:'Results of 3000 Monte Carlo runs from the posterior distribution. X-axis = year, Y-axis = number of runs where AGI/ASI is reached in that year.',
+    hist_p1:'Results of 3000 Monte Carlo runs from the posterior distribution. X-axis = year, Y-axis = number of runs where T1/T2/T3/T4 is reached in that year.',
     hist_p2:'<b>Key equation:</b> each run is sampled from particle weights (systematic resampling), then a full trajectory to 2068 is simulated:',
     hist_p3:'<b>Histogram peak</b> = most likely year. Wide distribution = high uncertainty. Bimodality = two competing scenarios (e.g., &quot;fast breakthrough&quot; vs &quot;stagnation&quot;).',
     hist_p4:'<b>What shifts the histogram:</b> new AA observations (via Bayesian weight update), Expert Sandbox parameters (RSI thresholds, paradigms, ceilings), particle count.',
     // Cumulative desc
-    cum_p1:'Cumulative distribution function: P(AGI &le; X) and P(ASI &le; X). Answers the question &quot;what is the probability AGI happens no later than year X?&quot;',
+    cum_p1:'Cumulative distribution function: P(T2 &le; X) and P(T4 &le; X). Answers the question &quot;what is the probability T2/T4 happens no later than year X?&quot;',
     cum_p2:'<b>Computed from</b> the same 3000 runs. For each year T:',
     cum_p3:'<b>Steep step</b> = forecasts concentrated in a narrow window. <b>Plateau</b> = bottleneck (data wall, energy, regulation). <b>Sharp jump</b> = nearly all particles converge on one scenario.',
-    cum_p4:'<b>ASI curve</b> always lies to the right of AGI &mdash; ASI requires cap &ge; 100. Distance between curves = time between AGI and ASI.',
+    cum_p4:'<b>T4 curve</b> always lies to the right of T2 &mdash; T4 requires cap &ge; 100. Distance between curves = time between T2 and T4.',
     cum_p5:'<b>What affects it:</b> same factors as the histogram. The curves complement each other &mdash; histogram shows &quot;where is the peak&quot;, cumulative shows &quot;what is the probability by year X&quot;.',
     // Sensitivity desc
-    sens_p1:'Sensitivity map: how the forecast depends on the last Intelligence &times; Agentic observation. Cell (i,j) = median AGI year if the last observation = (Intel=i, Agentic=j).',
+    sens_p1:'Sensitivity map: how the forecast depends on the last Intelligence &times; Agentic observation. Cell (i,j) = median T2 year if the last observation = (Intel=i, Agentic=j).',
     sens_p2:'<b>Computation:</b> for each (i,j) pair from grid [40,45,...,85] &times; [10,20,...,100], <code>runSensitivityMatrix()</code> is executed &mdash; takes the current tracker, clones particles, replaces the last observation with (i,j), runs MC.',
-    sens_p3:'<b>Color interpretation:</b> blue = early AGI (model &quot;believes&quot; we&apos;re close); red = late AGI (far away). Gradients show which parameter dominates:',
+    sens_p3:'<b>Color interpretation:</b> blue = early T2 (model &quot;believes&quot; we&apos;re close); red = late T2 (far away). Gradients show which parameter dominates:',
     sens_li1:'Vertical gradient &rarr; Intelligence dominates',
     sens_li2:'Horizontal gradient &rarr; Agency dominates',
     sens_li3:'Diagonal &rarr; both parameters are equally important',
@@ -1815,17 +1815,17 @@ const LANG = {
     // Fan desc
     fan_p1:'30 random runs from the posterior, overlaid semi-transparently. Shows the spread of possible capability paths from 2026 to 2050 (logarithmic scale).',
     fan_p2:'<b>Each run:</b> a random particle (by weights) is simulated to 2050 at monthly resolution. At each step: paradigm shift, RSI, economic bottlenecks.',
-    fan_p3:'<b>Dense bundles</b> = scenarios converge. <b>Spread</b> = high uncertainty. <b>Horizontal lines cap=10 and cap=100:</b> AGI and ASI thresholds respectively.',
+    fan_p3:'<b>Dense bundles</b> = scenarios converge. <b>Spread</b> = high uncertainty. <b>Horizontal lines cap=8, 10, 25, 100:</b> T1, T2, T3, T4 thresholds respectively.',
     fan_p4:'<b>What shapes the fan:</b><br>&bull; Width &larr; differences in hw_months, algo_months between particles<br>&bull; Slope &larr; FLOPs-scaling (hwK and algoK)<br>&bull; Bends &larr; paradigm shifts, RSI onset, economic walls',
     // Decomposition desc
     decomp_p1:'Stacked area: breakdown of total capability into 4 components. Shows <em>what</em> drives progress at each point in time.',
     decomp_p2:'<b>Components:</b>',
     decomp_p3:'Computed via <code>runDecomposition()</code> &mdash; averaging over all particles with weights. The transition from &quot;hardware&quot; to &quot;algorithms&quot; to &quot;RSI&quot; = the path to singularity.',
     // Event Horizon desc
-    eh_p1_desc:'Animated visualization of the AGI/ASI distribution. Each particle = one MC run. Flies from center (2026) and freezes at its AGI year orbit.',
-    eh_p2_desc:'<b>Metaphor:</b> dense rings = high probability (many particles predict AGI in that year). Rare dots = unlikely scenarios.',
-    eh_p3_desc:'<b>Mechanics:</b> on launch, particles &quot;take off&quot; from the center with a delay proportional to AGI year. Orange orbits = AGI, red = ASI. Distance from center = particle weight.',
-    eh_p4_desc:'<b>What affects it:</b> AGI/ASI year distribution from posterior, MC run randomness. Symmetric sphere = one clear peak. Fractal structure = many competing scenarios. P(AGI by 2068), AGI median &mdash; updated in real time.',
+    eh_p1_desc:'Animated visualization of the 4 singularity stages distribution. Each particle = one MC run. Flies from center (2026) and freezes at its T1/T2/T3/T4 year orbit.',
+    eh_p2_desc:'<b>Metaphor:</b> dense rings = high probability (many particles predict a stage in that year). Rare dots = unlikely scenarios.',
+    eh_p3_desc:'<b>Mechanics:</b> on launch, particles &quot;take off&quot; from the center with a delay proportional to stage year. Yellow orbits = T1, orange = T2, red = T3, purple = T4. Distance from center = particle weight.',
+    eh_p4_desc:'<b>What affects it:</b> T1-T4 year distribution from posterior, MC run randomness. Symmetric sphere = one clear peak. Fractal structure = many competing scenarios.',
 
     eh_play:'Play', eh_reset:'Reset',
     eh_legend_agi:'reached', eh_legend_asi:'reached', eh_legend_flight:'in flight',
@@ -1845,7 +1845,7 @@ const LANG = {
     // Observable metrics warning
     v3_warning_far:'Values far from particle range — model cannot reliably extrapolate. Forecast is closer to prior.',
     // v3 params panel
-    v3_params_title:'v3 Parameters', v3_no_agi:'No AGI by 2068 in any particle',
+    v3_params_title:'v4 Parameters', v3_no_agi:'No T4 by 2068 in any particle',
     // Footer / misc
     footer_note_en:'Data is estimated',
   }
@@ -2112,7 +2112,7 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
   ctx.globalAlpha = 1.0;
 
   // labels
-  const xLabel = L.forecast_xaxis || 'AGI Year';
+  const xLabel = L.forecast_xaxis || 'T2 Year';
   ctx.fillStyle = '#666680'; ctx.font = '11px Inter, sans-serif';
   ctx.textAlign = 'center'; ctx.fillText(xLabel, w / 2, h - 6);
   ctx.save(); ctx.translate(10, h / 2); ctx.rotate(-Math.PI / 2);
@@ -2120,8 +2120,8 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
 
   // stats
   const pct = totalW > 0 ? (visW / totalW * 100) : 0;
-  const pLabel = L.forecast_pagi || 'P(AGI)';
-  const mLabel = L.forecast_median || 'Median AGI';
+  const pLabel = L.forecast_pagi || 'P(T2)';
+  const mLabel = L.forecast_median || 'Median T2';
   ctx.fillStyle = '#f0883e'; ctx.font = 'bold 11px JetBrains Mono, monospace'; ctx.textAlign = 'left';
   ctx.fillText(`${pLabel}: ${pct.toFixed(1)}%`, pad + 4, pad + 12);
 
@@ -2169,7 +2169,7 @@ function swarmDrawOverlay(ctx, w, h, pad) {
     if (hint) hint.style.display = 'none';
     if (ov) {
       const fc = swarm.forecastSliderMax || 2068;
-      ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">AGI ≤ ${fc}</div><div style="font-size:.68rem;color:#9898b0">${L.forecast_overlay_hypotheses} AGI ${L.forecast_overlay_by} ${fc}</div>`;
+      ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">T2 ≤ ${fc}</div><div style="font-size:.68rem;color:#9898b0">${L.forecast_overlay_hypotheses} T2 ${L.forecast_overlay_by} ${fc}</div>`;
       ov.style.opacity = '1';
     }
     if (leg) {
