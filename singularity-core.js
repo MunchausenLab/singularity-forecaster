@@ -685,7 +685,7 @@ class BayesianTracker {
         this.restoreState(state);
         this.observeRealData(baseObs.year, { arcAgi: arc, sweBench: swe });
         const mc = this.runMonteCarloForecast(300);
-        const finite = mc.agiYears.filter(isFinite);
+        const finite = mc.t2Years.filter(isFinite);
         row.push(finite.length > 0 ? percentile(finite, 50) : 40);
       }
       results.push(row);
@@ -716,7 +716,13 @@ class BayesianTracker {
       let algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
       let cR = cfg.DIMENSIONS.reasoning.ceiling;
       let cA = p.agency_ceiling;
-
+      // Apply World Model constraints
+      if (p.world_model === 'hard_wall') {
+        cA = Math.min(cA, 5.5);
+      } else if (p.world_model === 'slow_takeoff') {
+        algoK *= 0.6;
+      }
+      let paradigmGeneration = 0;
       const years = [], caps = [];
       for (let step = 0; step < steps; step++) {
         const y = cfg.BASE_YEAR + step * dt;
@@ -732,7 +738,8 @@ class BayesianTracker {
         if (y > cfg.CURRENT_YEAR && saturation > cfg.EXPERT.saturationThreshold && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
           cA *= cfg.SCALING_LAW.shift_multiplier;
           cR *= cfg.SCALING_LAW.shift_multiplier;
-          algoLog -= 0.5; // Откат для будущего роста
+          algoLog -= (0.4 + paradigmGeneration * 0.1);
+          paradigmGeneration++;
         }
         years.push(y);
         caps.push(Math.min(reasoning, agency));
@@ -784,9 +791,19 @@ class BayesianTracker {
     const algoK = Math.log(2) / Math.max(1.0, avgAlgo / 12.0);
     let cR = cfg.DIMENSIONS.reasoning.ceiling;
     let cA = avgCeiling;
-
+    // Apply weighted World Model constraints to avgCeiling
+    let hardWallWeight = 0, slowTakeoffWeight = 0;
+    if (totalW > 0) {
+      for (let i = 0; i < this.n; i++) {
+        const w = this.weights[i] / totalW;
+        if (this.particles[i].world_model === 'hard_wall') hardWallWeight += w;
+        else if (this.particles[i].world_model === 'slow_takeoff') slowTakeoffWeight += w;
+      }
+    }
+    // Blend: hard_wall caps agency at 5.5, slow_takeoff reduces algoK
+    if (hardWallWeight > 0.5) cA = Math.min(cA, 5.5);
+    const algoKMultiplier = slowTakeoffWeight > 0.5 ? 0.6 : 1.0;
     for (let step = 0; step < steps; step++) {
-      const y = cfg.BASE_YEAR + step * dt;
       let paradigmBonus = 0;
 
       const logDiff = flopsLog + algoLog - baseLog;
@@ -819,8 +836,8 @@ class BayesianTracker {
       accumulatedRsi += rsi * dt;
       rsiComp.push(accumulatedRsi);
       flopsLog += hwK * damping * dt;
-      algoLog += (algoK * damping + rsi) * dt;
-      pureAlgoLog += (algoK * damping) * dt;
+      algoLog += (algoK * algoKMultiplier * damping + rsi) * dt;
+      pureAlgoLog += (algoK * algoKMultiplier * damping) * dt;
     }
     return { years, hwComp, algoComp, paradigmComp, rsiComp };
   }
@@ -1224,6 +1241,7 @@ function plotCumulative(c) {
 // ===== ADVANCED PLOT FUNCTIONS =====
 
 async function plotSensitivityHeatmap(tracker) {
+  const t = LANG[window._lang || 'ru'];
   const c5 = document.getElementById('c5');
   if (c5) {
     c5.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666680;font-family:monospace;">' + (LANG[window._lang || 'ru'].ch5_loading || 'Вычисление матрицы (асинхронно)...') + '</div>';
@@ -1867,13 +1885,13 @@ function swarmComputeAGIYears(tracker) {
   for (let i = 1; i < tracker.n; i++) cumw[i] = cumw[i-1] + tracker.weights[i];
 
   const agiResults = [], asiResults = [];
-  for (let run = 0; run < mc.agiYears.length; run++) {
-    const u = (run + 0.5) / mc.agiYears.length;
+  for (let run = 0; run < mc.t2Years.length; run++) {
+    const u = (run + 0.5) / mc.t2Years.length;
     let idx = 0;
     while (idx < tracker.n - 1 && cumw[idx] < u) idx++;
     const p = tracker.particles[idx];
-    agiResults.push({ year: mc.agiYears[run] + curYear, hw: p.hw_months, w: 1.0 / mc.agiYears.length });
-    asiResults.push({ year: mc.asiYears[run] + curYear, hw: p.hw_months, w: 1.0 / mc.asiYears.length });
+    agiResults.push({ year: mc.t2Years[run] + curYear, hw: p.hw_months, w: 1.0 / mc.t2Years.length });
+    asiResults.push({ year: mc.t4Years[run] + curYear, hw: p.hw_months, w: 1.0 / mc.t4Years.length });
   }
   return { t2: agiResults, t4: asiResults };
 }
@@ -2518,9 +2536,11 @@ function ehDraw() {
   const statsEl = document.getElementById('ehStats');
   const legendEl = document.getElementById('ehLegend');
   const n = ehData.particles.length;
+  const t1 = ehData.particles.filter(p => p.type === 't1').length;
   const t2 = ehData.particles.filter(p => p.type === 't2').length;
+  const t3 = ehData.particles.filter(p => p.type === 't3').length;
   const t4 = ehData.particles.filter(p => p.type === 't4').length;
-  const pending = n - t2 - t4;
+  const pending = n - t1 - t2 - t3 - t4;
 
   if (statsEl) {
     statsEl.textContent = `N=${n} | T1=${t1} T2=${t2} T3=${t3} T4=${t4} | ${pending > 0 ? 'flying +' + pending : ''}`;
@@ -2681,8 +2701,8 @@ window.addEventListener('load', async () => {
 
 function setLang(lang) {
   window._lang = lang;
-  document.getElementById('lang_ru').classList.toggle('active', lang === 'ru');
-  document.getElementById('lang_en').classList.toggle('active', lang === 'en');
+  document.getElementById('lang_ru')?.classList.toggle('active', lang === 'ru');
+  document.getElementById('lang_en')?.classList.toggle('active', lang === 'en');
   const t = LANG[lang];
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
