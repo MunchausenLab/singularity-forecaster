@@ -2292,13 +2292,10 @@ function liveSwarmInit() {
   } else {
     liveSwarm.tracker = swarmBuildTracker(REAL_BENCHMARK_HISTORY.length);
   }
-  liveSwarmTickT1();
-  liveSwarmTickT2();
-  liveSwarmTickT3();
-  liveSwarmTickT4();
+  liveSwarmTickAll();
 }
 
-function drawLiveSwarm(canvasId, statsId, yearsKey, colorKey) {
+function drawLiveSwarm(canvasId, statsId, yearsKey, colorKey, mc) {
   const c = document.getElementById(canvasId);
   if (!c || !liveSwarm.tracker) return;
   const ctx = c.getContext('2d');
@@ -2315,8 +2312,8 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorKey) {
   function yearToX(yr) { return pad + ((yr - xMin) / (xMax - xMin)) * pw; }
   function hwToY(hw) { return h - pad - ((hw - yMin) / (yMax - yMin)) * ph; }
 
-  // Run fresh MC
-  const mc = liveSwarm.tracker.runMonteCarloForecast(500);
+  // Use provided MC or skip
+  if (!mc) return;
   const cfg = liveSwarm.tracker.cfg;
   const curYear = cfg.CURRENT_YEAR;
   const n = liveSwarm.tracker.n;
@@ -2418,24 +2415,13 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorKey) {
   }
 }
 
-function liveSwarmTickT1() {
-  drawLiveSwarm('liveSwarmT1', 'liveSwarmT1Stats', 't1Years', 'T1');
-  liveSwarm.timerT1 = setTimeout(liveSwarmTickT1, 250);
-}
-
-function liveSwarmTickT2() {
-  drawLiveSwarm('liveSwarmT2', 'liveSwarmT2Stats', 't2Years', 'T2');
-  liveSwarm.timerT2 = setTimeout(liveSwarmTickT2, 250);
-}
-
-function liveSwarmTickT3() {
-  drawLiveSwarm('liveSwarmT3', 'liveSwarmT3Stats', 't3Years', 'T3');
-  liveSwarm.timerT3 = setTimeout(liveSwarmTickT3, 250);
-}
-
-function liveSwarmTickT4() {
-  drawLiveSwarm('liveSwarmT4', 'liveSwarmT4Stats', 't4Years', 'T4');
-  liveSwarm.timerT4 = setTimeout(liveSwarmTickT4, 250);
+function liveSwarmTickAll() {
+  const mc = liveSwarm.tracker ? liveSwarm.tracker.runMonteCarloForecast(500) : null;
+  ['T1','T2','T3','T4'].forEach((stage, i) => {
+    drawLiveSwarm('liveSwarm' + stage, 'liveSwarm' + stage + 'Stats',
+      stage.toLowerCase() + 'Years', stage, mc);
+    liveSwarm['timer' + stage] = setTimeout(liveSwarmTickAll, 250);
+  });
 }
 
 // ===== EVENT HORIZON: Sphere of Singularity =====
@@ -2675,14 +2661,19 @@ window.addEventListener('load', async () => {
 
   // Инициализируем UI и канвасы
   swarmInit();
-  liveSwarmInit();
   ehInitCanvas();
   ehDraw();
 
-  // Запускаем симуляцию
+  // Запускаем симуляцию (создаёт v3Tracker)
   const tracker = v3GetTracker();
   v3UpdateUI(tracker);
   renderDataPanel();
+
+  // Live Swarm — используем тот же трекер
+  if (typeof liveSwarm !== 'undefined') {
+    liveSwarm.tracker = v3Tracker;
+    liveSwarmInit();
+  }
 
   if (overlay) overlay.classList.remove('show');
   runSimulation();
@@ -2702,10 +2693,11 @@ function setLang(lang) {
   if (typeof ehDraw === 'function') ehDraw();
   if (typeof drawLiveSwarm === 'function') {
     if (typeof liveSwarm !== 'undefined') {
-      if (liveSwarm.timerT1) { clearTimeout(liveSwarm.timerT1); liveSwarmTickT1(); }
-      if (liveSwarm.timerT2) { clearTimeout(liveSwarm.timerT2); liveSwarmTickT2(); }
-      if (liveSwarm.timerT3) { clearTimeout(liveSwarm.timerT3); liveSwarmTickT3(); }
-      if (liveSwarm.timerT4) { clearTimeout(liveSwarm.timerT4); liveSwarmTickT4(); }
+    if (liveSwarm.timerT1) clearTimeout(liveSwarm.timerT1);
+    if (liveSwarm.timerT2) clearTimeout(liveSwarm.timerT2);
+    if (liveSwarm.timerT3) clearTimeout(liveSwarm.timerT3);
+    if (liveSwarm.timerT4) clearTimeout(liveSwarm.timerT4);
+    liveSwarmTickAll();
     }
   }
 }
