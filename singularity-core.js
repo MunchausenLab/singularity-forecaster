@@ -756,17 +756,23 @@ let v3Tracker = null;
 let v3Observations = [];
 
 // ============================================================================
-// DATA & OBSERVABLES
+// DATA & OBSERVABLES (Dynamic Benchmark History)
 // ============================================================================
 
-// Шум (дисперсия) для каждого бенчмарка (чем меньше, тем строже фильтр)
+// URL вашего JSON с актуальными бенчмарками (можно заменить на GitHub Raw или ваш API)
+const BENCHMARKS_API_URL = 'https://raw.githubusercontent.com/slavabelik79/ai-metrics/main/benchmarks_history.json';
+
+// Шум (дисперсия) для каждого бенчмарка. Отражает степень доверия к тесту.
 const BENCHMARK_SIGMAS = {
-  arenaElo: 40.0,    // Elo (LMSYS Chatbot Arena)
+  arenaElo: 40.0,    // Elo (LMSYS)
   arcAgi: 8.0,       // ARC-AGI (%)
-  sweBench: 10.0     // SWE-bench (%)
+  sweBench: 10.0     // SWE-bench Verified (%)
 };
 
-const REAL_BENCHMARK_HISTORY = [
+let REAL_BENCHMARK_HISTORY = [];
+
+// Фоллбэк-база (Актуальна на май 2026 года), используется если JSON недоступен
+const FALLBACK_BENCHMARK_HISTORY = [
   { year: 2022.90, event: "ChatGPT (GPT-3.5)", arenaElo: 1000, arcAgi: 3.0,  sweBench: 0.0 },
   { year: 2023.25, event: "GPT-4 Release",     arenaElo: 1150, arcAgi: 12.0, sweBench: 0.1 },
   { year: 2023.85, event: "GPT-4 Turbo",       arenaElo: 1250, arcAgi: 15.0, sweBench: 1.5 },
@@ -778,7 +784,22 @@ const REAL_BENCHMARK_HISTORY = [
   { year: 2026.30, event: "Claude Mythos",     arenaElo: 1480, arcAgi: 94.0, sweBench: 82.0 },
 ];
 
-// Функция для вычисления численных значений бенчмарков напрямую
+async function loadHistoricalBenchmarks() {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const response = await fetch(BENCHMARKS_API_URL, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!response.ok) throw new Error('Network response was not ok');
+    REAL_BENCHMARK_HISTORY = await response.json();
+    console.log("Historical benchmarks loaded from API.");
+  } catch (error) {
+    console.warn("Failed to fetch benchmarks from API, using fallback data. Error:", error);
+    REAL_BENCHMARK_HISTORY = JSON.parse(JSON.stringify(FALLBACK_BENCHMARK_HISTORY));
+  }
+}
+
+// Преобразование латентных переменных трекера в численные бенчмарки
 function getNumericObservables(r10, a10, expertCfg) {
     const autonomyWeight = expertCfg ? expertCfg.toolUseVsAutonomyWeight : 0.6;
     const reasoningWeight = 1.0 - autonomyWeight;
@@ -2416,22 +2437,31 @@ function eventHorizonReset() {
 }
 
 // ===== SINGLE LOAD HANDLER (ordered initialization) =====
-window.addEventListener('load', () => {
-  // 1. Language first (so all UI text is correct)
+window.addEventListener('load', async () => {
   setLang('ru');
-  // 2. Swarm canvases (need DOM ready)
-  setTimeout(swarmInit, 100);
-  setTimeout(liveSwarmInit, 300);
-  // 3. Event horizon canvas
-  setTimeout(ehInitCanvas, 200);
-  setTimeout(ehDraw, 250);
-  // 4. Main simulation (last, heaviest)
-  setTimeout(() => {
-    const tracker = v3GetTracker();
-    v3UpdateUI(tracker);
-  }, 50);
-  // 5. Auto-run simulation after everything is ready
-  setTimeout(runSimulation, 800);
+
+  // Показываем оверлей загрузки
+  const overlay = document.getElementById('overlay');
+  if (overlay) {
+    overlay.classList.add('show');
+    document.getElementById('overlayText').textContent = 'Загрузка исторических бенчмарков...';
+  }
+
+  // БЛОКИРУЮЩИЙ ВЫЗОВ: загружаем реальные данные
+  await loadHistoricalBenchmarks();
+
+  // Инициализируем UI и канвасы
+  swarmInit();
+  liveSwarmInit();
+  ehInitCanvas();
+  ehDraw();
+
+  // Запускаем симуляцию
+  const tracker = v3GetTracker();
+  v3UpdateUI(tracker);
+
+  if (overlay) overlay.classList.remove('show');
+  runSimulation();
 });
 
 function setLang(lang) {
