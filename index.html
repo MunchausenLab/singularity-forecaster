@@ -362,7 +362,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
           <span class="expert-param-value" id="ev-t4Threshold">100.0</span>
         </div>
         <input type="range" id="e-t4Threshold" min="30" max="200" step="5" value="100" oninput="expertUpdate('t4Threshold',this.value)">
-        <div class="expert-param-desc" data-i18n="expert_d_t4Threshold">Порог capability для T4 (ASI)</div>
+        <div class="expert-param-desc" data-i18n="expert_d_t4Threshold">Порог capability для T4 (Влияние)</div>
       </div>
 
       <div class="expert-param">
@@ -818,21 +818,21 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
     <span class="card-tag" style="background:rgba(88,166,255,.15);color:var(--accent)">Swarm Learning</span>
     <div class="desc-body">
       <p data-i18n="swarm_learn_p1">Интерактивная визуализация байесовского обучения в реальном времени. Каждая точка — гипотеза о мире (частица): скорость роста железа <em>hw_months</em> и потолок агентности <em>agency_ceiling</em>.</p>
-      <p data-i18n="swarm_learn_p2"><b>Режим «Обучение» (Learn):</b> ползунок прикладывает наблюдения AA одно за другим. При каждом наблюдении пересчитываются веса:</p>
+      <p data-i18n="swarm_learn_p2"><b>Режим «Обучение» (Learn):</b> ползунок прикладывает наблюдения бенчмарков одно за другим. При каждом наблюдении пересчитываются веса:</p>
       <div class="formula">log w<sub>i</sub> &prop; &minus;0.5 &times; ((I<sub>obs</sub> &minus; R<sub>i</sub>)/&sigma;)<sup>2</sup> &minus; 0.5 &times; ((A<sub>obs</sub> &minus; Ag<sub>i</sub>)/&sigma;)<sup>2</sup></div>
       <p data-i18n="swarm_learn_p3">где R<sub>i</sub> и Ag<sub>i</sub> — предсказания частицы i на год наблюдения, &sigma; — нешумящее правдоподобие. Частицы, чьи предсказания далеки от наблюдения, экспоненциально теряют вес.</p>
-      <p data-i18n="swarm_learn_p4"><b>Режим «Прогноз» (Forecast):</b> все наблюдения применены. Ползунок фильтрует гипотезы по году AGI — показывая, какие частицы предсказывают AGI до выбранного года.</p>
+      <p data-i18n="swarm_learn_p4"><b>Режим «Прогноз» (Forecast):</b> все наблюдения применены. Ползунок фильтрует гипотезы по году T2 — показывая, какие частицы предсказывают T2 до выбранного года.</p>
       <p data-i18n="swarm_learn_p5"><b>Визуальный язык:</b> яркие области = высокая плотность весов; оранжевый круг = медиана роя; красный = текущее наблюдение. В режиме покой рой «дышит» — перестраивается из нового MC прогона каждые 0.25 сек.</p>
-      <p data-i18n="swarm_learn_p6"><b>Что влияет:</b> количество и точность наблюдений AA, априорные допущения (priorAgencyMean/Std в Expert Sandbox), сам состав частиц.</p></div>
+      <p data-i18n="swarm_learn_p6"><b>Что влияет:</b> количество и точность наблюдений бенчмарков, априорные допущения (priorAgencyMean/Std в Expert Sandbox), сам состав частиц.</p></div>
   </div>
 
   <!-- ROW 2: Live Swarm (описание | график) -->
   <div class="desc-card">
     <span class="card-tag" style="background:rgba(239,68,68,.15);color:var(--real-time)">Live Swarm</span>
     <div class="desc-body">
-      <p data-i18n="live_swarm_p1">Две параллельные симуляции — AGI и ASI — обновляются каждые 0.25 сек из нового прогона Monte Carlo. Показывает «живой» posterior без необходимости нажимать «Запуск».</p>
-      <p data-i18n="live_swarm_p2"><b>Точки:</b> каждая частица = один прогон <code>runMonteCarloForecast(500)</code>. Цвет кодирует год AGI/ASI: голубой = ранний, жёлтый = средний, красный = поздний. Прозрачность = вес частицы.</p>
-      <p data-i18n="live_swarm_p3"><b>Формула AGI/ASI year:</b> для каждого из 500 прогонов моделируется траектория от BASE_YEAR (2023) до 2068 с месячным шагом. AGI = первый год, где <code>cap &ge; 10.0</code>. ASI = первый год, где <code>cap &ge; 100.0</code>.</p>
+      <p data-i18n="live_swarm_p1">Четыре параллельных симуляции — T1, T2, T3, T4 — обновляются каждые 0.25 сек из нового прогона Monte Carlo. Показывает «живой» posterior без необходимости нажимать «Запуск».</p>
+      <p data-i18n="live_swarm_p2"><b>Точки:</b> каждая частица = один прогон <code>runMonteCarloForecast(500)</code>. Цвет кодирует год T1/T2/T3/T4: голубой = ранний, жёлтый = средний, красный = поздний. Прозрачность = вес частицы.</p>
+      <p data-i18n="live_swarm_p3"><b>Формула T1–T4 year:</b> для каждого из 500 прогонов моделируется траектория от BASE_YEAR (2023) до 2068 с месячным шагом. T1, T2, T3, T4 — первые годы, где <code>cap</code> превышает соответствующий порог.</p>
       <p data-i18n="live_swarm_p4">Статистика справа: медиана, P10–P90, количество частиц. Обновляется в реальном времени — видна дисперсия posterior.</p>
       <p data-i18n="live_swarm_p5"><b>Что влияет:</b> текущий набор наблюдений, веса частиц, случайность MC прогона. Стабильность картинки ← уверенность модели. Хаотичность ← высокая неопределённость.</p></div>
   </div>
@@ -840,7 +840,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <div class="card" id="liveSwarmSection">
     <span class="card-tag" style="background:rgba(239,68,68,.15);color:var(--red)" data-i18n="live_swarm_title">Симуляция в реальном времени</span>
     <div class="card-header">
-      <h3 data-i18n="live_swarm_desc" style="font-size:.78rem;color:var(--text-muted);font-weight:400">Каждые 0.25 сек рой перерисовывается из нового прогона Monte Carlo. AGI — голубые частицы, ASI — красные.</h3>
+      <h3 data-i18n="live_swarm_desc" style="font-size:.78rem;color:var(--text-muted);font-weight:400">Каждые 0.25 сек рой перерисовывается из нового прогона Monte Carlo. T1–T4 — цветовые коды стадий.</h3>
     </div>
     <div class="chart-container" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;min-height:440px">
       <div style="position:relative;height:200px;background:#0a0a0f;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
@@ -870,8 +870,8 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <div class="card">
     <span class="card-tag" data-i18n="tag1">Вероятностный анализ</span>
     <div class="card-header">
-      <h3 data-i18n="chart1">1. Распределение AGI / ASI по Monte Carlo</h3>
-      <span class="tip">?<span class="tip-text" data-i18n="tip1">Показывает, где группируются 3000 прогонов Монте-Карло. Чем выше столбец — тем больше сценариев привели к AGI/ASI в этом году.</span></span>
+      <h3 data-i18n="chart1">1. Распределение T2 / T4 по Monte Carlo</h3>
+      <span class="tip">?<span class="tip-text" data-i18n="tip1">Показывает, где группируются 3000 прогонов Монте-Карло. Чем выше столбец — тем больше сценариев привели к T2/T4 в этом году.</span></span>
     </div>
     <div class="chart-container" id="c1"></div>
   </div>
@@ -879,29 +879,29 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <div class="desc-card">
     <span class="card-tag">Scenario Distribution</span>
     <div class="desc-body">
-      <p data-i18n="hist_p1">Результат 3000 прогонов Monte Carlo из апостериорного распределения. По оси X — год, по Y — количество прогонов, в которых AGI/ASI достигнут в этот год.</p>
+      <p data-i18n="hist_p1">Результат 3000 прогонов Monte Carlo из апостериорного распределения. По оси X — год, по Y — количество прогонов, в которых T2/T4 достигнут в этот год.</p>
       <p data-i18n="hist_p2"><b>Ключевое уравнение:</b> каждый прогон выбирается из весов частиц (systematic resampling), затем симулируется полная траектория до 2068:</p>
       <div class="formula">cap(t) = min(R(t), Ag(t)), где R(t) = f(log FLOPs(t)), Ag(t) = g(log FLOPs(t))</div>
       <p data-i18n="hist_p3"><b>Пик гистограммы</b> = наиболее вероятный год. Широкое распределение = высокая неопределённость. Бимодальность = два конкурирующих сценария (например, «быстрый прорыв» vs «стагнация»).</p>
-      <p data-i18n="hist_p4"><b>Что сдвигает гистограмму:</b> новые наблюдения AA (через байесовское обновление весов), параметры Expert Sandbox (пороги RSI, парадигмы, потолки), количество частиц.</p></div>
+      <p data-i18n="hist_p4"><b>Что сдвигает гистограмму:</b> новые наблюдения бенчмарков (через байесовское обновление весов), параметры Expert Sandbox (пороги RSI, парадигмы, потолки), количество частиц.</p></div>
   </div>
 
   <!-- ROW 4: Кумулятивная (описание | график) -->
   <div class="desc-card">
     <span class="card-tag">Cumulative Probability</span>
     <div class="desc-body">
-      <p data-i18n="cum_p1">Накопленная функция распределения: P(AGI &le; X) и P(ASI &le; X). Отвечает на вопрос «какова вероятность, что AGI случится не позднее года X?»</p>
+      <p data-i18n="cum_p1">Накопленная функция распределения: P(T2 &le; X) и P(T4 &le; X). Отвечает на вопрос «какова вероятность, что T2/T4 случится не позднее года X?»</p>
       <p data-i18n="cum_p2"><b>Вычисление:</b> из тех же 3000 прогонов. Для каждого года T:</p>
       <div class="formula">P(AGI &le; T) = (# прогонов, где AGI_year &le; T) / (всего прогонов) &times; 100%</div>
       <p data-i18n="cum_p3"><b>Ступенчатый подъём</b> = концентрация прогнозов в узком окне. <b>Плато</b> = затор (data wall, энергетика, регуляция). <b>Резкий скачок</b> = почти все частицы сходятся в одном сценарии.</p>
-      <p data-i18n="cum_p4"><b>ASI-кривая</b> всегда лежит правее AGI — ASI требует cap &ge; 100. Расстояние между кривыми = время между AGI и ASI.</p>
+      <p data-i18n="cum_p4"><b>T4-кривая</b> всегда лежит правее T2 — T4 требует более высокого порога. Расстояние между кривыми = время между T2 и T4.</p>
       <p data-i18n="cum_p5"><b>Что влияет:</b> те же факторы, что и гистограмма. Кривые дополняют друг друга — гистограмма показывает «где пик», кумулятивная — «какова вероятность к году X».</p></div>
   </div>
 
   <div class="card">
     <span class="card-tag" data-i18n="tag3">Кумулятивная</span>
     <div class="card-header">
-      <h3 data-i18n="chart3">2. Накопленная вероятность AGI / ASI</h3>
+      <h3 data-i18n="chart3">2. Накопленная вероятность T2 / T4</h3>
       <span class="tip">?<span class="tip-text" data-i18n="tip3">P(AGI &lt;= X) — шанс, что AGI появится не позднее, чем через X лет. Если кривая круто поднимается — быстрый переход от «почти нет» к «почти точно». Плоская часть — затор (data wall, регуляция, энергетика).</span></span>
     </div>
     <div class="chart-container" id="c3"></div>
@@ -938,7 +938,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
       <p data-i18n="fan_p1">30 случайных прогонов из posterior, наложенных полупрозрачно. Показывает разброс возможных путей capability от 2026 до 2050 года (логарифмическая шкала).</p>
       <p data-i18n="fan_p2"><b>Каждый прогон:</b> случайная частица (по весам) симулируется до 2050 с месячным шагом. На каждом шаге: paradigm shift, RSI, экономические бутылочные горлышка.</p>
       <div class="formula">cap(t) = min(R<sub>inf</sub>(t), Ag<sub>inf</sub>(t)) + RSI_bonus(t) + paradigm_shift(t)</div>
-      <p data-i18n="fan_p3"><b>Плотные пучки</b> = сценарии сходятся. <b>Разброс</b> = высокая неопределённость. <b>Горизонтальные линии cap=10 и cap=100:</b> пороги AGI и ASI соответственно.</p>
+      <p data-i18n="fan_p3"><b>Плотные пучки</b> = сценарии сходятся. <b>Разброс</b> = высокая неопределённость. <b>Горизонтальные линии порогов T1–T4:</b> настраиваются через Expert Sandbox.</p>
       <p data-i18n="fan_p4"><b>Что формирует веер:</b><br>&bull; Ширина ← различие в hw_months, algo_months между частицами<br>&bull; Наклон ← FLOPs-scaling (hwK и algoK)<br>&bull; Изгибы ← paradigm shifts, RSI onset, экономические стены</p></div>
   </div>
 
@@ -979,11 +979,11 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <div class="desc-card">
     <span class="card-tag" style="background:rgba(167,139,250,.15);color:var(--purple)">Sphere of Singularity</span>
     <div class="desc-body">
-      <p data-i18n="eh_p1">Анимированная визуализация распределения AGI/ASI. Каждая частица = один MC прогон. Вылетает из центра (2026) и застывает на орбите своего года AGI.</p>
+      <p data-i18n="eh_p1">Анимированная визуализация распределения T2/T4. Каждая частица = один MC прогон. Вылетает из центра (2026) и застывает на орбите своего года T2/T4.</p>
       <p data-i18n="eh_p2"><b>Метафора:</b> плотные кольца = высокая вероятность (много частиц предсказывают AGI в этот год). Редкие точки = маловероятные сценарии.</p>
-      <p data-i18n="eh_p3"><b>Механика:</b> при запуске частицы «взлетают» из центра с задержкой, пропорциональной году AGI. Оранжевые орбиты = AGI, красные = ASI. Расстояние от центр = вес частицы.</p>
+      <p data-i18n="eh_p3"><b>Механика:</b> при запуске частицы «взлетают» из центра с задержкой, пропорциональной году T2/T4. Цвета орбит кодируют стадии. Расстояние от центра = вес частицы.</p>
       <div class="formula">&theta;(i) = 2&pi; &times; i / N,  r(i) = year_AGI(i),  &alpha;(i) = weight(i)</div>
-      <p data-i18n="eh_p4"><b>Что влияет:</b> распределение AGI/ASI лет из posterior, случайность MC прогона. Симметричная сфера = один чёткий пик. Фрактальная структура = множество конкурирующих сценариев. P(AGI к 2068), медиана AGI — обновляется в реальном времени.</p></div>
+      <p data-i18n="eh_p4"><b>Что влияет:</b> распределение T2/T4 лет из posterior, случайность MC прогона. Симметричная сфера = один чёткий пик. Фрактальная структура = множество конкурирующих сценариев. P(T2 к 2068), медиана T2 — обновляется в реальном времени.</p></div>
   </div>
 
   <div class="card" id="eventHorizonSection">
@@ -1011,12 +1011,12 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 <div style="padding:0 32px;max-width:1100px;margin:0 auto;width:100%">
   <div class="about" id="aboutSection">
     <h2 data-i18n="about_title">О модели v3</h2>
-    <p data-i18n="about_intro">Модель v3 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных Artificial Analysis. Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения AA обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге. Панель Expert Sandbox позволяет настраивать 18+ параметров модели и проверять гипотезы о будущем в реальном времени.</p>
+    <p data-i18n="about_intro">Модель v4 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных бенчмарков (ARC-AGI, SWE-bench, Arena Elo). Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге. Панель Expert Sandbox позволяет настраивать 30+ параметров модели и проверять гипотезы о будущем в реальном времени.</p>
     <div class="sec-label" data-i18n="defs_label">Архитектура модели</div>
     <div class="fgrid">
       <div class="fc">
         <h4 data-i18n="arch_tracker_title">Байесовский трекер</h4>
-        <p data-i18n="arch_tracker_desc">1000 частиц с настраиваемыми априорными распределениями: hw_months, algo_months, agency_ceiling (mean/std через Expert Sandbox). Каждое наблюдение AA (Intelligence + Agentic) обновляет веса через гауссово правдоподобие. ESS-ресэмплинг предотвращает вырождение. Поддержка трёх World Models: Cascade, Hard Wall, Slow Takeoff.</p>
+        <p data-i18n="arch_tracker_desc">1000 частиц с настраиваемыми априорными распределениями: hw_months, algo_months, agency_ceiling (mean/std через Expert Sandbox). Каждое наблюдение бенчмарков (ARC-AGI, SWE-bench, Arena Elo) обновляет веса через гауссово правдоподобие. ESS-ресэмплинг предотвращает вырождение. Поддержка трёх World Models: Cascade, Hard Wall, Slow Takeoff.</p>
       </div>
       <div class="fc">
         <h4 data-i18n="arch_dims_title">Два измерения интеллекта</h4>
@@ -1036,7 +1036,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
       </div>
       <div class="fc">
         <h4 data-i18n="arch_mc_title">Monte Carlo прогноз</h4>
-        <p data-i18n="arch_mc_desc">N прогонов из апостериорного распределения (500–10000). Каждый прогон — симуляция от 2023 до 2068+ с месячным шагом. Шоки: data wall, alignment incident, GPU bubble burst. Результат: распределение лет до AGI (cap >= 10) и ASI (cap >= 100).</p>
+        <p data-i18n="arch_mc_desc">N прогонов из апостериорного распределения (500–10000). Каждый прогон — симуляция от 2023 до 2068+ с месячным шагом. Шоки: data wall, alignment incident, GPU bubble burst. Результат: распределение лет до T1, T2, T3, T4. Пороги настраиваются через Expert Sandbox.</p>
       </div>
       <div class="fc">
         <h4 data-i18n="arch_expert_title">Expert Sandbox</h4>
@@ -1050,19 +1050,19 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   </div>
 
   <div class="about" id="defsSection">
-    <div class="sec-label" data-i18n="defs_label">Определения: что такое AGI и ASI в этой модели</div>
-    <p style="font-size:.82rem;color:#9898b0;margin-bottom:14px" data-i18n="defs_intro">В модели v3 используются строгие операциональные определения на основе двухмерной шкалы (Reasoning, Agency). Шкала логарифмическая: GPT-4 (конец 2023) ~ 3.0 по Reasoning и ~0.2 по Agency, текущие модели середины 2026 ~ 6.5 по Reasoning и ~6.5 по Agency. AGI = 10.0, ASI = 100.0.</p>
+    <div class="sec-label" data-i18n="defs_label">Определения: что такое T1, T2, T3, T4 в этой модели</div>
+    <p style="font-size:.82rem;color:#9898b0;margin-bottom:14px" data-i18n="defs_intro">В модели v4 используются строгие операциональные определения на основе двухмерной шкалы (Reasoning, Agency). Шкала логарифмическая: GPT-4 (конец 2023) ~ 3.0 по Reasoning и ~0.2 по Agency. Пороги T1–T4 настраиваются через Expert Sandbox.</p>
     <div class="defs-grid">
       <div class="def-card">
-        <h4>🤖 <span data-i18n="agi_def_title">AGI — Artificial General Intelligence</span></h4>
+        <h4>🤖 <span data-i18n="agi_def_title">T1 & T2: Потеря понимания и предсказуемости</span></h4>
         <div class="score" style="color:var(--orange)" data-i18n="agi_def_score">min(Reasoning, Agency) = 10.0</div>
         <p data-i18n="agi_def_text1">Автономный ИИ-исследователь уровня PhD. Демонстрирует истинное обобщение, способен к сложному планированию и надёжной работе (>99%). Может автономно проводить эксперименты, писать продакшен-код и находить ошибки в чужих статьях.</p>
         <p data-i18n="agi_def_text2" style="color:#666680;font-size:.72rem;margin-top:6px">Роль в модели: триггер для RSI и геополитической реакции. Без достаточного уровня Agency невозможен.</p>
       </div>
       <div class="def-card">
-        <h4>🌌 <span data-i18n="asi_def_title">ASI — Artificial Superintelligence</span></h4>
+        <h4>🌌 <span data-i18n="asi_def_title">T3 & T4: Потеря контроля и влияния</span></h4>
         <div class="score" style="color:var(--red)" data-i18n="asi_def_score">min(Reasoning, Agency) = 100.0</div>
-        <p data-i18n="asi_def_text1">Фазовый переход. ИИ автономно сжимает десятилетия научного прогресса в месяцы. Разрыв между ASI и AGI сопоставим с разницей между академиком и первоклассником.</p>
+        <p data-i18n="asi_def_text1">Фазовый переход. ИИ автономно сжимает десятилетия научного прогресса в месяцы. Разрыв между T4 и T2 сопоставим с разницей между академиком и первоклассником.</p>
         <p data-i18n="asi_def_text2" style="color:#666680;font-size:.72rem;margin-top:6px">Роль в модели: конец симуляции. За этой чертой прогнозы теряют смысл.</p>
       </div>
     </div>

@@ -159,7 +159,7 @@ function v3CalculateRSI(reasoning, agency, cap, expertCfg) {
   // 3. Координационное трение (замедление при развертывании миллиардов агентов)
   const friction = 1.0 / (1.0 + expertCfg.coordinationFriction * Math.max(0, cap - 10.0));
 
-  // Итоговый RSI плавно нарастает от ~0.05 сейчас до 2.0 в эпоху ASI
+  // Итоговый RSI плавно нарастает от ~0.05 сейчас до 2.0 в эпоху T4
   return Math.min(2.0, baseRsi * rsiActivation * friction);
 }
 
@@ -1316,7 +1316,7 @@ const LANG = {
     sb_hw:'Удвоение HW', sb_algo:'Удвоение Algo', sb_agency:'Потолок Agency', sb_ess:'ESS',
     // Controls
     ctrl_simulations:'Симуляции (N)', ctrl_obs_year:'Год наблюдения',
-    ctrl_intelligence:'Интеллект (AA)', ctrl_agentic:'Агентность (AA)',
+    ctrl_intelligence:'Интеллект', ctrl_agentic:'Агентность',
     ctrl_add:'Добавить', ctrl_reset:'Сбросить',
     ctrl_swe_bench:'SWE-bench (%)', ctrl_arc_agi:'ARC-AGI (%)',
     ctrl_horizon:'Автономность (часов)', ctrl_cost:'Стоимость 1M токенов ($)',
@@ -1336,13 +1336,13 @@ const LANG = {
     tip7:'Разбивка capability на составляющие: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Показывает, что двигает прогресс.',
     ch_t1:'T1: Понимание', ch_t2:'T2: Предсказуемость', ch_t3:'T3: Контроль', ch_t4:'T4: Влияние',
     ch1_xlabel:'Год', ch1_ylabel:'Прогонов',
-    ch3_xlabel:'Год', ch3_ylabel:'P(%)', ch3_pagi:'P(T2)', ch3_pasi:'P(T4)',
+    ch3_xlabel:'Год', ch3_ylabel:'P(%)', ch3_pt2:'P(T2)', ch3_pt4:'P(T4)',
     ch5_label:'Лет до T4', ch5_colorbar:'Лет до T4', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score', ch5_loading:'Вычисление матрицы (асинхронно)...',
     ch7_ylabel:'Суммарный вклад (log FLOPs)',
     fY_suffix:' лет', fY_gt:'> 40 лет',
     // About
     about_title:'О модели v4',
-    about_intro:'Модель v4 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных Artificial Analysis. Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения AA обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге. Панель Expert Sandbox позволяет настраивать 18+ параметров модели и проверять гипотезы о будущем в реальном времени.',
+    about_intro:'Модель v4 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных бенчмарков (ARC-AGI, SWE-bench, Arena Elo). Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге. Панель Expert Sandbox позволяет настраивать 30+ параметров модели и проверять гипотезы о будущем в реальном времени.',
     defs_label:'Архитектура модели',
     arch_tracker_title:'Байесовский трекер',
     arch_tracker_desc:'1000 частиц с настраиваемыми априорными распределениями: hw_months, algo_months, agency_ceiling (mean/std через Expert Sandbox). Каждое наблюдение AA (Intelligence + Agentic) обновляет веса через гауссово правдоподобие. ESS-ресэмплинг предотвращает вырождение. Поддержка трёх World Models: Cascade, Hard Wall, Slow Takeoff.',
@@ -1355,18 +1355,18 @@ const LANG = {
     arch_bottlenecks_title:'Бутылочные горлышки',
     arch_bottlenecks_desc:'Экономическая стена: если Reasoning обгоняет Agency > 2.0 — инвестиции экспоненциально падают. GPU-пузырь может лопнуть при agency < 4. Alignment incident замораживает масштабирование на 1.5 года. Физический предел роста hardware (maxPhysicalHwGrowth) — даже сверхразум не строит fabs мгновенно.',
     arch_mc_title:'Monte Carlo прогноз',
-    arch_mc_desc:'3000 прогонов из апостериорного распределения. Каждый прогон — симуляция от 2023 до 2068 года с месячным шагом. Результат: распределение лет до T1 (cap >= 8), T2 (cap >= 10), T3 (cap >= 25) и T4 (cap >= 100).',
+    arch_mc_desc:'3000 прогонов из апостериорного распределения. Каждый прогон — симуляция от 2023 до 2068 года с месячным шагом. Результат: распределение лет до T1, T2, T3 и T4. Пороги настраиваются через Expert Sandbox.',
     arch_expert_title:'Expert Sandbox',
     arch_expert_desc:'30+ настраиваемых параметров: априорные допущения (agency mean/std), пороги RSI, координационное трение, физический предел hardware, compute overhang, вероятности World Models, вес autonomy в бенчмарках. Превращает модель из прогноза в эпистемологический симулятор.',
     arch_shocks_title:'Шоки и Black Swans',
     arch_shocks_desc:'Типы шоков: Data Wall (исчерпание данных), Alignment Incident (регуляторная заморозка), GPU Bubble Burst (обвал инвестиций), AI Winter (разрыв reasoning-agency). Вероятности зависят от текущего состояния системы.',
-    defs_intro:'В модели v4 используется 4-стадийная модель сингулярности на основе двухмерной шкалы (Reasoning, Agency). Шкала логарифмическая: GPT-4 (конец 2023) ~ 3.0 по Reasoning и ~0.2 по Agency. T1 (Понимание) = 8.0, T2 (Предсказуемость) = 10.0, T3 (Контроль) = 25.0, T4 (Влияние) = 100.0.',
+    defs_intro:'В модели v4 используется 4-стадийная модель сингулярности на основе двухмерной шкалы (Reasoning, Agency). Шкала логарифмическая: GPT-4 (конец 2023) ~ 3.0 по Reasoning и ~0.2 по Agency. T1–T4 пороги настраиваются через Expert Sandbox.',
     agi_def_title:'T1 & T2: Потеря понимания и предсказуемости',
-    agi_def_score:'Capability: 8.0 и 10.0',
+    agi_def_score:'Capability: T1 и T2',
     agi_def_text1:'<b>1. Потеря понимания (cap=8.0):</b> Система сложнее когнитивной модели человека. Пользование становится ритуальным. Мы доверяем интерфейсам, но уже не понимаем причин решений.<br><br><b>2. Потеря предсказуемости (cap=10.0):</b> Система выступает как координатор. Никто не способен оценить глобальные последствия действий. Возникает ощущение случайности мира и эрозия человеческой агентности.',
     agi_def_text2:'Промежуточные стадии: Инструмент → Усилитель → Посредник → Координатор → Арбитр.',
     asi_def_title:'T3 & T4: Потеря контроля и субъектности',
-    asi_def_score:'Capability: 25.0 и 100.0',
+    asi_def_score:'Capability: T3 и T4',
     asi_def_text1:'<b>3. Потеря контроля (cap=25.0):</b> Система автономна и действует быстрее человеческого цикла. Строит собственную инфраструктуру. Люди, политики и государства становятся функцией инфраструктуры.<br><br><b>4. Потеря влияния (cap=100.0):</b> Среда мыслит за человека. Пространство решений полностью сконструировано извне. Цели системы перестают быть человеческими. Цивилизационный фазовый переход.',
     asi_def_text2:'Промежуточные стадии: Архитектор среды → Метасистема → Постчеловеческий слой.',
     // Expert Sandbox
@@ -1462,8 +1462,8 @@ const LANG = {
     expert_d_winterDamping:'Множитель инвестиций и алгоритмов в Зиму ИИ',
     expert_p_observationNoiseSigma:'Шум наблюдений (σ)',
     expert_d_observationNoiseSigma:'Уровень доверия к бенчмаркам (меньше = строже фильтр)',
-    expert_p_asiThreshold:'Порог ASI',
-    expert_d_asiThreshold:'Уровень capability для наступления ASI (Сверхразум)',
+    expert_p_t4Threshold:'Порог T4',
+    expert_d_t4Threshold:'Уровень capability для наступления T4 (Влияние)',
     expert_p_t1Threshold:'Порог T1',
     expert_d_t1Threshold:'Порог capability для T1 (Понимание)',
     expert_p_t2Threshold:'Порог T2',
@@ -1499,8 +1499,8 @@ const LANG = {
     swarm_mode_learn:'Обучение', swarm_mode_forecast:'Прогноз',
     swarm_play_forecast:'Анимация',
     forecast_xaxis:'Год T2', forecast_yaxis:'Удвоение HW (мес)',
-    forecast_pagi:'P(T2 до 2068)', forecast_median:'Медиана T2',
-    forecast_xaxis_asi:'Год T4', forecast_median_asi:'Медиана T4',
+    forecast_pt2:'P(T2 до 2068)', forecast_median_t2:'Медиана T2',
+    forecast_xaxis_t4:'Год T4', forecast_median_t4:'Медиана T4',
     forecast_overlay:'T2 \u2264', forecast_overlay_desc:'Показаны гипотезы с T2 до',
     live_swarm_title:'Симуляция в реальном времени', live_swarm_desc:'Каждые 0.25 сек рой перерисовывается из нового прогона Monte Carlo.',
     swarm_play_forecast:'Анимация',
@@ -1556,8 +1556,8 @@ const LANG = {
     eh_p4_desc:'<b>Что влияет:</b> распределение T1-T4 лет из posterior, случайность MC прогона. Симметричная сфера = один чёткий пик. Фрактальная структура = множество конкурирующих сценариев.',
 
     eh_play:'Запуск', eh_reset:'Сброс',
-    eh_legend_agi:'достигнут', eh_legend_asi:'достигнут', eh_legend_flight:'в полёте',
-    v3_variations_label:'(v3: Дисперсия в облаке частиц)',
+    eh_legend_t2:'достигнут', eh_legend_t4:'достигнут', eh_legend_flight:'в полёте',
+    v3_variations_label:'(v4: Дисперсия в облаке частиц)',
     // Canvas / overlay hardcoded strings (Swarm learn mode)
     swarm_canvas_median:'Медиана роя', canvas_hw_doubling:'Удвоение HW (мес)',
     canvas_agency_ceiling:'Потолок Agency', canvas_observation:'Наблюдение',
@@ -1576,7 +1576,7 @@ const LANG = {
     data_panel_year:'Год', data_panel_event:'Модель', data_panel_source:'Источники',
     data_panel_loading:'Данные загружаются...',
     // v3 params panel
-    v3_params_title:'Параметры v4', v3_no_agi:'T4 не достигнут ни одной частицей к 2068',
+    v3_params_title:'Параметры v4', v3_no_t4:'T4 не достигнут ни одной частицей к 2068',
   },
   en: {
     // Header
@@ -1589,7 +1589,7 @@ const LANG = {
     sb_hw:'HW Doubling', sb_algo:'Algo Doubling', sb_agency:'Agency Ceiling', sb_ess:'ESS',
     // Controls
     ctrl_simulations:'Simulations (N)', ctrl_obs_year:'Observation Year',
-    ctrl_intelligence:'Intelligence (AA)', ctrl_agentic:'Agentic (AA)',
+    ctrl_intelligence:'Intelligence', ctrl_agentic:'Agentic',
     ctrl_add:'Add', ctrl_reset:'Reset',
     ctrl_swe_bench:'SWE-bench (%)', ctrl_arc_agi:'ARC-AGI (%)',
     ctrl_horizon:'Autonomy (hours)', ctrl_cost:'Cost per 1M tokens ($)',
@@ -1609,13 +1609,13 @@ const LANG = {
     tip7:'Breakdown of capability into components: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Shows what drives progress.',
     ch_t1:'T1: Understanding', ch_t2:'T2: Predictability', ch_t3:'T3: Control', ch_t4:'T4: Influence',
     ch1_xlabel:'Year', ch1_ylabel:'Runs',
-    ch3_xlabel:'Year', ch3_ylabel:'P(%)', ch3_pagi:'P(T2)', ch3_pasi:'P(T4)',
+    ch3_xlabel:'Year', ch3_ylabel:'P(%)', ch3_pt2:'P(T2)', ch3_pt4:'P(T4)',
     ch5_label:'Years to T4', ch5_colorbar:'Years to T4', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score', ch5_loading:'Computing matrix (async)...',
     ch7_ylabel:'Cumulative contribution (log FLOPs)',
     fY_suffix:' yrs', fY_gt:'> 40 yrs',
     // About
     about_title:'About v4 Model',
-    about_intro:'The v4 model uses a Bayesian Particle Filter to calibrate predictions on real Artificial Analysis data. Each particle is a hypothesis about the future: hardware growth rate, algorithm progress, and agency ceiling. AA observations update particle weights via likelihood, and unlikely hypotheses die during resampling. Expert Sandbox panel provides 30+ tunable parameters for real-time hypothesis testing.',
+    about_intro:'The v4 model uses a Bayesian Particle Filter to calibrate predictions on real benchmark data (ARC-AGI, SWE-bench, Arena Elo). Each particle is a hypothesis about the future: hardware growth rate, algorithm progress, and agency ceiling. Observations update particle weights via likelihood, and unlikely hypotheses die during resampling. Expert Sandbox panel provides 30+ tunable parameters for real-time hypothesis testing.',
     defs_label:'Model Architecture',
     arch_tracker_title:'Bayesian Tracker',
     arch_tracker_desc:'1000 particles with tunable priors: hw_months, algo_months, agency_ceiling (mean/std via Expert Sandbox). Each AA observation updates weights via Gaussian likelihood. ESS resampling prevents degeneracy. Three World Models supported: Cascade, Hard Wall, Slow Takeoff.',
@@ -1628,19 +1628,19 @@ const LANG = {
     arch_bottlenecks_title:'Bottlenecks',
     arch_bottlenecks_desc:'Economic wall: if Reasoning leads Agency > 2.0, investment drops exponentially. GPU bubble can burst when agency < 4. Alignment incident freezes scaling for 1.5 years. Physical HW growth limit (maxPhysicalHwGrowth) — even superintelligence doesn\'t build fabs instantly.',
     arch_mc_title:'Monte Carlo Forecast',
-    arch_mc_desc:'3000 runs from the posterior distribution. Each run simulates 2023 to 2068 at monthly resolution. Result: distribution of years to T1 (cap >= 8), T2 (cap >= 10), T3 (cap >= 25) and T4 (cap >= 100).',
+    arch_mc_desc:'3000 runs from the posterior distribution. Each run simulates 2023 to 2068 at monthly resolution. Result: distribution of years to T1, T2, T3, and T4. Thresholds are configurable via Expert Sandbox.',
     arch_expert_title:'Expert Sandbox',
     arch_expert_desc:'30+ tunable parameters: philosophical priors (agency mean/std), RSI thresholds, coordination friction, physical HW growth limit, compute overhang, World Models probabilities, benchmark autonomy weight. Transforms the model from a predictor into an epistemological simulator.',
     arch_shocks_title:'Shocks & Black Swans',
     arch_shocks_desc:'Shock types: Data Wall (data exhaustion, slows algorithms), Alignment Incident (regulatory freeze), GPU Bubble Burst (investment crash), AI Winter (reasoning-agency gap). Probabilities depend on current system state.',
-    defs_intro:'The v4 model uses a 4-stage singularity framework based on a two-dimensional scale (Reasoning, Agency). The scale is logarithmic: GPT-4 (late 2023) ~ 3.0 in Reasoning and ~0.2 in Agency. T1 (Understanding) = 8.0, T2 (Predictability) = 10.0, T3 (Control) = 25.0, T4 (Influence) = 100.0.',
+    defs_intro:'The v4 model uses a 4-stage singularity framework based on a two-dimensional scale (Reasoning, Agency). The scale is logarithmic: GPT-4 (late 2023) ~ 3.0 in Reasoning and ~0.2 in Agency. T1–T4 thresholds are configurable via Expert Sandbox.',
     agi_def_title:'T1 & T2: Loss of Understanding & Predictability',
-    agi_def_score:'Capability: 8.0 and 10.0',
+    agi_def_score:'Capability: T1 and T2',
     agi_def_text1:'Autonomous AI researcher at PhD level. Demonstrates true generalization, capable of complex planning and reliable work (>99%). Can autonomously conduct experiments, write production code, and find errors in others\' papers.',
     agi_def_text2:'Role in model: trigger for RSI and geopolitical reaction. Impossible without sufficient Agency level.',
     asi_def_title:'T3 & T4: Loss of Control & Agency',
-    asi_def_score:'Capability: 25.0 and 100.0',
-    asi_def_text1:'Phase transition. AI autonomously compresses decades of scientific progress into months. The gap between ASI and AGI is comparable to the difference between an academician and a first-grader.',
+    asi_def_score:'Capability: T3 and T4',
+    asi_def_text1:'Phase transition. AI autonomously compresses decades of scientific progress into months. The gap between T4 and T2 is comparable to the difference between an academician and a first-grader.',
     asi_def_text2:'Role in model: end of simulation. Beyond this threshold, predictions lose meaning.',
     // Expert Sandbox
     expert_toggle:'Expert Settings',
@@ -1735,8 +1735,8 @@ const LANG = {
     expert_d_winterDamping:'Investment and algorithm multiplier during AI Winter',
     expert_p_observationNoiseSigma:'Observation Noise (σ)',
     expert_d_observationNoiseSigma:'Trust level in benchmarks (lower = stricter filter)',
-    expert_p_asiThreshold:'ASI Threshold',
-    expert_d_asiThreshold:'Capability level for ASI (Superintelligence)',
+    expert_p_t4Threshold:'T4 Threshold',
+    expert_d_t4Threshold:'Capability level for T4 (Influence)',
     expert_p_t1Threshold:'T1 Threshold',
     expert_d_t1Threshold:'Capability threshold for T1 (Understanding)',
     expert_p_t2Threshold:'T2 Threshold',
@@ -1772,8 +1772,8 @@ const LANG = {
     swarm_mode_learn:'Learning', swarm_mode_forecast:'Forecast',
     swarm_play_forecast:'Animate',
     forecast_xaxis:'T2 Year', forecast_yaxis:'HW Doubling (mo)',
-    forecast_pagi:'P(T2 by 2068)', forecast_median:'T2 Median',
-    forecast_xaxis_asi:'T4 Year', forecast_median_asi:'T4 Median',
+    forecast_pt2:'P(T2 by 2068)', forecast_median_t2:'T2 Median',
+    forecast_xaxis_t4:'T4 Year', forecast_median_t4:'T4 Median',
     forecast_overlay:'T2 \u2264', overlay_desc:'Showing hypotheses with T2 by',
     live_swarm_title:'Real-time Simulation', live_swarm_desc:'Every 0.25s the swarm redraws from a new Monte Carlo run.',
     // Event Horizon
@@ -1828,8 +1828,8 @@ const LANG = {
     eh_p4_desc:'<b>What affects it:</b> T1-T4 year distribution from posterior, MC run randomness. Symmetric sphere = one clear peak. Fractal structure = many competing scenarios.',
 
     eh_play:'Play', eh_reset:'Reset',
-    eh_legend_agi:'reached', eh_legend_asi:'reached', eh_legend_flight:'in flight',
-    v3_variations_label:'(v3: Variance in particle cloud)',
+    eh_legend_t2:'reached', eh_legend_t4:'reached', eh_legend_flight:'in flight',
+    v3_variations_label:'(v4: Variance in particle cloud)',
     // Canvas / overlay hardcoded strings (Swarm learn mode)
     swarm_canvas_median:'Swarm Median', canvas_hw_doubling:'HW Doubling (mo)',
     canvas_agency_ceiling:'Agency Ceiling', canvas_observation:'Observation',
@@ -1845,7 +1845,7 @@ const LANG = {
     // Observable metrics warning
     v3_warning_far:'Values far from particle range — model cannot reliably extrapolate. Forecast is closer to prior.',
     // v3 params panel
-    v3_params_title:'v4 Parameters', v3_no_agi:'No T4 by 2068 in any particle',
+    v3_params_title:'v4 Parameters', v3_no_t4:'No T4 by 2068 in any particle',
     // Footer / misc
     footer_note_en:'Data is estimated',
   }
@@ -1855,8 +1855,8 @@ const LANG = {
 // ===== PARTICLE SWARM v3 =====
 let swarm = { mode:'learn', obsIdx:0, tracker:null, particles:[], weights:[], animating:false, rafId:null, agiYears:null, forecastSliderMax:0 };
 
-// Pre-compute AGI and ASI years using the same MC forecast as the main charts
-// Returns { agiYears: [{agiYear, hw, w}], asiYears: [{asiYear, hw, w}] }
+// Pre-compute T2 and T4 years using the same MC forecast as the main charts
+// Returns { t2Years: [{t2Year, hw, w}], t4Years: [{t4Year, hw, w}] }
 // Note: runMonteCarloForecast returns years relative to CURRENT_YEAR
 function swarmComputeAGIYears(tracker) {
   const mc = tracker.runMonteCarloForecast(500);
@@ -1875,7 +1875,7 @@ function swarmComputeAGIYears(tracker) {
     agiResults.push({ year: mc.agiYears[run] + curYear, hw: p.hw_months, w: 1.0 / mc.agiYears.length });
     asiResults.push({ year: mc.asiYears[run] + curYear, hw: p.hw_months, w: 1.0 / mc.asiYears.length });
   }
-  return { agi: agiResults, asi: asiResults };
+  return { t2: agiResults, t4: asiResults };
 }
 
 function swarmBuildTracker(idx) {
@@ -1919,7 +1919,7 @@ function swarmSetMode(m) {
     swarm.weights = Array.from(swarm.tracker.weights);
     swarm.agiYears = null;
     const mcData = swarmComputeAGIYears(swarm.tracker);
-    swarm.agiYears = mcData.agi;
+    swarm.t2Years = mcData.t2;
     if (slider) { slider.min = 2020; slider.max = 2068; slider.step = 1; slider.value = 2068; }
     swarm.forecastSliderMax = 2068;
     if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2038</span><span></span><span>2048</span><span></span><span>2058</span><span>2068</span>';
@@ -1940,9 +1940,9 @@ function swarmSetMode(m) {
 }
 
 function swarmSetTarget(target) {
-  swarm.showASI = (target === 'asi');
-  document.getElementById('swarmTargetAGI').classList.toggle('active', target === 'agi');
-  document.getElementById('swarmTargetASI').classList.toggle('active', target === 'asi');
+  swarm.showT4 = (target === 't4');
+  document.getElementById('swarmTargetT2').classList.toggle('active', target === 't2');
+  document.getElementById('swarmTargetT4').classList.toggle('active', target === 't4');
   const slider = document.getElementById('swarmSlider');
   const labels = document.getElementById('swarmSliderLabels');
   if (swarm.showASI) {
@@ -2031,8 +2031,8 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
   const L = LANG[window._lang || 'ru'];
   if (!swarm.agiYears) {
     const mcData = swarmComputeAGIYears(swarm.tracker);
-    swarm.agiYears = mcData.agi;
-    swarm.asiYears = mcData.asi;
+    swarm.t2Years = mcData.t2;
+    swarm.t4Years = mcData.t4;
   }
   const years = swarm.agiYears;
   const cutoff = swarm.forecastSliderMax || 2068;
@@ -2270,7 +2270,7 @@ function swarmStopLive() {
   if (_swarmLiveTimer) { clearInterval(_swarmLiveTimer); _swarmLiveTimer = null; }
 }
 
-// ===== LIVE SWARM: AGI (blue) + ASI (red) side by side =====
+// ===== LIVE SWARM: T1/T2/T3/T4 side by side =====
 let liveSwarm = { tracker:null, timerT1:null, timerT2:null, timerT3:null, timerT4:null };
 
 function liveSwarmInit() {
@@ -2434,7 +2434,7 @@ const ehData = {
   running: false,
   tracker: null,
   radii: {},
-  stats: { agi: 0, asi: 0, total: 0 },
+  stats: { t2: 0, t4: 0, total: 0 },
   years: [2026, 2028, 2030, 2032, 2035, 2040, 2045, 2050, 2055, 2060, 2068],
 };
 
@@ -2518,9 +2518,9 @@ function ehDraw() {
   const statsEl = document.getElementById('ehStats');
   const legendEl = document.getElementById('ehLegend');
   const n = ehData.particles.length;
-  const agi = ehData.particles.filter(p => p.type === 'agi').length;
-  const asi = ehData.particles.filter(p => p.type === 'asi').length;
-  const pending = n - agi - asi;
+  const t2 = ehData.particles.filter(p => p.type === 't2').length;
+  const t4 = ehData.particles.filter(p => p.type === 't4').length;
+  const pending = n - t2 - t4;
 
   if (statsEl) {
     statsEl.textContent = `N=${n} | T1=${t1} T2=${t2} T3=${t3} T4=${t4} | ${pending > 0 ? 'flying +' + pending : ''}`;
