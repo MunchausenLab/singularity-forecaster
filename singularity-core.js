@@ -255,14 +255,35 @@ class BayesianTracker {
     }
   }
 
-  observeAAData(year, aaIntelligence, aaAgentic, sigma = 1.0) {
-    const tR = aaIntelligence / 10.0, tA = aaAgentic / 10.0;
+  observeRealData(year, obs, sigmas = BENCHMARK_SIGMAS) {
     for (let i = 0; i < this.n; i++) {
       const p = this.particles[i];
       if (p.hw_months < 1.0 || p.agency_ceiling < 1.0) { this.weights[i] = 0; continue; }
+      
       const pred = v3SimulateToYear(p, year, this.cfg);
-      const logLik = -0.5 * (((tR - pred.reasoning) / sigma)**2 + ((tA - pred.agency) / sigma)**2);
-      this.weights[i] *= Math.exp(Math.max(-50, logLik));
+      const metrics = getNumericObservables(pred.reasoning, pred.agency, this.cfg.EXPERT);
+      
+      let logLik = 0;
+      let count = 0;
+      const baseSigmaMult = this.cfg.EXPERT.observationNoiseSigma || 1.0;
+      
+      if (obs.sweBench !== undefined) {
+        logLik -= 0.5 * ((obs.sweBench - metrics.sweBench) / (sigmas.sweBench * baseSigmaMult))**2;
+        count++;
+      }
+      if (obs.arcAgi !== undefined) {
+        logLik -= 0.5 * ((obs.arcAgi - metrics.arcAgi) / (sigmas.arcAgi * baseSigmaMult))**2;
+        count++;
+      }
+      if (obs.arenaElo !== undefined) {
+        logLik -= 0.5 * ((obs.arenaElo - metrics.arenaElo) / (sigmas.arenaElo * baseSigmaMult))**2;
+        count++;
+      }
+
+      // Усредняем ошибку, чтобы штраф не зависел от количества доступных бенчмарков в этот год
+      if (count > 0) {
+        this.weights[i] *= Math.exp(Math.max(-50, logLik / count));
+      }
     }
 
     let sum = this.weights.reduce((a, b) => a + b, 0);
@@ -274,7 +295,7 @@ class BayesianTracker {
       const newP = [], cumsum = new Float64Array(this.n);
       cumsum[0] = this.weights[0];
       for (let i = 1; i < this.n; i++) cumsum[i] = cumsum[i - 1] + this.weights[i];
-      cumsum[this.n - 1] = 1.0; // ИСПРАВЛЕНИЕ: страхуемся от ошибок округления float
+      cumsum[this.n - 1] = 1.0; 
       const u0 = Math.random() / this.n;
       let j = 0;
       for (let i = 0; i < this.n; i++) {
@@ -291,7 +312,7 @@ class BayesianTracker {
       this.particles = newP;
       this.weights.fill(1.0 / this.n);
     }
-    this.observationLog.push({ year, aaIntelligence, aaAgentic });
+    this.observationLog.push({ year, ...obs });
   }
 
   getSummary() {
@@ -574,22 +595,21 @@ class BayesianTracker {
     this.n = this.particles.length;
   }
 
-  async runSensitivityMatrixAsync(intelRange, agenticRange) {
-    const baseObs = AA_FRONTIER_DATA[AA_FRONTIER_DATA.length - 1];
+  async runSensitivityMatrixAsync(arcRange, sweRange) {
+    const baseObs = REAL_BENCHMARK_HISTORY[REAL_BENCHMARK_HISTORY.length - 1];
     const state = this.cloneState();
 
     const results = [];
-    for (const intel of intelRange) {
+    for (const arc of arcRange) {
       const row = [];
-      for (const agentic of agenticRange) {
+      for (const swe of sweRange) {
         this.restoreState(state);
-        this.observeAAData(baseObs.year, intel, agentic, this.cfg.EXPERT.observationNoiseSigma);
+        this.observeRealData(baseObs.year, { arcAgi: arc, sweBench: swe });
         const mc = this.runMonteCarloForecast(300);
         const finite = mc.agiYears.filter(isFinite);
         row.push(finite.length > 0 ? percentile(finite, 50) : 40);
       }
       results.push(row);
-      // Отдаём управление браузеру после каждой строки матрицы, чтобы UI не зависал
       await new Promise(r => setTimeout(r, 0));
     }
     this.restoreState(state);
@@ -735,32 +755,47 @@ let simulationRunning = false;
 let v3Tracker = null;
 let v3Observations = [];
 
-const AA_FRONTIER_DATA = [
-  // --- РАННЯЯ ЭПОХА (Пре-Агенты) ---
-  { year: 2020.45, intel: 5.0,  agentic: 0.1,  event: "GPT-3 Release" },
-  { year: 2022.90, intel: 7.0,  agentic: 0.5,  event: "ChatGPT (GPT-3.5)" },
+// ============================================================================
+// DATA & OBSERVABLES
+// ============================================================================
 
-  // --- ЭПОХА ИНСТРУМЕНТОВ (2023 — начало 2024) ---
-  { year: 2023.25, intel: 14.0, agentic: 2.0,  event: "GPT-4 Release" },
-  { year: 2023.85, intel: 15.0, agentic: 5.5,  event: "GPT-4 Turbo + Assistants API" },
-  { year: 2024.20, intel: 18.0, agentic: 13.8, event: "Claude 3 Opus" },
+// Шум (дисперсия) для каждого бенчмарка (чем меньше, тем строже фильтр)
+const BENCHMARK_SIGMAS = {
+  arenaElo: 40.0,    // Elo (LMSYS Chatbot Arena)
+  arcAgi: 8.0,       // ARC-AGI (%)
+  sweBench: 10.0     // SWE-bench (%)
+};
 
-  // --- ЭПОХА АГЕНТНОГО ПРОРЫВА (середина 2024 — 2025) ---
-  { year: 2024.45, intel: 30.0, agentic: 31.4, event: "Claude 3.5 Sonnet" },
-  { year: 2024.75, intel: 31.0, agentic: 36.0, event: "OpenAI o1-preview" },
-  { year: 2025.20, intel: 35.0, agentic: 42.0, event: "Claude 3.7 Sonnet (reasoning)" },
-  { year: 2025.30, intel: 37.0, agentic: 48.0, event: "Claude 4 Sonnet (reasoning)" },
-  { year: 2025.80, intel: 48.0, agentic: 52.0, event: "Gemini 3 Pro" },
-
-  // --- СОВРЕМЕННЫЙ ФРОНТИР (2026) ---
-  { year: 2026.15, intel: 57.0, agentic: 61.0, event: "GPT-5.4 (Agentic Web)" },
-  { year: 2026.30, intel: 65.0, agentic: 65.0, event: "Claude Mythos (Closed)" },
+const REAL_BENCHMARK_HISTORY = [
+  { year: 2022.90, event: "ChatGPT (GPT-3.5)", arenaElo: 1000, arcAgi: 3.0,  sweBench: 0.0 },
+  { year: 2023.25, event: "GPT-4 Release",     arenaElo: 1150, arcAgi: 12.0, sweBench: 0.1 },
+  { year: 2023.85, event: "GPT-4 Turbo",       arenaElo: 1250, arcAgi: 15.0, sweBench: 1.5 },
+  { year: 2024.45, event: "Claude 3.5 Sonnet", arenaElo: 1270, arcAgi: 43.0, sweBench: 31.4 },
+  { year: 2024.75, event: "o1-preview",        arenaElo: 1320, arcAgi: 65.0, sweBench: 36.0 },
+  { year: 2025.20, event: "Claude 3.7 Sonnet", arenaElo: 1360, arcAgi: 78.0, sweBench: 49.0 },
+  { year: 2025.80, event: "Gemini 3 Pro",      arenaElo: 1400, arcAgi: 85.0, sweBench: 60.0 },
+  { year: 2026.15, event: "GPT-5.4 Web",       arenaElo: 1450, arcAgi: 92.0, sweBench: 75.0 },
+  { year: 2026.30, event: "Claude Mythos",     arenaElo: 1480, arcAgi: 94.0, sweBench: 82.0 },
 ];
+
+// Функция для вычисления численных значений бенчмарков напрямую
+function getNumericObservables(r10, a10, expertCfg) {
+    const autonomyWeight = expertCfg ? expertCfg.toolUseVsAutonomyWeight : 0.6;
+    const reasoningWeight = 1.0 - autonomyWeight;
+    const blendedReasoning = r10 * reasoningWeight + a10 * autonomyWeight;
+
+    return {
+        sweBench: 100 * sigmoid(0.55 * blendedReasoning - 2.5),
+        arcAgi: 100 * sigmoid(0.6 * r10 - 4.0),
+        arenaElo: 800 + 70 * r10
+    };
+}
 
 function v3GetTracker() {
   if (!v3Tracker) {
     v3Tracker = new BayesianTracker(1000);
-    AA_FRONTIER_DATA.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, EXPERT_CONFIG.observationNoiseSigma));
+    REAL_BENCHMARK_HISTORY.forEach(d => v3Tracker.observeRealData(d.year, d));
+    v3Observations.forEach(d => v3Tracker.observeRealData(d.year, d));
   }
   return v3Tracker;
 }
@@ -788,16 +823,21 @@ function benchmarksToAA(arcAgiPct, horizonHours) {
 function v3AddObservation() {
   const arcVal = +document.getElementById('v3ARC').value;
   const horizonVal = +document.getElementById('v3Horizon').value;
+  
+  // Конвертируем horizonVal обратно в r10/a10, чтобы аппроксимировать SWE-bench
   const aa = benchmarksToAA(arcVal, horizonVal);
-  // Используем CURRENT_YEAR трекера, если он есть, иначе берем системное время
+  const fakeMetrics = getNumericObservables(aa.r10, aa.a10, EXPERT_CONFIG);
+  const sweVal = fakeMetrics.sweBench;
+  const eloVal = fakeMetrics.arenaElo;
+
   const y = v3Tracker ? v3Tracker.cfg.CURRENT_YEAR : (new Date().getFullYear() + new Date().getMonth() / 12);
-  const i = aa.intel;
-  const a = aa.agency;
+  
   v3Observations = v3Observations.filter(o => o.year < y - 0.01);
-  v3Observations.push({ year: y, intel: i, agentic: a });
+  v3Observations.push({ year: y, arcAgi: arcVal, sweBench: sweVal, arenaElo: eloVal });
+  
   v3Tracker = new BayesianTracker(1000);
-  AA_FRONTIER_DATA.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, EXPERT_CONFIG.observationNoiseSigma));
-  v3Observations.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, EXPERT_CONFIG.observationNoiseSigma));
+  REAL_BENCHMARK_HISTORY.forEach(d => v3Tracker.observeRealData(d.year, d));
+  v3Observations.forEach(d => v3Tracker.observeRealData(d.year, d));
   v3UpdateUI(v3Tracker);
 }
 
@@ -817,19 +857,25 @@ function v3UpdateUI(tracker) {
 function v3CheckWarning(tracker) {
   const warnEl = document.getElementById('v3Warning');
   if (!warnEl) return;
-  // Read from benchmark inputs (ARC-AGI + Horizon) and convert to AA scale
   const arcVal = +document.getElementById('v3ARC').value || 0;
   const horizonVal = +document.getElementById('v3Horizon').value || 0;
   const aa = benchmarksToAA(arcVal, horizonVal);
-  const tR = aa.intel / 10.0, tA = aa.agency / 10.0;
+  const testMetrics = getNumericObservables(aa.r10, aa.a10, tracker.cfg.EXPERT);
+
   let minDist = Infinity;
-  for (let i = 0; i < tracker.n; i += 10) { // Проверяем каждую 10-ю частицу
-    if (tracker.weights[i] < 1e-5) continue; // Снижаем порог веса
+  for (let i = 0; i < tracker.n; i += 10) { 
+    if (tracker.weights[i] < 1e-5) continue;
     const pred = v3SimulateToYear(tracker.particles[i], tracker.cfg.CURRENT_YEAR, tracker.cfg);
-    const dist = Math.sqrt((tR - pred.reasoning) ** 2 + (tA - pred.agency) ** 2);
+    const m = getNumericObservables(pred.reasoning, pred.agency, tracker.cfg.EXPERT);
+    
+    // Считаем Евклидово расстояние в пространстве нормализованных бенчмарков
+    const dist = Math.sqrt(
+        ((testMetrics.arcAgi - m.arcAgi)/BENCHMARK_SIGMAS.arcAgi)**2 + 
+        ((testMetrics.sweBench - m.sweBench)/BENCHMARK_SIGMAS.sweBench)**2
+    );
     if (dist < minDist) minDist = dist;
   }
-  if (minDist > 8.0) {
+  if (minDist > 3.0) { // 3 сигмы
     warnEl.style.display = '';
     const L = LANG[window._lang || 'ru'];
     warnEl.textContent = L.v3_warning_far || '⚠️ Значения далеко от диапазона частиц — модель не может надёжно экстраполировать. Прогноз ближе к априорному.';
@@ -855,14 +901,14 @@ async function runSimulation() {
     const horizonVal = +document.getElementById('v3Horizon').value;
     const aa = benchmarksToAA(arcVal, horizonVal);
     const currentY = v3Tracker ? v3Tracker.cfg.CURRENT_YEAR : (new Date().getFullYear() + new Date().getMonth() / 12);
-    const currentI = aa.intel;
-    const currentA = aa.agency;
+    const fakeMetrics = getNumericObservables(aa.r10, aa.a10, EXPERT_CONFIG);
     v3Tracker = new BayesianTracker(1000);
-    AA_FRONTIER_DATA.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, EXPERT_CONFIG.observationNoiseSigma));
-    v3Observations.forEach(d => v3Tracker.observeAAData(d.year, d.intel, d.agentic, EXPERT_CONFIG.observationNoiseSigma));
+    REAL_BENCHMARK_HISTORY.forEach(d => v3Tracker.observeRealData(d.year, d));
+    
+    const newObs = { year: currentY, arcAgi: arcVal, sweBench: fakeMetrics.sweBench, arenaElo: fakeMetrics.arenaElo };
     v3Observations = v3Observations.filter(o => o.year < currentY - 0.01);
-    v3Observations.push({ year: currentY, intel: currentI, agentic: currentA });
-    v3Tracker.observeAAData(currentY, currentI, currentA, EXPERT_CONFIG.observationNoiseSigma);
+    v3Observations.push(newObs);
+    v3Observations.forEach(d => v3Tracker.observeRealData(d.year, d));
     const tracker = v3Tracker;
     const runData = tracker.runMonteCarloForecast(n);
     const agiList = runData.agiYears;
@@ -999,23 +1045,21 @@ async function plotSensitivityHeatmap(tracker) {
     c5.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666680;font-family:monospace;">' + (LANG[window._lang || 'ru'].ch5_loading || 'Вычисление матрицы (асинхронно)...') + '</div>';
   }
 
-  const t = LANG[window._lang || 'ru'];
-  const intelRange = [40, 45, 50, 55, 60, 65, 70, 75, 80, 85];
-  const agenticRange = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+  const arcRange = [60, 65, 70, 75, 80, 85, 90, 95, 99];     // Oсь Y
+  const sweRange = [20, 30, 40, 50, 60, 70, 80, 90, 99];     // Oсь X
 
-  // Ждём результат, не блокируя UI
-  const matrix = await tracker.runSensitivityMatrixAsync(intelRange, agenticRange);
+  const matrix = await tracker.runSensitivityMatrixAsync(arcRange, sweRange);
 
   if (!document.getElementById('c5')) return;
 
   const textMatrix = matrix.map((row, i) =>
-    row.map((v, j) => `Intel=${intelRange[i]}, Agentic=${agenticRange[j]}<br>${t.ch5_label}: ${v.toFixed(1)} лет`)
+    row.map((v, j) => `ARC=${arcRange[i]}%, SWE=${sweRange[j]}%<br>${t.ch5_label}: ${v.toFixed(1)} лет`)
   );
 
   Plotly.newPlot('c5', [{
     z: matrix,
-    x: agenticRange.map(String),
-    y: intelRange.map(String),
+    x: sweRange.map(String),
+    y: arcRange.map(String),
     type: 'heatmap',
     colorscale: [[0, '#0a0a0f'], [0.2, '#1a3a4a'], [0.4, '#0e5e7a'], [0.6, '#f0883e'], [0.8, '#ef4444'], [1, '#ff0040']],
     text: textMatrix,
@@ -1023,8 +1067,8 @@ async function plotSensitivityHeatmap(tracker) {
     colorbar: { title: { text: t.ch5_colorbar || 'Лет до AGI' }, thickness: 12, len: 0.8 },
   }], {
     ...LAYOUT_BASE,
-    xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch5_xaxis || 'Agentic score' } },
-    yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch5_yaxis || 'Intelligence score' } },
+    xaxis: { ...LAYOUT_BASE.xaxis, title: { text: 'SWE-bench (%)' } },
+    yaxis: { ...LAYOUT_BASE.yaxis, title: { text: 'ARC-AGI (%)' } },
     margin: { ...LAYOUT_BASE.margin, l: 52 },
   }, PLOT_CFG);
 }
@@ -1604,9 +1648,8 @@ function swarmComputeAGIYears(tracker) {
 
 function swarmBuildTracker(idx) {
   const t = new BayesianTracker(1000);
-  for (let i = 0; i < idx && i < AA_FRONTIER_DATA.length; i++) {
-    const d = AA_FRONTIER_DATA[i];
-    t.observeAAData(d.year, d.intel, d.agentic, 1.5);
+  for (let i = 0; i < idx && i < REAL_BENCHMARK_HISTORY.length; i++) {
+    t.observeRealData(REAL_BENCHMARK_HISTORY[i].year, REAL_BENCHMARK_HISTORY[i]);
   }
   return t;
 }
@@ -1638,7 +1681,7 @@ function swarmSetMode(m) {
     } else if (typeof v3GetTracker === 'function') {
       swarm.tracker = v3GetTracker();
     } else {
-      swarm.tracker = swarmBuildTracker(AA_FRONTIER_DATA.length);
+      swarm.tracker = swarmBuildTracker(REAL_BENCHMARK_HISTORY.length);
     }
     swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
     swarm.weights = Array.from(swarm.tracker.weights);
@@ -1655,7 +1698,7 @@ function swarmSetMode(m) {
     swarm.tracker = swarmBuildTracker(swarm.obsIdx);
     swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
     swarm.weights = Array.from(swarm.tracker.weights);
-    if (slider) { slider.min = 0; slider.max = AA_FRONTIER_DATA.length; slider.step = 1; slider.value = swarm.obsIdx; }
+    if (slider) { slider.min = 0; slider.max = REAL_BENCHMARK_HISTORY.length; slider.step = 1; slider.value = swarm.obsIdx; }
     if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2024</span><span></span><span>2025</span><span></span><span>2026</span><span>2026.5</span>';
     // Show play button in learn mode
     const playBtn = document.getElementById('swarmPlayBtn');
@@ -1739,16 +1782,8 @@ function swarmDrawLearn(ctx, w, h, pad, pw, ph) {
   const cx = pad + ((5 - 2) / 18) * pw, cy = h - pad - ((8 - 1) / 24) * ph;
   ctx.strokeStyle = '#f0883e'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.stroke();
-  if (swarm.obsIdx > 0 && swarm.obsIdx <= AA_FRONTIER_DATA.length) {
-    const obs = AA_FRONTIER_DATA[swarm.obsIdx - 1];
-    const ox = pad + (((obs.intel / 10) - 2) / 18) * pw;
-    const oy = h - pad - (((obs.agentic / 10) - 1) / 24) * ph;
-    ctx.strokeStyle = '#ef4444'; ctx.setLineDash([3, 3]);
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ox, oy); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#ef4444';
-    ctx.beginPath(); ctx.arc(ox, oy, 4, 0, Math.PI * 2); ctx.fill();
-  }
+  // Мы больше не рисуем "наблюдение" в виде точки, так как оси графика (HW и Agency Ceiling)
+  // лежат в совершенно другом пространстве по сравнению с бенчмарками.
   ctx.fillStyle = '#58a6ff'; ctx.font = '9px JetBrains Mono, monospace'; ctx.textAlign = 'left';
   const t = LANG[window._lang || 'ru'];
   ctx.fillText(t.swarm_canvas_median, pad + 4, pad + 12);
@@ -1918,10 +1953,15 @@ function swarmDrawOverlay(ctx, w, h, pad) {
     // Show play button in learn mode
     const playBtnL = document.getElementById('swarmPlayBtn');
     if (playBtnL) playBtnL.style.display = '';
-    if (swarm.obsIdx > 0 && swarm.obsIdx <= AA_FRONTIER_DATA.length) {
-      const obs = AA_FRONTIER_DATA[swarm.obsIdx - 1];
-      if (ov) { ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">${obs.year.toFixed(2)}</div><div style="font-size:.68rem;color:#9898b0">${obs.event}</div><div style="font-size:.65rem;color:#666680;margin-top:4px">I=${obs.intel.toFixed(0)} A=${obs.agentic.toFixed(1)}</div>`; ov.style.opacity = '1'; }
-    } else { if (ov) ov.style.opacity = '0'; }
+  if (swarm.obsIdx > 0 && swarm.obsIdx <= REAL_BENCHMARK_HISTORY.length) {
+    const obs = REAL_BENCHMARK_HISTORY[swarm.obsIdx - 1];
+    if (ov) { 
+      ov.innerHTML = `<div style="font-size:.75rem;color:#f0883e;font-weight:600">${obs.year.toFixed(2)}</div>
+      <div style="font-size:.68rem;color:#9898b0">${obs.event}</div>
+      <div style="font-size:.65rem;color:#666680;margin-top:4px">ARC:${obs.arcAgi.toFixed(0)}% | SWE:${obs.sweBench.toFixed(1)}% | Elo:${obs.arenaElo.toFixed(0)}</div>`; 
+      ov.style.opacity = '1'; 
+    }
+  } else { if (ov) ov.style.opacity = '0'; }
     if (leg) {
       leg.innerHTML = `<span style="color:#58a6ff">●</span> ${L.swarm_canvas_legend_density} &nbsp; <span style="color:#ef4444">●</span> ${L.swarm_canvas_legend_obs} &nbsp; <span style="color:#f0883e">●</span> ${L.swarm_canvas_legend_median}`;
     }
@@ -1941,12 +1981,12 @@ function swarmPlay() {
       swarmStartLive();
       return;
     }
-    if (swarm.obsIdx >= AA_FRONTIER_DATA.length) { swarm.obsIdx = 0; swarmInit(); }
+    if (swarm.obsIdx >= REAL_BENCHMARK_HISTORY.length) { swarm.obsIdx = 0; swarmInit(); }
     swarm.animating = true;
     swarmStopLive();
     document.getElementById('swarmPlayBtn').querySelector('span').textContent = '⏸';
     function step() {
-      if (!swarm.animating || swarm.obsIdx >= AA_FRONTIER_DATA.length) {
+      if (!swarm.animating || swarm.obsIdx >= REAL_BENCHMARK_HISTORY.length) {
         swarm.animating = false;
         document.getElementById('swarmPlayBtn').querySelector('span').textContent = LANG[window._lang||'ru'].swarm_play || 'Запуск';
         swarmStartLive();
@@ -2018,7 +2058,7 @@ function liveSwarmInit() {
   } else if (typeof v3GetTracker === 'function') {
     liveSwarm.tracker = v3GetTracker();
   } else {
-    liveSwarm.tracker = swarmBuildTracker(AA_FRONTIER_DATA.length);
+    liveSwarm.tracker = swarmBuildTracker(REAL_BENCHMARK_HISTORY.length);
   }
   liveSwarmTickAGI();
   liveSwarmTickASI();
@@ -2579,6 +2619,7 @@ function updateObsMetrics() {
 
   const _cfg = Object.assign({}, EXPERT_CONFIG, { _lang: window._lang || 'ru' });
   const m = mapToObservables(aa.r10, aa.a10, _cfg);
+  const n = getNumericObservables(aa.r10, aa.a10, _cfg);
 
   const el = document.getElementById('obsMetrics');
   if (el) el.style.display = 'block';
@@ -2586,8 +2627,8 @@ function updateObsMetrics() {
   const e2 = document.getElementById('omARC');
   const e3 = document.getElementById('omHorizon');
   const e4 = document.getElementById('omCost');
-  if (e1) e1.textContent = m.sweBench;
-  if (e2) e2.textContent = m.arcAgi;
+  if (e1) e1.textContent = n.sweBench.toFixed(1) + '%';
+  if (e2) e2.textContent = n.arcAgi.toFixed(1) + '%';
   if (e3) e3.textContent = m.horizon;
   if (e4) e4.textContent = m.cost;
 }
@@ -2596,3 +2637,4 @@ function updateObsMetrics() {
 // v2026.05.30c: fix expertApplyAndRun worldSlider
 // v2026.05.30d: physics patches
 // v2026.05.30e: year-fix, deep-copy, noise-sensitivity, cleanup
+// v2026.05.30f: fix decomp RSI + paradigm algoLog reset
