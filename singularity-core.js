@@ -2271,11 +2271,11 @@ function swarmStopLive() {
 }
 
 // ===== LIVE SWARM: AGI (blue) + ASI (red) side by side =====
-let liveSwarm = { tracker:null, timerAGI:null, timerASI:null };
+let liveSwarm = { tracker:null, timerT1:null, timerT2:null, timerT3:null, timerT4:null };
 
 function liveSwarmInit() {
-  // Init both canvases
-  ['liveSwarmAGI','liveSwarmASI'].forEach(id => {
+  // Init all 4 canvases
+  ['liveSwarmT1','liveSwarmT2','liveSwarmT3','liveSwarmT4'].forEach(id => {
     const c = document.getElementById(id);
     if (!c) return;
     const ctx = c.getContext('2d');
@@ -2292,11 +2292,13 @@ function liveSwarmInit() {
   } else {
     liveSwarm.tracker = swarmBuildTracker(REAL_BENCHMARK_HISTORY.length);
   }
-  liveSwarmTickAGI();
-  liveSwarmTickASI();
+  liveSwarmTickT1();
+  liveSwarmTickT2();
+  liveSwarmTickT3();
+  liveSwarmTickT4();
 }
 
-function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
+function drawLiveSwarm(canvasId, statsId, yearsKey, colorKey) {
   const c = document.getElementById(canvasId);
   if (!c || !liveSwarm.tracker) return;
   const ctx = c.getContext('2d');
@@ -2306,8 +2308,6 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
 
   const pad = 40, pw = w - pad * 2, ph = h - pad * 2;
 
-  // X range depends on AGI vs ASI
-  const isASI = (colorMode === 'asi');
   const xMin = 2020;
   const xMax = 2068;
   const yMin = 0, yMax = 16;
@@ -2324,7 +2324,7 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
   cumw[0] = liveSwarm.tracker.weights[0];
   for (let i = 1; i < n; i++) cumw[i] = cumw[i-1] + liveSwarm.tracker.weights[i];
 
-  const yearData = isASI ? mc.asiYears : mc.agiYears;
+  const yearData = mc[yearsKey];
   const pts = [];
   let totalW = 0;
   for (let run = 0; run < yearData.length; run++) {
@@ -2340,19 +2340,27 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
   }
   if (totalW === 0) return;
 
-  // Color function: blue gradient for AGI, red gradient for ASI
+  // Color function per stage
   function particleColor(t) {
-    if (colorMode === 'agi') {
-      // Light blue -> deep blue
-      const r = Math.floor(100 - t * 60);
-      const g = Math.floor(180 - t * 80);
-      const b = Math.floor(255 - t * 40);
+    if (colorKey === 'T1') { // yellow
+      const r = Math.floor(234 - t * 80);
+      const g = Math.floor(179 - t * 60);
+      const b = Math.floor(88 - t * 40);
       return `rgba(${r},${g},${b},0.85)`;
-    } else {
-      // Light red/pink -> deep red
-      const r = Math.floor(255 - t * 40);
+    } else if (colorKey === 'T2') { // orange
+      const r = Math.floor(249 - t * 60);
+      const g = Math.floor(115 - t * 50);
+      const b = Math.floor(22 + t * 10);
+      return `rgba(${r},${g},${b},0.85)`;
+    } else if (colorKey === 'T3') { // red
+      const r = Math.floor(239 - t * 40);
       const g = Math.floor(100 - t * 60);
-      const b = Math.floor(120 - t * 80);
+      const b = Math.floor(100 - t * 60);
+      return `rgba(${r},${g},${b},0.85)`;
+    } else { // T4 purple
+      const r = Math.floor(139 - t * 40);
+      const g = Math.floor(92 - t * 50);
+      const b = Math.floor(246 - t * 40);
       return `rgba(${r},${g},${b},0.85)`;
     }
   }
@@ -2388,7 +2396,7 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
 
   // Axis labels
   const lang = window._lang || 'ru';
-  const xLabel = isASI ? (LANG[lang].forecast_xaxis_asi || 'ASI Year') : (LANG[lang].forecast_xaxis || 'AGI Year');
+  const xLabel = LANG[lang].forecast_xaxis || 'Year';
   const yLabel = LANG[lang].forecast_yaxis || 'HW Doubling (mo)';
   ctx.fillStyle = '#555570'; ctx.font = '10px Inter, sans-serif';
   ctx.textAlign = 'center'; ctx.fillText(xLabel, w / 2, h - 4);
@@ -2405,19 +2413,29 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorMode) {
 
   const statsEl = document.getElementById(statsId);
   if (statsEl) {
-    const mLabel = isASI ? (LANG[lang].forecast_median_asi || 'ASI Median') : (LANG[lang].forecast_median || 'Median AGI');
+    const mLabel = LANG[lang]['forecast_median_' + colorKey.toLowerCase()] || ('Median ' + colorKey);
     statsEl.innerHTML = `${mLabel}: <b>${median.toFixed(1)}</b><br>P10\u2013P90: ${pct10.toFixed(0)}\u2013${pct90.toFixed(0)}<br>N = ${totalW}`;
   }
 }
 
-function liveSwarmTickAGI() {
-  drawLiveSwarm('liveSwarmAGI', 'liveSwarmAGIStats', 'agiYears', 'agi');
-  liveSwarm.timerAGI = setTimeout(liveSwarmTickAGI, 250);
+function liveSwarmTickT1() {
+  drawLiveSwarm('liveSwarmT1', 'liveSwarmT1Stats', 't1Years', 'T1');
+  liveSwarm.timerT1 = setTimeout(liveSwarmTickT1, 250);
 }
 
-function liveSwarmTickASI() {
-  drawLiveSwarm('liveSwarmASI', 'liveSwarmASIStats', 'asiYears', 'asi');
-  liveSwarm.timerASI = setTimeout(liveSwarmTickASI, 250);
+function liveSwarmTickT2() {
+  drawLiveSwarm('liveSwarmT2', 'liveSwarmT2Stats', 't2Years', 'T2');
+  liveSwarm.timerT2 = setTimeout(liveSwarmTickT2, 250);
+}
+
+function liveSwarmTickT3() {
+  drawLiveSwarm('liveSwarmT3', 'liveSwarmT3Stats', 't3Years', 'T3');
+  liveSwarm.timerT3 = setTimeout(liveSwarmTickT3, 250);
+}
+
+function liveSwarmTickT4() {
+  drawLiveSwarm('liveSwarmT4', 'liveSwarmT4Stats', 't4Years', 'T4');
+  liveSwarm.timerT4 = setTimeout(liveSwarmTickT4, 250);
 }
 
 // ===== EVENT HORIZON: Sphere of Singularity =====
@@ -2683,8 +2701,12 @@ function setLang(lang) {
   if (typeof swarmDraw === 'function') swarmDraw();
   if (typeof ehDraw === 'function') ehDraw();
   if (typeof drawLiveSwarm === 'function') {
-    if (typeof liveSwarm !== 'undefined' && liveSwarm.timerAGI) { clearTimeout(liveSwarm.timerAGI); liveSwarmTickAGI(); }
-    if (typeof liveSwarm !== 'undefined' && liveSwarm.timerASI) { clearTimeout(liveSwarm.timerASI); liveSwarmTickASI(); }
+    if (typeof liveSwarm !== 'undefined') {
+      if (liveSwarm.timerT1) { clearTimeout(liveSwarm.timerT1); liveSwarmTickT1(); }
+      if (liveSwarm.timerT2) { clearTimeout(liveSwarm.timerT2); liveSwarmTickT2(); }
+      if (liveSwarm.timerT3) { clearTimeout(liveSwarm.timerT3); liveSwarmTickT3(); }
+      if (liveSwarm.timerT4) { clearTimeout(liveSwarm.timerT4); liveSwarmTickT4(); }
+    }
   }
 }
 
