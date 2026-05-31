@@ -223,7 +223,7 @@ function v3SimulateToYear(particle, targetYear, cfg) {
         ceilingR *= shiftMult;
         algoKMult = 2.0;
         // ДОБАВЛЕНО: откат логарифма при смене парадигмы, чтобы физика совпадала с Монте-Карло
-        algoLog -= (0.4 + paradigmGeneration * 0.1);
+        algoLog = Math.max(algoLog - (0.4 + paradigmGeneration * 0.1), -3.0);
       }
     }
 
@@ -241,7 +241,8 @@ function v3SimulateToYear(particle, targetYear, cfg) {
     }
 
     // --- БАРЬЕР 3: Геополитика (государственный шок после T2) ---
-    if (cap >= cfg.THRESHOLDS.t2 && !stateIntervention && Math.random() < cfg.EXPERT.barrierGeopoliticsRisk * dt) {
+    // Детерминированный: срабатывает при превышении порога риска (не случайно)
+    if (cap >= cfg.THRESHOLDS.t2 && !stateIntervention && cfg.EXPERT.barrierGeopoliticsRisk > 0.5) {
       stateIntervention = true;
       interventionCooldown = 3.0;
     }
@@ -493,7 +494,7 @@ class BayesianTracker {
                 ceilingAgency *= shiftMult;
                 ceilingReasoning *= shiftMult;
 
-                algoLog -= (0.4 + paradigmGeneration * 0.1);
+                algoLog = Math.max(algoLog - (0.4 + paradigmGeneration * 0.1), -3.0);
                 algoKMultiplier = 2.0;
                 dataExhaustionHit = false;
               }
@@ -738,7 +739,7 @@ class BayesianTracker {
         if (y > cfg.CURRENT_YEAR && saturation > cfg.EXPERT.saturationThreshold && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
           cA *= cfg.SCALING_LAW.shift_multiplier;
           cR *= cfg.SCALING_LAW.shift_multiplier;
-          algoLog -= (0.4 + paradigmGeneration * 0.1);
+          algoLog = Math.max(algoLog - (0.4 + paradigmGeneration * 0.1), -3.0);
           paradigmGeneration++;
         }
         years.push(y);
@@ -804,6 +805,7 @@ class BayesianTracker {
     if (hardWallWeight > 0.5) cA = Math.min(cA, 5.5);
     const algoKMultiplier = slowTakeoffWeight > 0.5 ? 0.6 : 1.0;
     for (let step = 0; step < steps; step++) {
+      const y = cfg.BASE_YEAR + step * dt;
       let paradigmBonus = 0;
 
       const logDiff = flopsLog + algoLog - baseLog;
@@ -1521,7 +1523,6 @@ const LANG = {
     forecast_xaxis_t4:'Год T4', forecast_median_t4:'Медиана T4',
     forecast_overlay:'T2 \u2264', forecast_overlay_desc:'Показаны гипотезы с T2 до',
     live_swarm_title:'Симуляция в реальном времени', live_swarm_desc:'Каждые 0.25 сек рой перерисовывается из нового прогона Monte Carlo.',
-    swarm_play_forecast:'Анимация',
     // Event Horizon
     eh_title:'Визуализация: «Сфера Сингулярности»',
     eh_desc:'Каждая частица — один прогон Monte Carlo. Вылетает из центра (2026) и застывает на орбите своего года T1/T2/T3/T4. Плотные кольца = высокая вероятность. Жёлтые орбиты = T1, оранжевые = T2, красные = T3, фиолетовые = T4.',
@@ -1963,7 +1964,7 @@ function swarmSetTarget(target) {
   document.getElementById('swarmTargetT4').classList.toggle('active', target === 't4');
   const slider = document.getElementById('swarmSlider');
   const labels = document.getElementById('swarmSliderLabels');
-  if (swarm.showASI) {
+  if (swarm.showT4) {
     if (slider) { slider.min = 2020; slider.max = 2068; slider.value = 2068; }
     swarm.forecastSliderMax = 2068;
     if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2040</span><span></span><span>2050</span><span></span><span>2060</span><span>2068</span>';
@@ -2051,8 +2052,9 @@ function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
     const mcData = swarmComputeAGIYears(swarm.tracker);
     swarm.t2Years = mcData.t2;
     swarm.t4Years = mcData.t4;
+    swarm.agiYears = mcData.t2;
   }
-  const years = swarm.agiYears;
+  const years = swarm.showT4 ? swarm.t4Years : swarm.agiYears;
   const cutoff = swarm.forecastSliderMax || 2068;
   const xMin = 2020;
   const xMax = 2068;
@@ -2423,8 +2425,8 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorKey, mc) {
   const half = totalW / 2;
   let cum = 0, median = xMax;
   for (const p of pts) { cum++; if (cum >= half) { median = p.x; break; } }
-  const pct10 = pts[Math.floor(totalW * 0.1)].x;
-  const pct90 = pts[Math.floor(totalW * 0.9)].x;
+  const pct10 = pts[Math.min(pts.length - 1, Math.floor(totalW * 0.1))].x;
+  const pct90 = pts[Math.min(pts.length - 1, Math.floor(totalW * 0.9))].x;
 
   const statsEl = document.getElementById(statsId);
   if (statsEl) {
@@ -2434,12 +2436,21 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorKey, mc) {
 }
 
 function liveSwarmTickAll() {
+  // Отменяем все предыдущие таймеры перед созданием новых
+  ['T1','T2','T3','T4'].forEach(stage => {
+    if (liveSwarm['timer' + stage]) {
+      clearTimeout(liveSwarm['timer' + stage]);
+      liveSwarm['timer' + stage] = null;
+    }
+  });
+
   const mc = liveSwarm.tracker ? liveSwarm.tracker.runMonteCarloForecast(500) : null;
-  ['T1','T2','T3','T4'].forEach((stage, i) => {
+  ['T1','T2','T3','T4'].forEach((stage) => {
     drawLiveSwarm('liveSwarm' + stage, 'liveSwarm' + stage + 'Stats',
       stage.toLowerCase() + 'Years', stage, mc);
-    liveSwarm['timer' + stage] = setTimeout(liveSwarmTickAll, 250);
   });
+  // Один таймер для следующего вызова (не 4!)
+  liveSwarm.timerT1 = setTimeout(liveSwarmTickAll, 250);
 }
 
 // ===== EVENT HORIZON: Sphere of Singularity =====
@@ -2752,7 +2763,7 @@ function expertUpdate(key, value) {
   }
   const el = document.getElementById('ev-' + key);
   if (el) {
-    el.textContent = (value % 1 === 0) ? value.toFixed(1) : value.toString();
+    el.textContent = (value % 1 === 0) ? value.toFixed(1) : value.toFixed(2);
   }
 }
 
