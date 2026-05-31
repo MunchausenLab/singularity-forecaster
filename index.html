@@ -249,6 +249,15 @@ body{font-family:var(--font);background:var(--bg-primary);color:var(--text-prima
 }
 
 footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);border-top:1px solid var(--border)}
+
+/* Data Panel */
+#dataPanel { transition: all .2s ease; }
+#dataPanelContent.collapsed { display:none; }
+#dataPanel table { border-spacing:0; }
+#dataPanel th, #dataPanel td { padding:4px 6px; border-bottom:1px solid #1a1a2a; }
+#dataPanel tr:hover { background:rgba(240,136,62,.04); }
+#dataPanel tr td:nth-child(1) { width:48px; }
+#dataPanel tr td:nth-child(3), #dataPanel td:nth-child(4), #dataPanel td:nth-child(5), #dataPanel td:nth-child(6) { font-family:var(--mono); font-size:.65rem; }
 </style>
 </head>
 <body>
@@ -687,6 +696,13 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <span style="margin-right:16px"><span data-i18n="obs_horizon">Автономность</span>: <b id="omHorizon" style="color:var(--orange)">—</b></span>
   <span><span data-i18n="obs_cost">Стоимость 1M токенов</span>: <b id="omCost" style="color:var(--green)">—</b></span>
 </div>
+  <div id="dataPanel" style="background:var(--bg-card);border-bottom:1px solid var(--border);padding:10px 32px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-size:.7rem;color:#666680;font-family:var(--mono)">DATASET: <span id="dataPanelCount" style="color:#f0883e">0</span> observations loaded</span>
+      <button onclick="document.getElementById('dataPanelContent').classList.toggle('collapsed')" style="background:none;border:none;color:#666680;cursor:pointer;font-size:.7rem">▼</button>
+    </div>
+    <div id="dataPanelContent" style="max-height:300px;overflow-y:auto"></div>
+  </div>
 
 <!-- ===== v3 PARAMS ===== -->
 <div id="v3Panel" style="display:block;background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:10px 32px">

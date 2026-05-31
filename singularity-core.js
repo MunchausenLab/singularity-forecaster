@@ -1465,6 +1465,9 @@ const LANG = {
     live_swarm_stats_n:'N =',
     // Observable metrics warning
     v3_warning_far:'⚠️ Значения далеко от диапазона частиц — модель не может надёжно экстраполировать. Прогноз ближе к априорному.',
+    // Data panel
+    data_panel_year:'Год', data_panel_event:'Модель', data_panel_source:'Источники',
+    data_panel_loading:'Данные загружаются...',
     // v3 params panel
     v3_params_title:'Параметры v3', v3_no_agi:'AGI не достигнут ни одной частицей к 2068',
   },
@@ -2538,6 +2541,7 @@ window.addEventListener('load', async () => {
   // Запускаем симуляцию
   const tracker = v3GetTracker();
   v3UpdateUI(tracker);
+  renderDataPanel();
 
   if (overlay) overlay.classList.remove('show');
   runSimulation();
@@ -2719,6 +2723,48 @@ function v3QuickWarning() {
   updateObsMetrics();
 }
 
+function renderDataPanel() {
+  const panel = document.getElementById('dataPanelContent');
+  if (!panel) return;
+  const L = LANG[window._lang || 'ru'];
+  const history = REAL_BENCHMARK_HISTORY;
+  if (!history || history.length === 0) {
+    panel.innerHTML = '<div style="color:#666680;padding:8px;font-size:.75rem;">' + (L.data_panel_loading || 'Данные загружаются...') + '</div>';
+    return;
+  }
+  const rows = history.map(d => {
+    const flops = d.trainingFlopsLog ? d.trainingFlopsLog.toFixed(2) : '—';
+    return `<tr>
+      <td style="color:#f0883e">${d.year.toFixed(2)}</td>
+      <td>${d.event}</td>
+      <td style="text-align:right">${d.arenaElo.toFixed(0)}</td>
+      <td style="text-align:right">${d.arcAgi.toFixed(1)}%</td>
+      <td style="text-align:right">${d.sweBench.toFixed(1)}%</td>
+      <td style="text-align:right;color:#a78bfa">${flops}</td>
+    </tr>`;
+  }).join('');
+  panel.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:.7rem;font-family:var(--mono)">
+      <thead>
+        <tr style="color:#666680;text-align:left;border-bottom:1px solid #1e1e2e">
+          <th style="padding:4px 6px">${L.data_panel_year || 'Год'}</th>
+          <th style="padding:4px 6px">${L.data_panel_event || 'Модель'}</th>
+          <th style="padding:4px 6px;text-align:right">Elo</th>
+          <th style="padding:4px 6px;text-align:right">ARC</th>
+          <th style="padding:4px 6px;text-align:right">SWE</th>
+          <th style="padding:4px 6px;text-align:right">log FLOPs</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="margin-top:6px;color:#444;font-size:.65rem;font-family:sans-serif">
+      ${L.data_panel_source || 'Источники'}: LMSYS, SWE-bench Official, ARC Prize, Epoch AI.
+    </div>
+  `;
+  const countEl = document.getElementById('dataPanelCount');
+  if (countEl) countEl.textContent = history.length;
+}
+
 function updateObsMetrics() {
   const arcVal = +document.getElementById('v3ARC').value || 0;
   const horizonVal = +document.getElementById('v3Horizon').value || 0;
@@ -2740,6 +2786,7 @@ function updateObsMetrics() {
   if (e2) e2.textContent = n.arcAgi.toFixed(1) + '%';
   if (e3) e3.textContent = m.horizon;
   if (e4) e4.textContent = m.cost;
+  renderDataPanel();
 }
 // DEPLOY: scroll-to-panel fix
 // cache-bypass: no-spoiler deployed
