@@ -98,7 +98,7 @@ function createV3Config() {
     BASE_YEAR: 2023.0,          // Якорь (уровень GPT-4)
     BASE_LOG_FLOPS: 24.5,       // Начальные FLOPs в 2023
     CURRENT_YEAR: new Date().getFullYear() + (new Date().getMonth() / 12), // Динамический текущий год
-    THRESHOLDS: { agi: 10.0, asi: EXPERT_CONFIG.asiThreshold },
+    THRESHOLDS: { t1: 8.0, t2: 10.0, t3: 25.0, t4: EXPERT_CONFIG.asiThreshold },
     DIMENSIONS: {
       reasoning: { slope: EXPERT_CONFIG.reasoningScalingSlope, ceiling: EXPERT_CONFIG.ceilingReasoningBase },
       agency:    { slope: EXPERT_CONFIG.agencyScalingSlope }, // Потолок определяет частица
@@ -344,7 +344,7 @@ class BayesianTracker {
   }
 
   runMonteCarloForecast(nRuns) {
-    const agiYears = [], asiYears = []; 
+    const t1Years = [], t2Years = [], t3Years = [], t4Years = []; 
     const maxSteps = 12 * 45, dt = 1.0 / 12.0; 
     const plotSteps = 40 * 12; 
     const trajYears = new Float64Array(plotSteps);
@@ -379,7 +379,7 @@ class BayesianTracker {
       }
       // 'cascade' — каскадные парадигмы, без модификаций
 
-      let agiY = null, asiY = null;
+      let yT1 = null, yT2 = null, yT3 = null, yT4 = null;
       let plotIdx = 0;
       let isWinter = false;
       let dataExhaustionHit = false;
@@ -504,13 +504,14 @@ class BayesianTracker {
             plotIdx++;
         }
         
-        if (agiY === null && cap >= this.cfg.THRESHOLDS.agi) {
-            agiY = currentYear;
-        }
-        if (asiY === null && cap >= this.cfg.THRESHOLDS.asi) {
-            asiY = currentYear;
-            break; // Остановка только на ASI
-        }
+                // Проверяем прохождение 4 этапов сингулярности
+                if (yT1 === null && cap >= this.cfg.THRESHOLDS.t1) yT1 = currentYear;
+                if (yT2 === null && cap >= this.cfg.THRESHOLDS.t2) yT2 = currentYear;
+                if (yT3 === null && cap >= this.cfg.THRESHOLDS.t3) yT3 = currentYear;
+                if (yT4 === null && cap >= this.cfg.THRESHOLDS.t4) { 
+                    yT4 = currentYear; 
+                    break; // Останавливаем симуляцию на фазовом переходе
+                }
         
         let damping = 1.0;
 
@@ -571,8 +572,10 @@ class BayesianTracker {
         algoLog += ((currentAlgoK + rsi) * shockDamping) * dt;
       }
       
-      agiYears.push(agiY !== null ? agiY - this.cfg.CURRENT_YEAR : Infinity);
-      asiYears.push(asiY !== null ? asiY - this.cfg.CURRENT_YEAR : Infinity);
+      t1Years.push(yT1 !== null ? yT1 - this.cfg.CURRENT_YEAR : Infinity);
+      t2Years.push(yT2 !== null ? yT2 - this.cfg.CURRENT_YEAR : Infinity);
+      t3Years.push(yT3 !== null ? yT3 - this.cfg.CURRENT_YEAR : Infinity);
+      t4Years.push(yT4 !== null ? yT4 - this.cfg.CURRENT_YEAR : Infinity);
     }
     
     const yrs = [], med = [], p10a = [], p25a = [], p75a = [], p90a = [];
@@ -586,8 +589,8 @@ class BayesianTracker {
         }
     }
     return {
-        agiYears, asiYears,
-        trajectory: { years: yrs, median: med, p10: p10a, p25: p25a, p75: p75a, p90: p90a, agiThreshold: 10, asiThreshold: 100 }
+        t1Years, t2Years, t3Years, t4Years,
+        trajectory: { years: yrs, median: med, p10: p10a, p25: p25a, p75: p75a, p90: p90a }
     };
   }
 
@@ -1024,10 +1027,11 @@ async function runSimulation() {
     v3Observations.forEach(d => v3Tracker.observeRealData(d.year, d));
     const tracker = v3Tracker;
     const runData = tracker.runMonteCarloForecast(n);
-    const agiList = runData.agiYears;
-    const asiList = runData.asiYears;
-    const finite = agiList.filter(isFinite);
-    const finiteAsi = asiList.filter(isFinite);
+    const t1List = runData.t1Years, t2List = runData.t2Years;
+    const t3List = runData.t3Years, t4List = runData.t4Years;
+    const finiteT2 = t2List.filter(isFinite);
+    const finiteT4 = t4List.filter(isFinite);
+    const finite = finiteT2;
     
     const CUR_Y = tracker.cfg.CURRENT_YEAR;
     const yq = [];
@@ -1041,16 +1045,20 @@ async function runSimulation() {
     };
 
     currentResults = {
-      histogram: buildHistogramBins(agiList, asiList), 
+      histogram: buildHistogramBins(t1List, t2List, t3List, t4List), 
       trajectory: runData.trajectory, 
-      cumulative: { x: yqAbs, agi: yq.map(y => cdf(agiList, y)), asi: yq.map(y => cdf(asiList, y)) },
-      sensitivity: dummySensitivity,
-      summary: {
-        agiMedian: percentile(finite, 50), 
-        asiMedian: percentile(finiteAsi, 50),
-        pAgi2029: cdf(agiList, 3), pAgi2033: cdf(agiList, 7), pAgi2040: cdf(agiList, 14),
-        pAsi2035: cdf(asiList, 9), pAsi2045: cdf(asiList, 19), nRuns: n
+      cumulative: { 
+        x: yqAbs, 
+        t1: yq.map(y => cdf(t1List, y)), t2: yq.map(y => cdf(t2List, y)),
+        t3: yq.map(y => cdf(t3List, y)), t4: yq.map(y => cdf(t4List, y))
       },
+      summary: {
+        agiMedian: percentile(finiteT2, 50),
+        asiMedian: percentile(finiteT4, 50),
+        pAgi2029: cdf(t2List, 3), pAgi2033: cdf(t2List, 7), pAgi2040: cdf(t2List, 14),
+        pAsi2035: cdf(t4List, 9), pAsi2045: cdf(t4List, 19), nRuns: n
+      },
+      sensitivity: dummySensitivity,
     };
     updateUI(currentResults);
     if (typeof liveSwarm !== 'undefined') liveSwarm.tracker = tracker;
@@ -1094,30 +1102,30 @@ function yearsText(yrs) {
   return yrs.toFixed(1) + LANG[window._lang||'ru'].fY_suffix;
 }
 
-function buildHistogramBins(listAgi, listAsi = []) {
+function buildHistogramBins(l1, l2, l3, l4) {
   const bins = [], binW = 0.5;
-  for (let x = 0.5; x <= 25.0; x += binW) bins.push(x);
-  const hAgi = new Array(bins.length - 1).fill(0);
-  const hAsi = new Array(bins.length - 1).fill(0);
+  for (let x = 0.5; x <= 30.0; x += binW) bins.push(x);
   
-  for (const v of listAgi) {
-    if (isFinite(v)) { 
-      const idx = Math.floor((v - 0.5) / binW); 
-      if (idx >= 0 && idx < hAgi.length) hAgi[idx]++; 
+  const h1 = new Array(bins.length - 1).fill(0);
+  const h2 = new Array(bins.length - 1).fill(0);
+  const h3 = new Array(bins.length - 1).fill(0);
+  const h4 = new Array(bins.length - 1).fill(0);
+  
+  const fillHist = (list, hist) => {
+    for (const v of list) {
+      if (isFinite(v)) { 
+        const idx = Math.floor((v - 0.5) / binW); 
+        if (idx >= 0 && idx < hist.length) hist[idx]++; 
+      }
     }
-  }
-  for (const v of listAsi) {
-    if (isFinite(v)) { 
-      const idx = Math.floor((v - 0.5) / binW); 
-      if (idx >= 0 && idx < hAsi.length) hAsi[idx]++; 
-    }
-  }
+  };
+  fillHist(l1, h1); fillHist(l2, h2); fillHist(l3, h3); fillHist(l4, h4);
+
   const tracker = v3GetTracker();
   const CUR_Y = tracker ? tracker.cfg.CURRENT_YEAR : new Date().getFullYear();
   return { 
     labels: bins.slice(0, -1).map((_, i) => (CUR_Y + (bins[i] + bins[i + 1]) / 2).toFixed(1)), 
-    agi: hAgi, asi: hAsi,
-    _agiYears: listAgi,
+    t1: h1, t2: h2, t3: h3, t4: h4
   };
 }
 
@@ -1138,15 +1146,19 @@ const PLOT_CFG = { responsive: true, displayModeBar: false };
 function plotHistogram(h) {
   const t = LANG[window._lang || 'ru'];
   Plotly.newPlot('c1', [
-    { x: h.labels, y: h.agi, type: 'bar', name: 'AGI', marker: { color: '#f0883e' } },
-    { x: h.labels, y: h.asi, type: 'bar', name: 'ASI', marker: { color: '#ef4444' } }
-  ], { ...LAYOUT_BASE, barmode: 'group', xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch1_xlabel } }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch1_ylabel } } }, PLOT_CFG);
+    { x: h.labels, y: h.t1, type: 'scatter', mode: 'none', fill: 'tozeroy', name: t.ch_t1, fillcolor: 'rgba(234,179,8,0.45)' },
+    { x: h.labels, y: h.t2, type: 'scatter', mode: 'none', fill: 'tozeroy', name: t.ch_t2, fillcolor: 'rgba(249,115,22,0.45)' },
+    { x: h.labels, y: h.t3, type: 'scatter', mode: 'none', fill: 'tozeroy', name: t.ch_t3, fillcolor: 'rgba(239,68,68,0.45)' },
+    { x: h.labels, y: h.t4, type: 'scatter', mode: 'none', fill: 'tozeroy', name: t.ch_t4, fillcolor: 'rgba(139,92,246,0.45)' }
+  ], { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch1_xlabel } }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch1_ylabel } } }, PLOT_CFG);
 }
 function plotCumulative(c) {
   const t = LANG[window._lang || 'ru'];
   Plotly.newPlot('c3', [
-    { x: c.x, y: c.agi, type: 'scatter', mode: 'lines+markers', name: t.ch3_pagi, line: { color: '#f0883e' }, fill: 'tozeroy', fillcolor: 'rgba(240,136,62,.08)' },
-    { x: c.x, y: c.asi, type: 'scatter', mode: 'lines+markers', name: t.ch3_pasi, line: { color: '#ef4444' }, fill: 'tozeroy', fillcolor: 'rgba(239,68,68,.08)' }
+    { x: c.x, y: c.t1, type: 'scatter', mode: 'lines', name: t.ch_t1, line: { color: '#eab308', width: 2 } },
+    { x: c.x, y: c.t2, type: 'scatter', mode: 'lines', name: t.ch_t2, line: { color: '#f97316', width: 2 } },
+    { x: c.x, y: c.t3, type: 'scatter', mode: 'lines', name: t.ch_t3, line: { color: '#ef4444', width: 2 } },
+    { x: c.x, y: c.t4, type: 'scatter', mode: 'lines', name: t.ch_t4, line: { color: '#8b5cf6', width: 2 } }
   ], { ...LAYOUT_BASE, xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch3_xlabel } }, yaxis: { ...LAYOUT_BASE.yaxis, title: { text: t.ch3_ylabel }, range: [0, 105] } }, PLOT_CFG);
 }
 
@@ -1199,11 +1211,12 @@ function plotScenarioFan(tracker) {
     hoverinfo: i === 0 ? 'skip' : 'skip',
   }));
 
-  // Add AGI/ASI lines
-  const yrRange = [2026, 2050];
+  const yrRange = [2026, 2055];
   traces.push(
-    { x: yrRange, y: [10, 10], type: 'scatter', mode: 'lines', name: t.ch_legend_agi, line: { color: '#f0883e', dash: 'dot', width: 1 } },
-    { x: yrRange, y: [100, 100], type: 'scatter', mode: 'lines', name: t.ch_legend_asi, line: { color: '#ef4444', dash: 'dot', width: 1 } }
+    { x: yrRange, y: [8.0, 8.0],   type: 'scatter', mode: 'lines', name: t.ch_t1, line: { color: '#eab308', dash: 'dot', width: 1 } },
+    { x: yrRange, y: [10.0, 10.0], type: 'scatter', mode: 'lines', name: t.ch_t2, line: { color: '#f97316', dash: 'dot', width: 1 } },
+    { x: yrRange, y: [25.0, 25.0], type: 'scatter', mode: 'lines', name: t.ch_t3, line: { color: '#ef4444', dash: 'dot', width: 1 } },
+    { x: yrRange, y: [100.0, 100.0], type: 'scatter', mode: 'lines', name: t.ch_t4, line: { color: '#8b5cf6', dash: 'dot', width: 1 } }
   );
 
   Plotly.newPlot('c6', traces, {
@@ -1236,9 +1249,9 @@ const LANG = {
     // Header
     hdr_title:'Singularity Forecaster', hdr_sub:'v3 Bayesian Tracker',
     // Status bar
-    sb_agi:'AGI медиана', sb_asi:'ASI медиана',
-    sb_pagi_2029:'P(AGI · 2029)', sb_pagi_2033:'P(AGI · 2033)', sb_pagi_2040:'P(AGI · 2040)',
-    sb_pasi_2035:'P(ASI · 2035)', sb_pasi_2045:'P(ASI · 2045)',
+    sb_agi:'Медиана T2 (Предсказуемость)', sb_asi:'Медиана T4 (Влияние)',
+    sb_pagi_2029:'P(T2 · 2029)', sb_pagi_2033:'P(T2 · 2033)', sb_pagi_2040:'P(T2 · 2040)',
+    sb_pasi_2035:'P(T4 · 2035)', sb_pasi_2045:'P(T4 · 2045)',
     sb_hw:'Удвоение HW', sb_algo:'Удвоение Algo', sb_agency:'Потолок Agency', sb_ess:'ESS',
     // Controls
     ctrl_simulations:'Симуляции (N)', ctrl_obs_year:'Год наблюдения',
@@ -1250,8 +1263,8 @@ const LANG = {
     // Charts
     tag1:'Вероятностный анализ', tag3:'Кумулятивная',
     tag5:'Чувствительность', tag6:'Сценарии', tag7:'Декомпозиция',
-    chart1:'1. Распределение AGI / ASI по Monte Carlo',
-    chart3:'2. Накопленная вероятность AGI / ASI',
+    chart1:'1. Распределение 4-х этапов Сингулярности (Monte Carlo)',
+    chart3:'2. Накопленная вероятность (Cumulative PDF)',
     chart5:'3. Карта чувствительности (Intel × Agentic)',
     chart6:'4. Веер сценариев (Multi-Run Overlay)',
     chart7:'5. Вклад компонент (Stacked Area)',
@@ -1260,6 +1273,7 @@ const LANG = {
     tip5:'Тепловая карта: оси — параметры Intelligence и Agentic последнего наблюдения. Цвет — медианный год AGI. Показывает, какой параметр доминирует в прогнозе.',
     tip6:'30 случайных прогонов из апостериорного распределения, наложенных полупрозрачно. Показывает разброс возможных путей к сингулярности.',
     tip7:'Разбивка capability на составляющие: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Показывает, что двигает прогресс.',
+    ch_t1:'T1: Понимание', ch_t2:'T2: Предсказуемость', ch_t3:'T3: Контроль', ch_t4:'T4: Влияние',
     ch1_xlabel:'Год', ch1_ylabel:'Прогонов',
     ch3_xlabel:'Год', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
     ch5_label:'Лет до AGI', ch5_colorbar:'Лет до AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score', ch5_loading:'Вычисление матрицы (асинхронно)...',
@@ -1286,14 +1300,14 @@ const LANG = {
     arch_shocks_title:'Шоки и Black Swans',
     arch_shocks_desc:'Типы шоков: Data Wall (исчерпание данных), Alignment Incident (регуляторная заморозка), GPU Bubble Burst (обвал инвестиций), AI Winter (разрыв reasoning-agency). Вероятности зависят от текущего состояния системы.',
     defs_intro:'В модели v3 используются строгие операциональные определения на основе двухмерной шкалы (Reasoning, Agency). Шкала логарифмическая: GPT-4 (конец 2023) ~ 3.0 по Reasoning и ~0.2 по Agency, текущие модели середины 2026 ~ 6.5 по Reasoning и ~6.5 по Agency. AGI = 10.0, ASI = 100.0.',
-    agi_def_title:'AGI — Artificial General Intelligence',
-    agi_def_score:'min(Reasoning, Agency) = 10.0',
-    agi_def_text1:'Автономный ИИ-исследователь уровня PhD. Демонстрирует истинное обобщение, способен к сложному планированию и надёжной работе (>99%). Может автономно проводить эксперименты, писать продакшен-код и находить ошибки в чужих статьях.',
-    agi_def_text2:'Роль в модели: триггер для RSI и геополитической реакции. Без достаточного уровня Agency невозможен.',
-    asi_def_title:'ASI — Artificial Superintelligence',
-    asi_def_score:'min(Reasoning, Agency) = 100.0',
-    asi_def_text1:'Фазовый переход. ИИ автономно сжимает десятилетия научного прогресса в месяцы. Разрыв между ASI и AGI сопоставим с разницей между академиком и первоклассником.',
-    asi_def_text2:'Роль в модели: конец симуляции. За этой чертой прогнозы теряют смысл.',
+    agi_def_title:'T1 & T2: Потеря понимания и предсказуемости',
+    agi_def_score:'Capability: 8.0 и 10.0',
+    agi_def_text1:'<b>1. Потеря понимания (cap=8.0):</b> Система сложнее когнитивной модели человека. Пользование становится ритуальным. Мы доверяем интерфейсам, но уже не понимаем причин решений.<br><br><b>2. Потеря предсказуемости (cap=10.0):</b> Система выступает как координатор. Никто не способен оценить глобальные последствия действий. Возникает ощущение случайности мира и эрозия человеческой агентности.',
+    agi_def_text2:'Промежуточные стадии: Инструмент → Усилитель → Посредник → Координатор → Арбитр.',
+    asi_def_title:'T3 & T4: Потеря контроля и субъектности',
+    asi_def_score:'Capability: 25.0 и 100.0',
+    asi_def_text1:'<b>3. Потеря контроля (cap=25.0):</b> Система автономна и действует быстрее человеческого цикла. Строит собственную инфраструктуру. Люди, политики и государства становятся функцией инфраструктуры.<br><br><b>4. Потеря влияния (cap=100.0):</b> Среда мыслит за человека. Пространство решений полностью сконструировано извне. Цели системы перестают быть человеческими. Цивилизационный фазовый переход.',
+    asi_def_text2:'Промежуточные стадии: Архитектор среды → Метасистема → Постчеловеческий слой.',
     // Expert Sandbox
     expert_toggle:'Экспертные настройки',
     expert_cat1:'Архитектура и Парадигмы',
@@ -1412,7 +1426,7 @@ const LANG = {
     swarm_play_forecast:'Анимация',
     // Event Horizon
     eh_title:'Визуализация: «Сфера Сингулярности»',
-    eh_desc:'Каждая частица — один прогон Monte Carlo. Вылетает из центра (2026) и застывает на орбите своего года AGI. Плотные кольца = высокая вероятность. Оранжевые орбиты — AGI, красные — ASI.',
+    eh_desc:'Каждая частица — один прогон Monte Carlo. Вылетает из центра (2026) и застывает на орбите своего года T1/T2/T3/T4. Плотные кольца = высокая вероятность. Жёлтые орбиты = T1, оранжевые = T2, красные = T3, фиолетовые = T4.',
 
     // Swarm Learning desc card
     swarm_learn_p1:'Интерактивная визуализация байесовского обучения в реальном времени. Каждая точка — гипотеза о мире (частица): скорость роста железа <em>hw_months</em> и потолок агентности <em>agency_ceiling</em>.',
@@ -1456,7 +1470,7 @@ const LANG = {
     decomp_p2:'<b>Компоненты:</b>',
     decomp_p3:'Вычисляется через <code>runDecomposition()</code> — усреднение по всем частицам с весами. Переход от «железа» к «алгоритмам» к «RSI» = путь к сингулярности.',
     // Event Horizon desc
-    eh_p1_desc:'Анимированная визуализация распределения AGI/ASI. Каждая частица = один MC прогон. Вылетает из центра (2026) и застывает на орбите своего года AGI.',
+    eh_p1_desc:'Анимированная визуализация распределения 4 этапов сингулярности. Каждая частица = один MC прогон. Вылетает из центра (2026) и застывает на орбите T1/T2/T3/T4.',
     eh_p2_desc:'<b>Метафора:</b> плотные кольца = высокая вероятность (много частиц предсказывают AGI в этом году). Редкие точки = маловероятные сценарии.',
     eh_p3_desc:'<b>Механика:</b> при запуске частицы «взлетают» из центра с задержкой, пропорциональной году AGI. Оранжевые орбиты = AGI, красные = ASI. Расстояние от центр = вес частицы.',
     eh_p4_desc:'<b>Что влияет:</b> распределение AGI/ASI лет из posterior, случайность MC прогона. Симметричная сфера = один чёткий пик. Фрактальная структура = множество конкурирующих сценариев. P(AGI к 2068), медиана AGI — обновляется в реальном времени.',
@@ -1487,9 +1501,9 @@ const LANG = {
   en: {
     hdr_title:'Singularity Forecaster', hdr_sub:'v3 Bayesian Tracker',
     // Status bar
-    sb_agi:'AGI median', sb_asi:'ASI median',
-    sb_pagi_2029:'P(AGI · 2029)', sb_pagi_2033:'P(AGI · 2033)', sb_pagi_2040:'P(AGI · 2040)',
-    sb_pasi_2035:'P(ASI · 2035)', sb_pasi_2045:'P(ASI · 2045)',
+    sb_agi:'Median T2 (Predictability)', sb_asi:'Median T4 (Influence)',
+    sb_pagi_2029:'P(T2 · 2029)', sb_pagi_2033:'P(T2 · 2033)', sb_pagi_2040:'P(T2 · 2040)',
+    sb_pasi_2035:'P(T4 · 2035)', sb_pasi_2045:'P(T4 · 2045)',
     sb_hw:'HW Doubling', sb_algo:'Algo Doubling', sb_agency:'Agency Ceiling', sb_ess:'ESS',
     // Controls
     ctrl_simulations:'Simulations (N)', ctrl_obs_year:'Observation Year',
@@ -1501,8 +1515,8 @@ const LANG = {
     // Charts
     tag1:'Probabilistic Analysis', tag3:'Cumulative',
     tag5:'Sensitivity', tag6:'Scenarios', tag7:'Decomposition',
-    chart1:'1. AGI / ASI Distribution (Monte Carlo)',
-    chart3:'2. Cumulative Probability AGI / ASI',
+    chart1:'1. Four Stages of Singularity Distribution (Monte Carlo)',
+    chart3:'2. Cumulative Probability (CDF)',
     chart5:'3. Sensitivity Heatmap (Intel × Agentic)',
     chart6:'4. Scenario Fan (Multi-Run Overlay)',
     chart7:'5. Component Decomposition (Stacked Area)',
@@ -1511,6 +1525,7 @@ const LANG = {
     tip5:'Heatmap: axes are Intelligence and Agentic scores of the last observation. Color = median AGI year. Shows which parameter dominates the forecast.',
     tip6:'30 random runs from the posterior distribution, overlaid semi-transparently. Shows the spread of possible paths to singularity.',
     tip7:'Breakdown of capability into components: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Shows what drives progress.',
+    ch_t1:'T1: Understanding', ch_t2:'T2: Predictability', ch_t3:'T3: Control', ch_t4:'T4: Influence',
     ch1_xlabel:'Year', ch1_ylabel:'Runs',
     ch3_xlabel:'Year', ch3_ylabel:'P(%)', ch3_pagi:'P(AGI)', ch3_pasi:'P(ASI)',
     ch5_label:'Years to AGI', ch5_colorbar:'Years to AGI', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score', ch5_loading:'Computing matrix (async)...',
@@ -1537,12 +1552,12 @@ const LANG = {
     arch_shocks_title:'Shocks & Black Swans',
     arch_shocks_desc:'Shock types: Data Wall (data exhaustion, slows algorithms), Alignment Incident (regulatory freeze), GPU Bubble Burst (investment crash), AI Winter (reasoning-agency gap). Probabilities depend on current system state.',
     defs_intro:'The v3 model uses strict operational definitions based on a two-dimensional scale (Reasoning, Agency). The scale is logarithmic: GPT-4 (late 2023) ~ 3.0 in Reasoning and ~0.2 in Agency, current mid-2026 models ~ 6.5 in Reasoning and ~6.5 in Agency. AGI = 10.0, ASI = 100.0.',
-    agi_def_title:'AGI — Artificial General Intelligence',
-    agi_def_score:'min(Reasoning, Agency) = 10.0',
+    agi_def_title:'T1 & T2: Loss of Understanding & Predictability',
+    agi_def_score:'Capability: 8.0 and 10.0',
     agi_def_text1:'Autonomous AI researcher at PhD level. Demonstrates true generalization, capable of complex planning and reliable work (>99%). Can autonomously conduct experiments, write production code, and find errors in others\' papers.',
     agi_def_text2:'Role in model: trigger for RSI and geopolitical reaction. Impossible without sufficient Agency level.',
-    asi_def_title:'ASI — Artificial Superintelligence',
-    asi_def_score:'min(Reasoning, Agency) = 100.0',
+    asi_def_title:'T3 & T4: Loss of Control & Agency',
+    asi_def_score:'Capability: 25.0 and 100.0',
     asi_def_text1:'Phase transition. AI autonomously compresses decades of scientific progress into months. The gap between ASI and AGI is comparable to the difference between an academician and a first-grader.',
     asi_def_text2:'Role in model: end of simulation. Beyond this threshold, predictions lose meaning.',
     // Expert Sandbox
@@ -2403,12 +2418,16 @@ function ehDraw() {
   const pending = n - agi - asi;
 
   if (statsEl) {
-    statsEl.textContent = `N=${n} | AGI=${agi} | ASI=${asi} | ${pending > 0 ? 'in flight +' + pending : ''}`;
+    statsEl.textContent = `N=${n} | T1=${t1} T2=${t2} T3=${t3} T4=${t4} | ${pending > 0 ? 'flying +' + pending : ''}`;
   }
 
   if (legendEl) {
     const L = LANG[window._lang || 'ru'];
-    legendEl.innerHTML = `<span style="color:#f0883e">● AGI</span> ${L.eh_legend_agi || 'достигнут'} &nbsp; <span style="color:#ef4444">● ASI</span> ${L.eh_legend_asi || 'достигнут'} &nbsp; <span style="color:#555570">● ${L.eh_legend_flight || 'в полёте'}</span>`;
+    legendEl.innerHTML = `
+        <span style="color:#eab308">● T1</span> Понимание &nbsp; 
+        <span style="color:#f97316">● T2</span> Предсказуемость &nbsp; 
+        <span style="color:#ef4444">● T3</span> Контроль &nbsp; 
+        <span style="color:#8b5cf6">● T4</span> Влияние`;
   }
 }
 
@@ -2428,46 +2447,34 @@ function ehStep(dt) {
 
   // Spawn new particles
   if (ehData.launched < ehData.nTarget && ehData.spawnsLeft > 0) {
-    const spawnRate = 3; // particles per frame
-    for (let i = 0; i < spawnRate && ehData.launched < ehData.nTarget && ehData.spawnsLeft > 0; i++) {
-      // Pick next particle from precomputed data
+    const spawnRate = 2; // runs per frame
+    for (let i = 0; i < spawnRate && ehData.launched < ehData.nTarget * 4 && ehData.spawnsLeft > 0; i++) {
       const pt = ehData.spawns[ehData.spawnIdx];
       ehData.spawnIdx++;
       ehData.spawnsLeft--;
 
-      const isASI = pt.asiYear !== Infinity && isFinite(pt.asiYear);
-      const isAGI = pt.agiYear !== Infinity && isFinite(pt.agiYear);
-      let targetYear, type, color, glowColor;
+      const stages = [
+        { y: pt.t1, type: 't1', c: 'rgba(234,179,8,0.9)', gc: 'rgba(234,179,8,0.15)' },
+        { y: pt.t2, type: 't2', c: 'rgba(249,115,22,0.9)', gc: 'rgba(249,115,22,0.15)' },
+        { y: pt.t3, type: 't3', c: 'rgba(239,68,68,0.9)', gc: 'rgba(239,68,68,0.15)' },
+        { y: pt.t4, type: 't4', c: 'rgba(139,92,246,0.9)', gc: 'rgba(139,92,246,0.15)' }
+      ];
 
-      if (isASI) {
-        targetYear = pt.asiYear;
-        type = 'asi';
-        color = 'rgba(239,68,68,0.9)';
-        glowColor = 'rgba(239,68,68,0.15)';
-      } else if (isAGI) {
-        targetYear = pt.agiYear;
-        type = 'agi';
-        color = 'rgba(240,136,62,0.9)';
-        glowColor = 'rgba(240,136,62,0.15)';
-      } else {
-        // Never reached AGI -- drift to far orbit
-        targetYear = 2068;
-        type = 'never';
-        color = 'rgba(80,80,120,0.5)';
-        glowColor = 'rgba(80,80,120,0.08)';
+      for (const s of stages) {
+        if (s.y !== Infinity) {
+          ehData.particles.push({
+            r: 0,
+            angle: Math.random() * Math.PI * 2,
+            speed: 8 + Math.random() * 12,
+            targetYear: s.y,
+            type: s.type,
+            color: s.c,
+            glowColor: s.gc,
+            glow: 3 + Math.random() * 4,
+          });
+          ehData.launched++;
+        }
       }
-
-      ehData.particles.push({
-        r: 0,
-        angle: Math.random() * Math.PI * 2,
-        speed: 8 + Math.random() * 12, // pixels per frame
-        targetYear: targetYear,
-        type: type,
-        color: color,
-        glowColor: glowColor,
-        glow: 3 + Math.random() * 4,
-      });
-      ehData.launched++;
     }
   }
 
@@ -2502,13 +2509,15 @@ function eventHorizonPlay() {
   for (let i = 1; i < n; i++) cumw[i] = cumw[i-1] + tracker.weights[i];
 
   ehData.spawns = [];
-  for (let run = 0; run < mc.agiYears.length; run++) {
-    const u = (run + 0.5) / mc.agiYears.length;
+  for (let run = 0; run < mc.t1Years.length; run++) {
+    const u = (run + 0.5) / mc.t1Years.length;
     let idx = 0;
     while (idx < n - 1 && cumw[idx] < u) idx++;
-    const agiAbs = isFinite(mc.agiYears[run]) ? mc.agiYears[run] + curYear : Infinity;
-    const asiAbs = isFinite(mc.asiYears[run]) ? mc.asiYears[run] + curYear : Infinity;
-    ehData.spawns.push({ agiYear: agiAbs, asiYear: asiAbs, idx: idx });
+    const t1 = isFinite(mc.t1Years[run]) ? mc.t1Years[run] + curYear : Infinity;
+    const t2 = isFinite(mc.t2Years[run]) ? mc.t2Years[run] + curYear : Infinity;
+    const t3 = isFinite(mc.t3Years[run]) ? mc.t3Years[run] + curYear : Infinity;
+    const t4 = isFinite(mc.t4Years[run]) ? mc.t4Years[run] + curYear : Infinity;
+    ehData.spawns.push({ t1, t2, t3, t4, idx });
   }
 
   ehData.spawnIdx = 0;
