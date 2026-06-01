@@ -746,13 +746,54 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
         <input type="range" id="e-barrierDemandGrace" min="0" max="15" step="0.5" value="5" oninput="expertUpdate('barrierDemandGrace',this.value)">
         <div class="expert-param-desc" data-i18n="expert_d_barrierDemandGrace">Лет на адаптацию экономики к T2</div>
       </div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_governanceMoratoriumProb">Compute Governance</span>
+          <span class="expert-param-value" id="ev-governanceMoratoriumProb">0.04</span>
+        </div>
+        <input type="range" id="e-governanceMoratoriumProb" min="0" max="0.20" step="0.01" value="0.04" oninput="expertUpdate('governanceMoratoriumProb',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_governanceMoratoriumProb">Доля лет на моратории (0.04 = ~1 шок за 25 лет)</div>
+      </div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_governanceShockDamping">Демпфирование шока</span>
+          <span class="expert-param-value" id="ev-governanceShockDamping">0.50</span>
+        </div>
+        <input type="range" id="e-governanceShockDamping" min="0" max="1" step="0.05" value="0.5" oninput="expertUpdate('governanceShockDamping',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_governanceShockDamping">Множитель HW-роста во время моратория (0.5 = в 2 раза медленнее)</div>
+      </div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_plateauHardWallCeiling">Plateau: потолок Agency</span>
+          <span class="expert-param-value" id="ev-plateauHardWallCeiling">5.50</span>
+        </div>
+        <input type="range" id="e-plateauHardWallCeiling" min="3" max="15" step="0.1" value="5.5" oninput="expertUpdate('plateauHardWallCeiling',this.value)">
+        <div class="expert-param-desc" data-i18n="expert_d_plateauHardWallCeiling">Потолок agency_ceiling для hard_wall частиц (ниже = жёстче плато)</div>
+      </div>
+    </div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_observationSigmaMode">Режим шума наблюдений</span>
+        </div>
+        <select id="e-observationSigmaMode" style="width:100%;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:.78rem" onchange="expertUpdate('observationSigmaMode',this.value)">
+          <option value="global">Global (BENCHMARK_SIGMAS)</option>
+          <option value="perPoint">Per-point (локальные *_sigma)</option>
+        </select>
+        <div class="expert-param-desc" data-i18n="expert_d_observationSigmaMode">Режим вычисления σ в likelihood</div>
+      </div>
     </div>
 
   </div><!-- /expert-grid -->
   <div class="expert-actions">
     <button class="btn btn-secondary btn-sm" onclick="expertResetDefaults()" data-i18n="expert_reset">Сбросить по умолчанию</button>
     <button class="btn btn-primary btn-sm" onclick="expertApplyAndRun()" data-i18n="expert_apply">Применить и перезапустить</button>
+    <button class="btn btn-info btn-sm" onclick="uiRunBacktest()" style="margin-left:8px" data-i18n="expert_backtest">📊 Бэктест</button>
   </div>
+  <div id="backtestResult" style="padding:8px 16px;font-family:var(--mono);font-size:.72rem;color:var(--text-secondary);background:var(--bg-card);border:1px solid var(--border);border-radius:4px;margin:8px 16px;display:none"></div>
   </div>
 </div>
 

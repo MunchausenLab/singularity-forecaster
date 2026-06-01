@@ -81,6 +81,10 @@ const EXPERT_CONFIG = {
   // --- COMPUTE GOVERNANCE (пред-T2 моратории и регулирование) ---
   governanceMoratoriumProb: 0.04,  // [Compute Governance] Ожидаемая доля лет, потерянных на регуляторные паузы (0.04 = ~1 мораторий за 25 лет)
   governanceShockDamping: 0.5,     // [Compute Governance] Множитель HW-роста во время шока (0.5 = рост в 2 раза медленнее)
+  // --- OBSERVATION NOISE MODE ---
+  observationSigmaMode: 'global',  // 'global' = BENCHMARK_SIGMAS; 'perPoint' = локальные *_sigma из точек данных
+  // --- PLATEAU SCENARIO (затяжной T1 без прогресса) ---
+  plateauHardWallCeiling: 5.5,     // [Plateau] Потолок agency_ceiling для hard_wall (5.5 = остановка роста)
 
   // Категория 4: Эпистемология (World Models)
   worldModels: { cascade: 0.60, hardWall: 0.25, slowTakeoff: 0.15 },
@@ -320,34 +324,43 @@ class BayesianTracker {
     for (let i = 0; i < this.n; i++) {
       const p = this.particles[i];
       if (p.hw_months < 1.0 || p.agency_ceiling < 1.0) { this.weights[i] = 0; continue; }
-      
+
       const pred = v3SimulateToYear(p, year, this.cfg);
       const metrics = getNumericObservables(pred.reasoning, pred.agency, this.cfg.EXPERT);
-      
+
       let logLik = 0;
       let count = 0;
       const baseSigmaMult = this.cfg.EXPERT.observationNoiseSigma || 1.0;
-      
+      const usePerPoint = this.cfg.EXPERT.observationSigmaMode === 'perPoint';
+
+      // Helper: returns sigma for a given dimension (per-point if available, else global)
+      const sig = (dim, globalKey) => {
+        if (usePerPoint && obs[dim + '_sigma'] !== undefined) {
+          return obs[dim + '_sigma'] * baseSigmaMult;
+        }
+        return (sigmas[globalKey] || 1.0) * baseSigmaMult;
+      };
+
       if (obs.sweBench !== undefined) {
-        logLik -= 0.5 * ((obs.sweBench - metrics.sweBench) / (sigmas.sweBench * baseSigmaMult))**2;
+        logLik -= 0.5 * ((obs.sweBench - metrics.sweBench) / sig('sweBench', 'sweBench'))**2;
         count++;
       }
       if (obs.arcAgi !== undefined) {
-        logLik -= 0.5 * ((obs.arcAgi - metrics.arcAgi) / (sigmas.arcAgi * baseSigmaMult))**2;
+        logLik -= 0.5 * ((obs.arcAgi - metrics.arcAgi) / sig('arcAgi', 'arcAgi'))**2;
         count++;
       }
       if (obs.arenaElo !== undefined) {
-        logLik -= 0.5 * ((obs.arenaElo - metrics.arenaElo) / (sigmas.arenaElo * baseSigmaMult))**2;
+        logLik -= 0.5 * ((obs.arenaElo - metrics.arenaElo) / sig('arenaElo', 'arenaElo'))**2;
         count++;
       }
       if (obs.trainingFlopsLog !== undefined) {
-        logLik -= 0.5 * ((obs.trainingFlopsLog - metrics.flopsLog) / (sigmas.flopsLog * baseSigmaMult))**2;
+        logLik -= 0.5 * ((obs.trainingFlopsLog - metrics.flopsLog) / sig('trainingFlopsLog', 'flopsLog'))**2;
         count++;
       }
       if (obs.horizon !== undefined) {
         // Наблюдение в log-шкале (log10 hours), модель предсказывает в той же шкале
         const obsHorizonLog = Math.log10(Math.max(0.01, obs.horizon));
-        logLik -= 0.5 * ((obsHorizonLog - metrics.horizon) / (sigmas.horizon * baseSigmaMult))**2;
+        logLik -= 0.5 * ((obsHorizonLog - metrics.horizon) / sig('horizon', 'horizon'))**2;
         count++;
       }
 
@@ -734,7 +747,7 @@ class BayesianTracker {
       let cA = p.agency_ceiling;
       // Apply World Model constraints
       if (p.world_model === 'hard_wall') {
-        cA = Math.min(cA, 5.5);
+        cA = Math.min(cA, cfg.EXPERT.plateauHardWallCeiling);
       } else if (p.world_model === 'slow_takeoff') {
         algoK *= 0.6;
       }
@@ -852,8 +865,8 @@ class BayesianTracker {
         else if (this.particles[i].world_model === 'slow_takeoff') slowTakeoffWeight += w;
       }
     }
-    // Blend: hard_wall caps agency at 5.5, slow_takeoff reduces algoK
-    if (hardWallWeight > 0.5) cA = Math.min(cA, 5.5);
+    // Blend: hard_wall caps agency at plateauHardWallCeiling, slow_takeoff reduces algoK
+    if (hardWallWeight > 0.5) cA = Math.min(cA, cfg.EXPERT.plateauHardWallCeiling);
     const algoKMultiplier = slowTakeoffWeight > 0.5 ? 0.6 : 1.0;
     let paradigmGeneration = 0;
     for (let step = 0; step < steps; step++) {
@@ -931,16 +944,19 @@ const FALLBACK_BENCHMARK_HISTORY = [
   {
     year: 2022.90, event: "ChatGPT (GPT-3.5)",
     arenaElo: 1000, arcAgi: 3.0, sweBench: 0.0, trainingFlopsLog: 23.5, horizon: 0.5,
+    arenaElo_sigma: 30, arcAgi_sigma: 5, sweBench_sigma: 0.5, trainingFlopsLog_sigma: 0.3, horizon_sigma: 0.3,
     notes: "LMSYS base Elo = 1000. Агентность нулевая."
   },
   {
     year: 2023.25, event: "GPT-4 Release",
     arenaElo: 1150, arcAgi: 12.0, sweBench: 0.1, trainingFlopsLog: 25.32, horizon: 1.0,
+    arenaElo_sigma: 30, arcAgi_sigma: 6, sweBench_sigma: 1, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.3,
     notes: "Epoch AI: 2.1e25 FLOPs. Появление зачатков абстрактного рассуждения."
   },
   {
     year: 2023.85, event: "GPT-4 Turbo",
     arenaElo: 1250, arcAgi: 15.0, sweBench: 1.5, trainingFlopsLog: 25.4, horizon: 1.0,
+    arenaElo_sigma: 25, arcAgi_sigma: 6, sweBench_sigma: 2, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.3,
     notes: "Слабый рост reasoning, улучшенное следование инструкциям."
   },
 
@@ -948,21 +964,25 @@ const FALLBACK_BENCHMARK_HISTORY = [
   {
     year: 2024.20, event: "Claude 3 Opus",
     arenaElo: 1255, arcAgi: 20.0, sweBench: 4.0, trainingFlopsLog: 25.5, horizon: 1.5,
+    arenaElo_sigma: 25, arcAgi_sigma: 7, sweBench_sigma: 3, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.3,
     notes: "Первое серьезное покушение на лидерство OpenAI в Arena."
   },
   {
     year: 2024.45, event: "Claude 3.5 Sonnet",
     arenaElo: 1270, arcAgi: 43.0, sweBench: 31.4, trainingFlopsLog: 25.55, horizon: 2.0,
+    arenaElo_sigma: 25, arcAgi_sigma: 8, sweBench_sigma: 5, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
     notes: "Шок на SWE-bench (31.4%). Метод Райана Гринблатта показал 43% на ARC-AGI через сэмплирование."
   },
   {
     year: 2024.75, event: "OpenAI o1-preview",
     arenaElo: 1320, arcAgi: 65.0, sweBench: 36.0, trainingFlopsLog: 25.8, horizon: 4.0,
+    arenaElo_sigma: 20, arcAgi_sigma: 6, sweBench_sigma: 5, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
     notes: "Первый масштабный Test-Time Compute. Резкий рост эффективности на сложных задачах."
   },
   {
     year: 2024.95, event: "OpenAI o3-preview",
     arenaElo: 1350, arcAgi: 87.5, sweBench: 45.0, trainingFlopsLog: 26.0, horizon: 8.0,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 5, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
     notes: "Декабрь 2024. ARC-AGI (High Compute) достигает 87.5%, демонстрируя силу RLHF в reasoning."
   },
 
@@ -970,21 +990,25 @@ const FALLBACK_BENCHMARK_HISTORY = [
   {
     year: 2025.15, event: "GPT-4.5 Preview",
     arenaElo: 1439, arcAgi: 70.0, sweBench: 56.0, trainingFlopsLog: 26.2, horizon: 4.0,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
     notes: "Смещение фокуса на базовую надежность моделей (без тяжелого CoT)."
   },
   {
     year: 2025.30, event: "o3-2025-04-16",
     arenaElo: 1444, arcAgi: 89.0, sweBench: 62.0, trainingFlopsLog: 26.3, horizon: 12.0,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
     notes: "Промежуточный релиз. Улучшенная агентность в средах программирования."
   },
   {
     year: 2025.65, event: "Gemini 2.5 Pro",
     arenaElo: 1456, arcAgi: 82.0, sweBench: 65.0, trainingFlopsLog: 26.5, horizon: 24.0,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
     notes: "Август 2025. Топ-1 LMSYS на момент релиза. Преодолен барьер 1450 Elo."
   },
   {
     year: 2025.95, event: "GPT-5-2 Thinking",
     arenaElo: 1480, arcAgi: 78.7, sweBench: 72.0, trainingFlopsLog: 26.8, horizon: 48.0,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
     notes: "Декабрь 2025. Базовая стоимость reasoning упала в 10 раз ($0.52 за задачу ARC)."
   },
 
@@ -992,16 +1016,19 @@ const FALLBACK_BENCHMARK_HISTORY = [
   {
     year: 2026.15, event: "GPT-5.4 Web",
     arenaElo: 1484, arcAgi: 92.0, sweBench: 78.2, trainingFlopsLog: 26.9, horizon: 72.0,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
     notes: "Массовое внедрение агентов браузинга."
   },
   {
     year: 2026.30, event: "Claude Opus 4.7",
     arenaElo: 1504, arcAgi: 94.0, sweBench: 82.0, trainingFlopsLog: 27.0, horizon: 120.0,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
     notes: "Апрель 2026. Пробит барьер в 1500 Elo. Насыщение оригинального SWE-bench."
   },
   {
     year: 2026.40, event: "GPT-5.5 Pro",
     arenaElo: 1561, arcAgi: 96.5, sweBench: 82.6, trainingFlopsLog: 27.2, horizon: 168.0,
+    arenaElo_sigma: 20, arcAgi_sigma: 4, sweBench_sigma: 3, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
     notes: "Май 2026. Абсолютный SOTA. Эффективный предел текущих бенчмарков."
   }
 ];
@@ -1559,6 +1586,7 @@ const LANG = {
     expert_world_desc:'Априорные вероятности гипотез о структуре реальности. Сумма = 100%.',
     expert_reset:'Сбросить по умолчанию',
     expert_apply:'Применить и перезапустить',
+    expert_backtest:'📊 Бэктест',
     // Category 7: Simulation Parameters
     expert_cat7:'Симуляции и Бенчмарки',
     expert_p_simulations:'Симуляции (N)',
@@ -1617,6 +1645,17 @@ const LANG = {
     expert_d_barrierNashFriction:'Координационная деградация после T3',
     expert_p_barrierDemandGrace:'Смысловой предел',
     expert_d_barrierDemandGrace:'Лет на адаптацию экономики к T2',
+    // Compute Governance (пред-T2 моратории)
+    expert_p_governanceMoratoriumProb:'Compute Governance',
+    expert_d_governanceMoratoriumProb:'Доля лет, потерянных на моратории (0.04 = ~1 шок за 25 лет)',
+    expert_p_governanceShockDamping:'Демпфирование шока',
+    expert_d_governanceShockDamping:'Множитель HW-роста во время моратория (0.5 = в 2 раза медленнее)',
+    // Plateau scenario
+    expert_p_plateauHardWallCeiling:'Plateau: потолок Agency',
+    expert_d_plateauHardWallCeiling:'Потолок agency_ceiling для hard_wall (ниже = жёстче плато)',
+    // Наблюдательный шум (per-observation sigma)
+    expert_p_observationSigmaMode:'Режим шума наблюдений',
+    expert_d_observationSigmaMode:'Global: BENCHMARK_SIGMAS. PerPoint: локальные *_sigma (если заданы).',
     // Observable Metrics
     obs_current:'Прогноз при текущих бенчмарках:',
     obs_swe:'SWE-bench',
@@ -1796,6 +1835,7 @@ const LANG = {
     expert_world_desc:'Prior probabilities about structure of reality. Sum = 100%.',
     expert_reset:'Reset to Defaults',
     expert_apply:'Apply & Restart',
+    expert_backtest:'📊 Backtest',
     // Category 7: Simulation Parameters
     expert_cat7:'Simulation & Benchmarks',
     expert_p_simulations:'Simulations (N)',
@@ -1854,6 +1894,17 @@ const LANG = {
     expert_d_barrierNashFriction:'Coordination degradation after T3',
     expert_p_barrierDemandGrace:'Meaning Limit',
     expert_d_barrierDemandGrace:'Years for economy to adapt to T2',
+    // Compute Governance (pre-T2 moratoriums)
+    expert_p_governanceMoratoriumProb:'Compute Governance',
+    expert_d_governanceMoratoriumProb:'Fraction of years lost to moratoriums (0.04 = ~1 shock per 25 years)',
+    expert_p_governanceShockDamping:'Shock damping',
+    expert_d_governanceShockDamping:'HW growth multiplier during moratorium (0.5 = 2x slower)',
+    // Plateau scenario
+    expert_p_plateauHardWallCeiling:'Plateau: Agency ceiling',
+    expert_d_plateauHardWallCeiling:'agency_ceiling cap for hard_wall particles (lower = harder plateau)',
+    // Observation noise mode
+    expert_p_observationSigmaMode:'Observation noise mode',
+    expert_d_observationSigmaMode:'Global: BENCHMARK_SIGMAS. PerPoint: local *_sigma (when present).',
     // Observable Metrics
     obs_current:'Forecast at current benchmarks:',
     obs_swe:'SWE-bench',
@@ -2841,6 +2892,14 @@ function toggleExpertPanel() {
 }
 
 function expertUpdate(key, value) {
+  // String values (e.g. observationSigmaMode) skip numeric parsing
+  if (typeof value === 'string' && isNaN(parseFloat(value))) {
+    EXPERT_CONFIG[key] = value;
+    if (typeof v3Tracker !== 'undefined' && v3Tracker && v3Tracker.cfg) {
+      v3Tracker.cfg.EXPERT[key] = value;
+    }
+    return;
+  }
   value = parseFloat(value);
   EXPERT_CONFIG[key] = value;
   if (typeof v3Tracker !== 'undefined' && v3Tracker && v3Tracker.cfg) {
@@ -2898,7 +2957,13 @@ function expertResetDefaults() {
   for (const [key, val] of Object.entries(DEFAULT_EXPERT_CONFIG)) {
     const inputEl = document.getElementById('e-' + key);
     const valEl = document.getElementById('ev-' + key);
-    if (inputEl) inputEl.value = val;
+    if (inputEl) {
+      if (inputEl.tagName === 'SELECT') {
+        inputEl.value = val;
+      } else {
+        inputEl.value = val;
+      }
+    }
     if (valEl) {
       if (typeof val === 'number') {
         valEl.textContent = (val % 1 === 0) ? val.toFixed(1) : val.toFixed(2);
@@ -3027,4 +3092,39 @@ function updateObsMetrics() {
 // Глобальный экспорт для бэктеста из консоли:
 //   runBacktest(5, 3) → train on 5 points, predict next 3
 window.runBacktest = runBacktest;
+
+// UI wrapper: запускает бэктест с автоматическим выбором границ и показывает результат в #backtestResult
+function uiRunBacktest() {
+  const data = REAL_BENCHMARK_HISTORY;
+  if (!data || data.length < 4) {
+    const el = document.getElementById('backtestResult');
+    if (el) { el.style.display = 'block'; el.textContent = 'Недостаточно данных для бэктеста (нужно ≥4 наблюдений)'; }
+    return;
+  }
+  const trainEnd = Math.max(3, Math.floor(data.length * 0.5));
+  const kPred = data.length - trainEnd;
+  const bt = runBacktest(trainEnd, kPred);
+  if (bt.error) {
+    const el = document.getElementById('backtestResult');
+    if (el) { el.style.display = 'block'; el.textContent = 'Ошибка: ' + bt.error; }
+    return;
+  }
+  const fmt = (v) => v == null ? '—' : v.toFixed(2);
+  const html = `
+    <div style="color:var(--text-primary);font-weight:600;margin-bottom:4px">📊 Бэктест результаты</div>
+    <div>Train: ${bt.trainYears} (${trainEnd} точек) → Test: ${bt.testYears} (${kPred} точек)</div>
+    <div>RMSE по измерениям:</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:4px">
+      <div><span style="color:var(--text-muted)">SWE:</span> <b style="color:var(--accent)">${fmt(bt.perDim.sweBench)}</b></div>
+      <div><span style="color:var(--text-muted)">ARC:</span> <b style="color:var(--accent)">${fmt(bt.perDim.arcAgi)}</b></div>
+      <div><span style="color:var(--text-muted)">Elo:</span> <b style="color:var(--accent)">${fmt(bt.perDim.arenaElo)}</b></div>
+      <div><span style="color:var(--text-muted)">logFLOPs:</span> <b style="color:var(--accent)">${fmt(bt.perDim.flopsLog)}</b></div>
+      <div><span style="color:var(--text-muted)">logHor:</span> <b style="color:var(--accent)">${fmt(bt.perDim.horizon)}</b></div>
+    </div>
+    <div style="margin-top:6px">90% CI coverage: <b style="color:${bt.coverage90 >= 80 && bt.coverage90 <= 95 ? 'var(--green)' : 'var(--orange)'}">${bt.coverage90 != null ? bt.coverage90.toFixed(0) + '%' : '—'}</b> (идеально: 80–95%)</div>
+  `;
+  const el = document.getElementById('backtestResult');
+  if (el) { el.style.display = 'block'; el.innerHTML = html; }
+}
+window.uiRunBacktest = uiRunBacktest;
 // v2026.05.30f: fix decomp RSI + paradigm algoLog reset
