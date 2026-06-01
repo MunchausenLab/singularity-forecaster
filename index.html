@@ -812,6 +812,15 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
         <span class="expert-param-value" id="ev-embodimentT4Requirement">6.0</span>
         <div class="expert-param-desc" data-i18n="expert_d_embodimentT4Requirement">Минимальный embodiment для засчитывания T4 (контроль атомов)</div>
       </div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_realRoboticsWeight">Real robotics prior weight</span>
+        </div>
+        <input type="range" id="e-realRoboticsWeight" min="0" max="1" step="0.05" value="0.30" oninput="expertUpdate('realRoboticsWeight',this.value)">
+        <span class="expert-param-value" id="ev-realRoboticsWeight">0.30</span>
+        <div class="expert-param-desc" data-i18n="expert_d_realRoboticsWeight">Вес prior на embodiment_ceiling от реальных роботов (Spot/Optimus/Figure/1X)</div>
+      </div>
     </div>
 
   </div><!-- /expert-grid -->
@@ -1042,6 +1051,26 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
       </ul>
       <p data-i18n="decomp_p3">Вычисляется через <code>runDecomposition()</code> &mdash; усреднение по всем частицам с весами. Переход от «железа» к «алгоритмам» к «RSI» = путь к сингулярности.</p></div>
   </div>
+
+  <!-- ROW 8: Embodiment diagnostics (график | описание) -->
+  <div class="card">
+    <span class="card-tag" style="background:rgba(167,139,250,.15);color:var(--purple)" data-i18n="tag8">Embodiment</span>
+    <div class="card-header">
+      <h3 data-i18n="chart8">6. Embodiment: распределение и реальная робототехника</h3>
+      <span class="tip">?<span class="tip-text" data-i18n="tip8">Нижний график — гистограмма embodiment_ceiling по 1000 частицам. Верхний — медиана (p10..p90) прогноза embodiment с наложением реальных роботов (жёлтые точки: Spot, Optimus, Figure, 1X Neo, ...). Красная черта = порог T4, зелёная = bypass.</span></span>
+    </div>
+    <div class="chart-container" id="c8"></div>
+  </div>
+
+  <div class="desc-card">
+    <span class="card-tag" style="background:rgba(167,139,250,.15);color:var(--purple)">Embodiment Diagnostics</span>
+    <div class="desc-body">
+      <p data-i18n="emb_p1"><b>Embodiment</b> &mdash; 4-е латентное измерение: физическая воплощённость ИИ. cap = min(reasoning, agency, embodiment): без роботов T4 недостижим.</p>
+      <p data-i18n="emb_p2"><b>Верхний график:</b> траектория embodiment (p10 / p25 / медиана / p75 / p90) по годам. Жёлтые точки = реальные роботы: Spot, Optimus Gen 1-3, Figure 02/03, 1X Neo, Apptronik Apollo, Unitree H1. <b>Bypass</b> (зелёная черта) — при embodiment выше неё ИИ строит свои дата-центры, HW-рост ускоряется &times;3. <b>T4 requirement</b> (красная) — минимальный embodiment для засчитывания T4.</p>
+      <p data-i18n="emb_p3"><b>Нижний график:</b> гистограмма текущего <code>embodiment_ceiling</code> по 1000 частицам. Среднее ~4 (роботы сложны), но есть хвост до 8-10 (быстрые оптимисты).</p>
+      <p data-i18n="emb_p4"><b>Real robotics prior:</b> <code>realRoboticsWeight</code> (0&hellip;1) в Expert Panel управляет силой likelihood-штрафа за отклонение <code>embodiment_ceiling</code> от реальных роботов. weight=0 — игнор, weight=1 — строгое следование.</p></div>
+  </div>
+
 
   <!-- ROW 8: Сфера Сингулярности (описание | график) -->
   <div class="desc-card">

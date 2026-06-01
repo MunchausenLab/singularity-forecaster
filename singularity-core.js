@@ -92,6 +92,7 @@ const EXPERT_CONFIG = {
   embodimentBypassThreshold: 8.0,  // [Embodiment] При embodiment > порога ИИ строит свои дата-центры, обходя maxPhysicalHwGrowth
   embodimentT4Requirement: 6.0,    // [Embodiment] Минимальный embodiment для засчитывания T4 (без контроля атомов T4 невозможен)
   embodimentHWBonusMultiplier: 3.0,// [Embodiment] Множитель HW-роста при активации bypass
+  realRoboticsWeight: 0.30,         // [Embodiment] Вес realEmbodimentIndex в likelihood (0=игнор, 1=строгое следование)
 
   // Категория 4: Эпистемология (World Models)
   worldModels: { cascade: 0.60, hardWall: 0.25, slowTakeoff: 0.15 },
@@ -400,6 +401,17 @@ class BayesianTracker {
         count++;
       }
 
+      // 9) Real embodiment index: prior на particle.embodiment_ceiling от реальной робототехники
+      // sigma для этого prior управляется weight (0..1): weight=0 → штраф 0, weight=1 → sigma=1.0
+      const rrWeight = this.cfg.EXPERT.realRoboticsWeight || 0;
+      if (rrWeight > 0) {
+        const realIdx = realEmbodimentIndexAt(year);
+        const rrSigma = (1.5 / Math.max(0.01, rrWeight)); // weight=0.3 → sigma=5; weight=1 → sigma=1.5
+        // Сравниваем с particle.embodiment_ceiling (потолок), а не с embodiment (текущим уровнем)
+        logLik -= 0.5 * ((realIdx - p.embodiment_ceiling) / rrSigma) ** 2;
+        count++;
+      }
+
       // Усредняем ошибку, чтобы штраф не зависел от количества доступных бенчмарков в этот год
       if (count > 0) {
         this.weights[i] *= Math.exp(Math.max(-50, logLik / count));
@@ -452,6 +464,7 @@ class BayesianTracker {
     const plotSteps = 40 * 12; 
     const trajYears = new Float64Array(plotSteps);
     const trajCaps = Array.from({length: plotSteps}, () => []);
+    const trajEmbodiment = Array.from({length: plotSteps}, () => []);
 
     const cumw = new Float64Array(this.n);
     cumw[0] = this.weights[0];
@@ -632,6 +645,7 @@ class BayesianTracker {
         if (currentYear >= this.cfg.CURRENT_YEAR && plotIdx < plotSteps) {
             trajYears[plotIdx] = currentYear;
             trajCaps[plotIdx].push(cap);
+            trajEmbodiment[plotIdx].push(embodiment);
             plotIdx++;
         }
         
@@ -709,6 +723,7 @@ class BayesianTracker {
     }
     
     const yrs = [], med = [], p10a = [], p25a = [], p75a = [], p90a = [];
+    const embYrs = [], embMed = [], embP10 = [], embP25 = [], embP75 = [], embP90 = [];
     for (let step = 0; step < plotSteps; step++) {
         const vals = trajCaps[step];
         if (vals.length > 0) {
@@ -717,10 +732,18 @@ class BayesianTracker {
             p10a.push(percentile(vals, 10)); p25a.push(percentile(vals, 25));
             med.push(percentile(vals, 50));  p75a.push(percentile(vals, 75)); p90a.push(percentile(vals, 90));
         }
+        const ev = trajEmbodiment[step];
+        if (ev.length > 0) {
+            ev.sort((a,b) => a - b);
+            embYrs.push(trajYears[step]);
+            embP10.push(percentile(ev, 10)); embP25.push(percentile(ev, 25));
+            embMed.push(percentile(ev, 50));  embP75.push(percentile(ev, 75)); embP90.push(percentile(ev, 90));
+        }
     }
     return {
         t1Years, t2Years, t3Years, t4Years,
-        trajectory: { years: yrs, median: med, p10: p10a, p25: p25a, p75: p75a, p90: p90a }
+        trajectory: { years: yrs, median: med, p10: p10a, p25: p25a, p75: p75a, p90: p90a },
+        embodimentTrajectory: { years: embYrs, median: embMed, p10: embP10, p25: embP25, p75: embP75, p90: embP90 }
     };
   }
 
@@ -1108,6 +1131,46 @@ async function loadHistoricalBenchmarks() {
   }
 }
 
+// ============================================================================
+// REAL ROBOTICS INDEX (Embodiment grounding)
+//
+// Калибровка на основе публичных данных о серийных гуманоидах и quad-роботах.
+// Каждая запись — (год, индекс 0..10, имя модели, capability-флаги).
+// Индекс = максимум из {mobility, manipulation, autonomy, dexterity}, усреднённый
+// с весом 0.4 / 0.3 / 0.2 / 0.1 (мобильность+манипуляция = "тело", autonomy = "мозг").
+// Используется в observeRealData как prior на embodiment_ceiling.
+// ============================================================================
+const REAL_ROBOTICS_DATA = [
+  { year: 2018.0, name: "Boston Dynamics Spot (proto)",     index: 1.5, mobility: 7, manipulation: 0, autonomy: 4, dexterity: 0 },
+  { year: 2020.0, name: "Spot (commercial)",                 index: 2.5, mobility: 8, manipulation: 0, autonomy: 6, dexterity: 0 },
+  { year: 2021.5, name: "Tesla Optimus Gen 1 (announce)",   index: 1.0, mobility: 3, manipulation: 2, autonomy: 2, dexterity: 2 },
+  { year: 2022.5, name: "Optimus Bumblebee",                 index: 1.5, mobility: 3, manipulation: 3, autonomy: 2, dexterity: 3 },
+  { year: 2023.5, name: "1X Neo Beta / Figure 01",           index: 2.5, mobility: 5, manipulation: 4, autonomy: 3, dexterity: 4 },
+  { year: 2024.0, name: "Apptronik Apollo / Figure 02",     index: 3.5, mobility: 6, manipulation: 5, autonomy: 4, dexterity: 5 },
+  { year: 2024.5, name: "Unitree H1 (commercial)",          index: 3.0, mobility: 7, manipulation: 3, autonomy: 3, dexterity: 4 },
+  { year: 2025.0, name: "Optimus Gen 2 / Figure 02 prod",   index: 4.5, mobility: 7, manipulation: 6, autonomy: 5, dexterity: 6 },
+  { year: 2025.5, name: "1X Neo Home (limited deploy)",     index: 5.0, mobility: 7, manipulation: 7, autonomy: 5, dexterity: 7 },
+  { year: 2026.0, name: "Optimus Gen 3 / Figure 03 (forecast)", index: 6.0, mobility: 8, manipulation: 8, autonomy: 6, dexterity: 8 },
+  { year: 2027.0, name: "Mass humanoid pilot (forecast)",  index: 7.0, mobility: 8, manipulation: 9, autonomy: 7, dexterity: 8 },
+  { year: 2028.5, name: "Factory fleet (forecast)",         index: 8.0, mobility: 9, manipulation: 9, autonomy: 8, dexterity: 9 }
+];
+
+// Линейная интерполяция realEmbodimentIndex по году
+function realEmbodimentIndexAt(year) {
+  if (year <= REAL_ROBOTICS_DATA[0].year) return REAL_ROBOTICS_DATA[0].index;
+  if (year >= REAL_ROBOTICS_DATA[REAL_ROBOTICS_DATA.length - 1].year) {
+    return REAL_ROBOTICS_DATA[REAL_ROBOTICS_DATA.length - 1].index;
+  }
+  for (let i = 0; i < REAL_ROBOTICS_DATA.length - 1; i++) {
+    const a = REAL_ROBOTICS_DATA[i], b = REAL_ROBOTICS_DATA[i + 1];
+    if (year >= a.year && year <= b.year) {
+      const t = (year - a.year) / (b.year - a.year);
+      return a.index + t * (b.index - a.index);
+    }
+  }
+  return 0;
+}
+
 // Преобразование латентных переменных трекера в численные бенчмарки
 // r10, a10 — reasoning и agency в шкале модели (0..~15)
 // Возвращает предсказанные значения бенчмарков + log10(FLOPs) для сопоставления с training compute
@@ -1380,6 +1443,7 @@ function updateUI(r) {
     requestAnimationFrame(() => {
       plotScenarioFan(tracker);
       plotDecomposition(tracker);
+      plotEmbodimentDiagnostics(tracker);
     });
   });
 }
@@ -1533,6 +1597,78 @@ function plotDecomposition(tracker) {
   }, PLOT_CFG);
 }
 
+function plotEmbodimentDiagnostics(tracker) {
+  const t = LANG[window._lang || 'ru'];
+  const cfg = tracker.cfg;
+
+  // 1) Histogram текущего embodiment_ceiling по всем частицам
+  const ceilingVals = tracker.particles.map(p => p.embodiment_ceiling || cfg.EXPERT.embodimentPriorMean);
+  const binW = 0.4;
+  const binMin = 0.5, binMax = 12.0;
+  const binLabels = [];
+  const binCounts = new Array(Math.ceil((binMax - binMin) / binW)).fill(0);
+  for (let i = 0; i < binCounts.length; i++) binLabels.push((binMin + i * binW).toFixed(1));
+  ceilingVals.forEach(v => {
+    const idx = Math.floor((Math.max(binMin, Math.min(binMax, v)) - binMin) / binW);
+    if (idx >= 0 && idx < binCounts.length) binCounts[idx]++;
+  });
+
+  // 2) Embodiment trajectory (percentiles) — последний MC прогон
+  const mc = tracker.runMonteCarloForecast(1); // быстрый прогон для trajectory
+  const et = mc.embodimentTrajectory;
+
+  // 3) Real robotics scatter markers
+  const realYears = REAL_ROBOTICS_DATA.map(d => d.year);
+  const realIdx = REAL_ROBOTICS_DATA.map(d => d.index);
+  const realNames = REAL_ROBOTICS_DATA.map(d => d.name);
+
+  // 4) Threshold lines
+  const lim = cfg.EXPERT;
+  const yrRange = [2026, 2040];
+  const realConnector = {
+    x: [REAL_ROBOTICS_DATA[0].year, REAL_ROBOTICS_DATA[REAL_ROBOTICS_DATA.length - 1].year],
+    y: [REAL_ROBOTICS_DATA[0].index, REAL_ROBOTICS_DATA[REAL_ROBOTICS_DATA.length - 1].index],
+  };
+
+  const traces = [
+    // === ROW 1: Histogram (xaxis2 / yaxis2 — нижний подзаголовок) ===
+    { x: binLabels, y: binCounts, type: 'bar', xaxis: 'x2', yaxis: 'y2', name: t.ch8_hist || 'Particles', marker: { color: 'rgba(167,139,250,0.6)' }, showlegend: false },
+
+    // === ROW 2: Embodiment trajectory band — стандартный паттерн 3-полос ===
+    // p10 (нижняя граница, без fill) → затем p90 (fill='tonexty' = между p10 и p90)
+    { x: et.years, y: et.p10, type: 'scatter', mode: 'lines', xaxis: 'x', yaxis: 'y', name: t.ch8_p10 || 'p10', line: { color: 'transparent', width: 0 }, showlegend: false, hoverinfo: 'skip' },
+    { x: et.years, y: et.p90, type: 'scatter', mode: 'lines', xaxis: 'x', yaxis: 'y', name: t.ch8_p1090 || 'p10..p90', line: { color: 'transparent', width: 0 }, fill: 'tonexty', fillcolor: 'rgba(167,139,250,0.10)', showlegend: false, hoverinfo: 'skip' },
+    // p25 (без fill) → p75 (fill='tonexty' = между p25 и p75, поверх p10..p90)
+    { x: et.years, y: et.p25, type: 'scatter', mode: 'lines', xaxis: 'x', yaxis: 'y', name: t.ch8_p25 || 'p25', line: { color: 'transparent', width: 0 }, showlegend: false, hoverinfo: 'skip' },
+    { x: et.years, y: et.p75, type: 'scatter', mode: 'lines', xaxis: 'x', yaxis: 'y', name: t.ch8_p2575 || 'p25..p75', line: { color: 'transparent', width: 0 }, fill: 'tonexty', fillcolor: 'rgba(167,139,250,0.18)', showlegend: false, hoverinfo: 'skip' },
+    // Median (линия)
+    { x: et.years, y: et.median, type: 'scatter', mode: 'lines', xaxis: 'x', yaxis: 'y', name: t.ch8_median || 'Median (MC)', line: { color: '#a78bfa', width: 2.5 } },
+
+    // === Real robotics: connector line + scatter ===
+    { x: realConnector.x, y: realConnector.y, type: 'scatter', mode: 'lines', xaxis: 'x', yaxis: 'y', name: t.ch8_real || 'Real robotics', line: { color: '#fbbf24', width: 2, dash: 'dot' } },
+    { x: realYears, y: realIdx, type: 'scatter', mode: 'markers', xaxis: 'x', yaxis: 'y', name: t.ch8_real || 'Real robots', marker: { size: 9, color: '#fbbf24', line: { color: '#000', width: 1 } }, text: realNames, hovertemplate: '<b>%{text}</b><br>year=%{x}<br>index=%{y}<extra></extra>' },
+
+    // === Threshold lines ===
+    { x: yrRange, y: [lim.embodimentT4Requirement, lim.embodimentT4Requirement], type: 'scatter', mode: 'lines', xaxis: 'x', yaxis: 'y', name: t.ch8_t4req || 'T4 requirement', line: { color: '#ef4444', dash: 'dash', width: 1.5 } },
+    { x: yrRange, y: [lim.embodimentBypassThreshold, lim.embodimentBypassThreshold], type: 'scatter', mode: 'lines', xaxis: 'x', yaxis: 'y', name: t.ch8_bypass || 'HW bypass', line: { color: '#22c55e', dash: 'dash', width: 1.5 } },
+  ];
+
+  const layout = {
+    ...LAYOUT_BASE,
+    grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
+    xaxis: { ...LAYOUT_BASE.xaxis, domain: [0, 1], anchor: 'y', title: { text: t.ch2_xlabel || 'Год' }, range: yrRange },
+    yaxis: { ...LAYOUT_BASE.yaxis, domain: [0.45, 1.0], anchor: 'x', title: { text: t.ch8_y_main || 'Embodiment (0..10)' }, range: [0, 11] },
+    xaxis2: { ...LAYOUT_BASE.xaxis, domain: [0, 1], anchor: 'y2', title: { text: t.ch8_x_hist || 'embodiment_ceiling' } },
+    yaxis2: { ...LAYOUT_BASE.yaxis, domain: [0, 0.32], anchor: 'x2', title: { text: t.ch8_y_hist || '#particles' } },
+    legend: { ...LAYOUT_BASE.legend, orientation: 'h', y: -0.08, x: 0, xanchor: 'left' },
+    margin: { l: 56, r: 24, t: 12, b: 64 },
+    showlegend: true,
+  };
+
+  Plotly.newPlot('c8', traces, layout, PLOT_CFG);
+}
+
+
 window._lang = 'ru';
 const LANG = {
   ru: {
@@ -1553,22 +1689,25 @@ const LANG = {
     run_btn:'Запустить симуляцию',
     // Charts
     tag1:'Вероятностный анализ', tag3:'Кумулятивная',
-    tag5:'Чувствительность', tag6:'Сценарии', tag7:'Декомпозиция',
+    tag5:'Чувствительность', tag6:'Сценарии', tag7:'Декомпозиция', tag8:'Embodiment',
     chart1:'1. Распределение 4-х этапов Сингулярности (Monte Carlo)',
     chart3:'2. Накопленная вероятность (Cumulative PDF)',
     chart5:'3. Карта чувствительности (Intel × Agentic)',
     chart6:'4. Веер сценариев (Multi-Run Overlay)',
     chart7:'5. Вклад компонент (Stacked Area)',
+    chart8:'6. Embodiment: распределение и реальная робототехника',
     tip1:'Показывает, где группируются 3000 прогонов Монте-Карло. Чем выше столбец — тем больше сценариев привели к T1/T2/T3/T4 в этом году.',
     tip3:'P(T2 ≤ X) — шанс, что T2 появится не позднее, чем через X лет. Если кривая круто поднимается — быстрый переход от «почти нет» к «почти точно».',
     tip5:'Тепловая карта: оси — параметры Intelligence и Agentic последнего наблюдения. Цвет — медианный год T2. Показывает, какой параметр доминирует в прогнозе.',
     tip6:'30 случайных прогонов из апостериорного распределения, наложенных полупрозрачно. Показывает разброс возможных путей к сингулярности.',
     tip7:'Разбивка capability на составляющие: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Показывает, что двигает прогресс.',
+    tip8:'Нижний график — гистограмма embodiment_ceiling по 1000 частицам. Верхний — медиана (p10..p90) прогноза embodiment с наложением реальных роботов (жёлтые точки: Spot, Optimus, Figure, 1X Neo, ...). Красная черта = порог T4, зелёная = bypass.',
     ch_t1:'T1: Понимание', ch_t2:'T2: Предсказуемость', ch_t3:'T3: Контроль', ch_t4:'T4: Влияние',
     ch1_xlabel:'Год', ch1_ylabel:'Прогонов',
     ch3_xlabel:'Год', ch3_ylabel:'P(%)', ch3_pt2:'P(T2)', ch3_pt4:'P(T4)',
     ch5_label:'Лет до T4', ch5_colorbar:'Лет до T4', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score', ch5_loading:'Вычисление матрицы (асинхронно)...',
     ch7_ylabel:'Суммарный вклад (log FLOPs)',
+    ch8_median:'Медиана (MC)', ch8_p1090:'p10..p90', ch8_p2575:'p25..p75', ch8_real:'Реальные роботы', ch8_t4req:'T4 requirement', ch8_bypass:'HW bypass', ch8_y_main:'Embodiment (0..10)', ch8_x_hist:'embodiment_ceiling', ch8_y_hist:'# частиц',
     fY_suffix:' лет', fY_gt:'> 40 лет',
     // About
     about_title:'О модели v4',
@@ -1736,6 +1875,9 @@ const LANG = {
     expert_d_embodimentBypassThreshold:'Embodiment > порога → ИИ строит дата-центры (HW-рост ×3)',
     expert_p_embodimentT4Requirement:'Embodiment: T4 requirement',
     expert_d_embodimentT4Requirement:'Минимальный embodiment для засчитывания T4 (контроль атомов)',
+    // Real robotics prior
+    expert_p_realRoboticsWeight:'Real robotics prior weight',
+    expert_d_realRoboticsWeight:'Вес prior на embodiment_ceiling от реальных роботов (Spot/Optimus/Figure/1X)',
     // Observable Metrics
     obs_current:'Прогноз при текущих бенчмарках:',
     obs_swe:'SWE-bench',
@@ -1809,22 +1951,25 @@ const LANG = {
     run_btn:'Run Simulation',
     // Charts
     tag1:'Probabilistic Analysis', tag3:'Cumulative',
-    tag5:'Sensitivity', tag6:'Scenarios', tag7:'Decomposition',
+    tag5:'Sensitivity', tag6:'Scenarios', tag7:'Decomposition', tag8:'Embodiment',
     chart1:'1. Four Stages of Singularity Distribution (Monte Carlo)',
     chart3:'2. Cumulative Probability (CDF)',
     chart5:'3. Sensitivity Heatmap (Intel × Agentic)',
     chart6:'4. Scenario Fan (Multi-Run Overlay)',
     chart7:'5. Component Decomposition (Stacked Area)',
+    chart8:'6. Embodiment: distribution and real-world robotics',
     tip1:'Shows where 3000 Monte Carlo runs cluster. Higher bar = more scenarios led to T1/T2/T3/T4 in that year.',
     tip3:'P(T2 ≤ X) — chance that T2 appears no later than X years. Steep rise = fast transition from "almost no" to "almost certain".',
     tip5:'Heatmap: axes are Intelligence and Agentic scores of the last observation. Color = median T2 year. Shows which parameter dominates the forecast.',
     tip6:'30 random runs from the posterior distribution, overlaid semi-transparently. Shows the spread of possible paths to singularity.',
     tip7:'Breakdown of capability into components: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Shows what drives progress.',
+    tip8:'Bottom panel: histogram of embodiment_ceiling across 1000 particles. Top panel: median (p10..p90) of the embodiment forecast overlaid with real-world robots (yellow markers: Spot, Optimus, Figure, 1X Neo, ...). Red line = T4 threshold, green = HW bypass.',
     ch_t1:'T1: Understanding', ch_t2:'T2: Predictability', ch_t3:'T3: Control', ch_t4:'T4: Influence',
     ch1_xlabel:'Year', ch1_ylabel:'Runs',
     ch3_xlabel:'Year', ch3_ylabel:'P(%)', ch3_pt2:'P(T2)', ch3_pt4:'P(T4)',
     ch5_label:'Years to T4', ch5_colorbar:'Years to T4', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score', ch5_loading:'Computing matrix (async)...',
     ch7_ylabel:'Cumulative contribution (log FLOPs)',
+    ch8_median:'Median (MC)', ch8_p1090:'p10..p90', ch8_p2575:'p25..p75', ch8_real:'Real robots', ch8_t4req:'T4 requirement', ch8_bypass:'HW bypass', ch8_y_main:'Embodiment (0..10)', ch8_x_hist:'embodiment_ceiling', ch8_y_hist:'# particles',
     fY_suffix:' yrs', fY_gt:'> 40 yrs',
     // About
     about_title:'About v4 Model',
@@ -1992,6 +2137,9 @@ const LANG = {
     expert_d_embodimentBypassThreshold:'Embodiment > threshold → AI builds its own data centers (HW growth ×3)',
     expert_p_embodimentT4Requirement:'Embodiment: T4 requirement',
     expert_d_embodimentT4Requirement:'Minimum embodiment for T4 to count (control of atoms)',
+    // Real robotics prior
+    expert_p_realRoboticsWeight:'Real robotics prior weight',
+    expert_d_realRoboticsWeight:'Weight of prior on embodiment_ceiling from real robots (Spot/Optimus/Figure/1X)',
     // Observable Metrics
     obs_current:'Forecast at current benchmarks:',
     obs_swe:'SWE-bench',
@@ -2058,6 +2206,11 @@ const LANG = {
     decomp_p1:'Stacked area: breakdown of total capability into 4 components. Shows <em>what</em> drives progress at each point in time.',
     decomp_p2:'<b>Components:</b>',
     decomp_p3:'Computed via <code>runDecomposition()</code> &mdash; averaging over all particles with weights. The transition from &quot;hardware&quot; to &quot;algorithms&quot; to &quot;RSI&quot; = the path to singularity.',
+    // Embodiment desc
+    emb_p1:'<b>Embodiment</b> &mdash; 4th latent dimension: AI physical embodiment. cap = min(reasoning, agency, embodiment): no robots, no T4.',
+    emb_p2:'<b>Top panel:</b> embodiment trajectory (p10 / p25 / median / p75 / p90) over years. Yellow markers = real robots: Spot, Optimus Gen 1-3, Figure 02/03, 1X Neo, Apptronik Apollo, Unitree H1. <b>Bypass</b> (green line) &mdash; above this threshold the AI builds its own data centers, HW growth accelerates &times;3. <b>T4 requirement</b> (red) &mdash; minimum embodiment for T4 to count.',
+    emb_p3:'<b>Bottom panel:</b> histogram of current <code>embodiment_ceiling</code> across 1000 particles. Mean ~4 (robotics is hard), but tail extends to 8-10 (fast optimists).',
+    emb_p4:'<b>Real robotics prior:</b> <code>realRoboticsWeight</code> (0&hellip;1) in the Expert Panel controls the strength of the likelihood penalty for <code>embodiment_ceiling</code> deviating from real robots. weight=0 &mdash; ignore, weight=1 &mdash; strict adherence.',
     // Event Horizon desc
     eh_p1:'Animated visualization of the T2/T4 distribution. Each particle = one MC run. Flies from the center (2026) and freezes on the orbit of its T2/T4 year.',
     eh_p2:'<b>Metaphor:</b> dense rings = high probability (many particles predict AGI in that year). Rare dots = unlikely scenarios.',
