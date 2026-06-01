@@ -1073,9 +1073,12 @@ function v3UpdateUI(tracker) {
   updateObsMetrics();
 }
 
+let v3HasUserInput = false;
+
 function v3CheckWarning(tracker) {
   const warnEl = document.getElementById('v3Warning');
   if (!warnEl) return;
+  if (!v3HasUserInput) { warnEl.style.display = 'none'; return; }
   const arcVal = +document.getElementById('v3ARC').value || 0;
   const horizonVal = +document.getElementById('v3Horizon').value || 0;
   const aa = benchmarksToAA(arcVal, horizonVal);
@@ -2854,6 +2857,7 @@ function expertApplyAndRun() {
 
 
 function v3QuickWarning() {
+  v3HasUserInput = true;
   const tracker = v3Tracker || v3GetTracker();
   v3CheckWarning(tracker);
   updateObsMetrics();
