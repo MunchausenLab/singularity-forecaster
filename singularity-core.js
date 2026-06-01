@@ -85,6 +85,13 @@ const EXPERT_CONFIG = {
   observationSigmaMode: 'global',  // 'global' = BENCHMARK_SIGMAS; 'perPoint' = локальные *_sigma из точек данных
   // --- PLATEAU SCENARIO (затяжной T1 без прогресса) ---
   plateauHardWallCeiling: 5.5,     // [Plateau] Потолок agency_ceiling для hard_wall (5.5 = остановка роста)
+  // --- EMBODIMENT (4-я латентная ось: физическая воплощенность) ---
+  embodimentPriorMean: 4.0,        // [Embodiment] Априорное среднее embodiment_ceiling (низкое: робототехника сложна)
+  embodimentPriorStd: 2.0,         // [Embodiment] Априорный разброс
+  embodimentScalingSlope: 0.20,    // [Embodiment] Наклон кривой FLOPs → Embodiment (медленнее reasoning/agency)
+  embodimentBypassThreshold: 8.0,  // [Embodiment] При embodiment > порога ИИ строит свои дата-центры, обходя maxPhysicalHwGrowth
+  embodimentT4Requirement: 6.0,    // [Embodiment] Минимальный embodiment для засчитывания T4 (без контроля атомов T4 невозможен)
+  embodimentHWBonusMultiplier: 3.0,// [Embodiment] Множитель HW-роста при активации bypass
 
   // Категория 4: Эпистемология (World Models)
   worldModels: { cascade: 0.60, hardWall: 0.25, slowTakeoff: 0.15 },
@@ -182,12 +189,16 @@ function v3SimulateToYear(particle, targetYear, cfg) {
 
   let ceilingR = cfg.DIMENSIONS.reasoning.ceiling;
   let ceilingA = particle.agency_ceiling;
+  let ceilingE = particle.embodiment_ceiling || cfg.EXPERT.embodimentPriorMean;
 
   // ИСПРАВЛЕНО: Применяем априорные World Models до симуляции
   if (particle.world_model === 'hard_wall') {
-    ceilingA = Math.min(ceilingA, 5.5);
+    ceilingA = Math.min(ceilingA, cfg.EXPERT.plateauHardWallCeiling);
+    // hard_wall также ограничивает embodiment: роботы на фабриках не масштабируются
+    ceilingE = Math.min(ceilingE, 4.0);
   } else if (particle.world_model === 'slow_takeoff') {
     algoK *= 0.6;
+    // slow_takeoff: embodiment растёт ещё медленнее
   }
 
   // Paradigm shift state (deterministic — no shocks)
@@ -200,13 +211,16 @@ function v3SimulateToYear(particle, targetYear, cfg) {
   for (let step = 0; step < steps; step++) {
     const currentYear = cfg.BASE_YEAR + step * dt;
     const logDiff = flopsLog + algoLog - baseLog;
-    
+
     let rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, ceilingR);
     let rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, ceilingA);
-    
+    // Embodiment: scale with agency/2 + reasoning/3 (нужен и software, и физика)
+    let rawE = v3ComputeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, ceilingE);
+
     let reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
     let agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
-    const cap = Math.min(reasoning, agency);
+    let embodiment = v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
+    const cap = Math.min(reasoning, agency, embodiment);
 
     // Deterministic paradigm shift (same logic as MC, but no randomness — threshold-based)
     const canShift = (paradigmGeneration === 0 && currentYear > 2026.5)
@@ -253,6 +267,11 @@ function v3SimulateToYear(particle, targetYear, cfg) {
     const govFactor = cfg.EXPERT.governanceMoratoriumProb * cfg.EXPERT.governanceShockDamping + (1.0 - cfg.EXPERT.governanceMoratoriumProb);
     damping *= govFactor;
 
+    // --- EMBODIMENT BYPASS: при высоком embodiment ИИ строит свои дата-центры ---
+    // Детерминированная аппроксимация: sigmoid активности bypass; умножаем HW-рост на бонус
+    const bypassActivation = sigmoid(1.5 * (embodiment - cfg.EXPERT.embodimentBypassThreshold));
+    const hwBonus = 1.0 + bypassActivation * (cfg.EXPERT.embodimentHWBonusMultiplier - 1.0);
+
     // --- БАРЬЕР 3: Геополитика (государственный шок после T2) ---
     // Детерминированный: срабатывает при превышении порога риска (не случайно)
     if (cap >= cfg.THRESHOLDS.t2 && !stateIntervention && cfg.EXPERT.barrierGeopoliticsRisk > 0.5) {
@@ -279,17 +298,19 @@ function v3SimulateToYear(particle, targetYear, cfg) {
     // RSI (deterministic)
     const rsi = v3CalculateRSI(reasoning, agency, cap, cfg.EXPERT);
 
-    flopsLog += hwK * damping * nashDamping * demandDamping * dt;
+    flopsLog += hwK * damping * nashDamping * demandDamping * hwBonus * dt;
     algoLog += (algoK * algoKMult * damping * nashDamping * demandDamping + rsi) * dt;
   }
   
   const logDiff = flopsLog + algoLog - baseLog;
   let rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, ceilingR);
   let rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, ceilingA);
-  
+  let rawE = v3ComputeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, ceilingE);
+
   return {
     reasoning: v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap),
     agency:    v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap),
+    embodiment: v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap),
   };
 }
 
@@ -315,6 +336,7 @@ class BayesianTracker {
         hw_months: Math.max(3.0, randnRange(7.5, 1.5)),
         algo_months: Math.max(2.0, randnRange(6.0, 2.0)),
         agency_ceiling: Math.max(2.0, randnRange(EXPERT_CONFIG.priorAgencyMean, EXPERT_CONFIG.priorAgencyStd)),
+        embodiment_ceiling: Math.max(1.5, randnRange(EXPERT_CONFIG.embodimentPriorMean, EXPERT_CONFIG.embodimentPriorStd)),
         world_model: worldModel,
       });
     }
@@ -326,7 +348,7 @@ class BayesianTracker {
       if (p.hw_months < 1.0 || p.agency_ceiling < 1.0) { this.weights[i] = 0; continue; }
 
       const pred = v3SimulateToYear(p, year, this.cfg);
-      const metrics = getNumericObservables(pred.reasoning, pred.agency, this.cfg.EXPERT);
+      const metrics = getNumericObservables(pred.reasoning, pred.agency, pred.embodiment, this.cfg.EXPERT);
 
       let logLik = 0;
       let count = 0;
@@ -363,6 +385,20 @@ class BayesianTracker {
         logLik -= 0.5 * ((obsHorizonLog - metrics.horizon) / sig('horizon', 'horizon'))**2;
         count++;
       }
+      if (obs.simToReal !== undefined) {
+        logLik -= 0.5 * ((obs.simToReal - metrics.simToReal) / sig('simToReal', 'simToReal'))**2;
+        count++;
+      }
+      if (obs.moravec !== undefined) {
+        logLik -= 0.5 * ((obs.moravec - metrics.moravec) / sig('moravec', 'moravec'))**2;
+        count++;
+      }
+      if (obs.autoAssembly !== undefined) {
+        // Наблюдение в log-шкале (log10 hours), модель предсказывает в той же шкале
+        const obsAutoAssemblyLog = Math.log10(Math.max(0.001, obs.autoAssembly));
+        logLik -= 0.5 * ((obsAutoAssemblyLog - metrics.autoAssembly) / sig('autoAssembly', 'autoAssembly'))**2;
+        count++;
+      }
 
       // Усредняем ошибку, чтобы штраф не зависел от количества доступных бенчмарков в этот год
       if (count > 0) {
@@ -390,6 +426,7 @@ class BayesianTracker {
           hw_months: Math.max(3.0, p.hw_months + randnRange(0, 0.4)),
           algo_months: Math.max(2.0, p.algo_months + randnRange(0, 0.6)),
           agency_ceiling: Math.max(1.5, p.agency_ceiling + randnRange(0, 0.4)),
+          embodiment_ceiling: Math.max(1.5, (p.embodiment_ceiling || EXPERT_CONFIG.embodimentPriorMean) + randnRange(0, 0.3)),
           world_model: p.world_model || 'cascade',
         });
       }
@@ -433,12 +470,14 @@ class BayesianTracker {
       // ИСПРАВЛЕНИЕ 1: Оба потолка теперь локальные переменные
       let ceilingReasoning = this.cfg.DIMENSIONS.reasoning.ceiling;
       let ceilingAgency = p.agency_ceiling;
+      let ceilingEmbodiment = p.embodiment_ceiling || this.cfg.EXPERT.embodimentPriorMean;
 
       // --- World Models: эпистемическая неопределённость ---
       // Каждая частица верит в свою "физику мира"
       if (p.world_model === 'hard_wall') {
-        // Мир "Стены": Трансформеры упираются в потолок агентности ~5.5
-        ceilingAgency = Math.min(ceilingAgency, 5.5);
+        // Мир "Стены": Трансформеры упираются в потолок агентности и embodiment
+        ceilingAgency = Math.min(ceilingAgency, this.cfg.EXPERT.plateauHardWallCeiling);
+        ceilingEmbodiment = Math.min(ceilingEmbodiment, 4.0);
       } else if (p.world_model === 'slow_takeoff') {
         // Мир "Нейросимволики": медленный старт, но огромный потенциал
         algoK *= 0.6; // Алгоритмический прогресс тормозит до прорыва
@@ -466,11 +505,13 @@ class BayesianTracker {
         const logDiff = flopsLog + algoLog - baseLog;
         const rawR = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.reasoning.slope, ceilingReasoning);
         const rawA = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.agency.slope, ceilingAgency);
+        const rawE = v3ComputeDim(0.5 * logDiff, this.cfg.EXPERT.embodimentScalingSlope, ceilingEmbodiment);
 
         const reasoning = v3ApplyInference(rawR, this.cfg.INFERENCE_SCALING.max_bonus_reasoning, this.cfg.INFERENCE_SCALING.saturation_cap);
         const agency = v3ApplyInference(rawA, this.cfg.INFERENCE_SCALING.max_bonus_agency, this.cfg.INFERENCE_SCALING.saturation_cap);
+        const embodiment = v3ApplyInference(rawE, this.cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, this.cfg.INFERENCE_SCALING.saturation_cap);
 
-        const cap = Math.min(reasoning, agency);
+        const cap = Math.min(reasoning, agency, embodiment);
 
         // Архитектурный каскад (множественные смены парадигм)
         // Первая смена — не раньше 2026.5, последующие — не чаще раза в 4 года
@@ -598,8 +639,9 @@ class BayesianTracker {
                 if (yT1 === null && cap >= this.cfg.THRESHOLDS.t1) yT1 = currentYear;
                 if (yT2 === null && cap >= this.cfg.THRESHOLDS.t2) yT2 = currentYear;
                 if (yT3 === null && cap >= this.cfg.THRESHOLDS.t3) yT3 = currentYear;
-                if (yT4 === null && cap >= this.cfg.THRESHOLDS.t4) { 
-                    yT4 = currentYear; 
+                // T4 требует не только cap >= 100, но и embodiment >= embodimentT4Requirement (контроль атомов)
+                if (yT4 === null && cap >= this.cfg.THRESHOLDS.t4 && embodiment >= this.cfg.EXPERT.embodimentT4Requirement) {
+                    yT4 = currentYear;
                     break; // Останавливаем симуляцию на фазовом переходе
                 }
         
@@ -810,12 +852,16 @@ class BayesianTracker {
         const cap = Math.min(reasoning, agency);
         const rsi = v3CalculateRSI(reasoning, agency, cap, cfg.EXPERT);
 
+        // [PATCH] Embodiment bypass: при высоком embodiment ИИ строит свои дата-центры
+        const bypassActivation = sigmoid(1.5 * (embodiment - cfg.EXPERT.embodimentBypassThreshold));
+        const hwBonus = 1.0 + bypassActivation * (cfg.EXPERT.embodimentHWBonusMultiplier - 1.0);
+
         let currentAlgoK = algoK * damping;
         if (dataExhaustionHit) currentAlgoK *= cfg.EXPERT.dataWallPenalty;
         let currentHwK = hwK * damping;
         if (gpuBubbleBurst) currentHwK *= 0.2;
 
-        flopsLog += currentHwK * dt;
+        flopsLog += currentHwK * hwBonus * dt;
         algoLog += (currentAlgoK + rsi) * dt;
       }
       scenarios.push({ years, caps });
@@ -827,13 +873,14 @@ class BayesianTracker {
     const cfg = this.cfg;
     // Use weighted average particle instead of particles[0] (which may have negligible weight)
     const totalW = this.weights.reduce((a, b) => a + b, 0);
-    let avgHw = 0, avgAlgo = 0, avgCeiling = 0;
+    let avgHw = 0, avgAlgo = 0, avgCeiling = 0, avgEmbodimentCeiling = 0;
     if (totalW > 0) {
       for (let i = 0; i < this.n; i++) {
         const w = this.weights[i] / totalW;
         avgHw += this.particles[i].hw_months * w;
         avgAlgo += this.particles[i].algo_months * w;
         avgCeiling += this.particles[i].agency_ceiling * w;
+        avgEmbodimentCeiling += (this.particles[i].embodiment_ceiling || cfg.EXPERT.embodimentPriorMean) * w;
       }
     } else {
       // Fallback: unweighted average
@@ -841,10 +888,12 @@ class BayesianTracker {
         avgHw += this.particles[i].hw_months;
         avgAlgo += this.particles[i].algo_months;
         avgCeiling += this.particles[i].agency_ceiling;
+        avgEmbodimentCeiling += this.particles[i].embodiment_ceiling || cfg.EXPERT.embodimentPriorMean;
       }
       avgHw /= this.n;
       avgAlgo /= this.n;
       avgCeiling /= this.n;
+      avgEmbodimentCeiling /= this.n;
     }
     const dt = 1.0 / 12.0;
     const steps = 40 * 12;
@@ -856,6 +905,7 @@ class BayesianTracker {
     const algoK = Math.log(2) / Math.max(1.0, avgAlgo / 12.0);
     let cR = cfg.DIMENSIONS.reasoning.ceiling;
     let cA = avgCeiling;
+    let cE = avgEmbodimentCeiling || cfg.EXPERT.embodimentPriorMean;
     // Apply weighted World Model constraints to avgCeiling
     let hardWallWeight = 0, slowTakeoffWeight = 0;
     if (totalW > 0) {
@@ -865,8 +915,11 @@ class BayesianTracker {
         else if (this.particles[i].world_model === 'slow_takeoff') slowTakeoffWeight += w;
       }
     }
-    // Blend: hard_wall caps agency at plateauHardWallCeiling, slow_takeoff reduces algoK
-    if (hardWallWeight > 0.5) cA = Math.min(cA, cfg.EXPERT.plateauHardWallCeiling);
+    // Blend: hard_wall caps agency at plateauHardWallCeiling and embodiment at 4.0, slow_takeoff reduces algoK
+    if (hardWallWeight > 0.5) {
+      cA = Math.min(cA, cfg.EXPERT.plateauHardWallCeiling);
+      cE = Math.min(cE, 4.0);
+    }
     const algoKMultiplier = slowTakeoffWeight > 0.5 ? 0.6 : 1.0;
     let paradigmGeneration = 0;
     for (let step = 0; step < steps; step++) {
@@ -876,9 +929,11 @@ class BayesianTracker {
       const logDiff = flopsLog + algoLog - baseLog;
       const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
       const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
+      const rawE = v3ComputeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, cE);
       const reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
       const agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
-      const cap = Math.min(reasoning, agency);
+      const embodiment = v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
+      const cap = Math.min(reasoning, agency, embodiment);
 
       // ИСПРАВЛЕНИЕ: Логика парадигм синхронизирована
       const saturation = Math.max(reasoning / cR, agency / cA);
@@ -903,7 +958,9 @@ class BayesianTracker {
       const rsi = v3CalculateRSI(reasoning, agency, cap, cfg.EXPERT);
       accumulatedRsi += rsi * dt;
       rsiComp.push(accumulatedRsi);
-      flopsLog += hwK * damping * dt;
+      const bypassActivation = sigmoid(1.5 * (embodiment - cfg.EXPERT.embodimentBypassThreshold));
+      const hwBonus = 1.0 + bypassActivation * (cfg.EXPERT.embodimentHWBonusMultiplier - 1.0);
+      flopsLog += hwK * damping * hwBonus * dt;
       algoLog += (algoK * algoKMultiplier * damping + rsi) * dt;
       pureAlgoLog += (algoK * algoKMultiplier * damping) * dt;
     }
@@ -932,7 +989,10 @@ const BENCHMARK_SIGMAS = {
   arcAgi: 8.0,       // ARC-AGI (%)
   sweBench: 10.0,    // SWE-bench Verified (%)
   flopsLog: 0.5,     // log10(FLOPs)
-  horizon: 0.5       // log10(autonomous task hours)
+  horizon: 0.5,      // log10(autonomous task hours)
+  simToReal: 5.0,    // % роботизированных задач, решаемых в реальном мире
+  moravec: 6.0,      // Балл Moravec (1-100, моторика+восприятие)
+  autoAssembly: 0.5  // log10(часы автономной сборки фабрики)
 };
 
 let REAL_BENCHMARK_HISTORY = [];
@@ -943,92 +1003,92 @@ const FALLBACK_BENCHMARK_HISTORY = [
   // --- РАННЯЯ ЭПОХА (Пре-Агенты) ---
   {
     year: 2022.90, event: "ChatGPT (GPT-3.5)",
-    arenaElo: 1000, arcAgi: 3.0, sweBench: 0.0, trainingFlopsLog: 23.5, horizon: 0.5,
-    arenaElo_sigma: 30, arcAgi_sigma: 5, sweBench_sigma: 0.5, trainingFlopsLog_sigma: 0.3, horizon_sigma: 0.3,
+    arenaElo: 1000, arcAgi: 3.0, sweBench: 0.0, trainingFlopsLog: 23.5, horizon: 0.5, simToReal: 0.0, moravec: 5.0, autoAssembly: 0.05,
+    arenaElo_sigma: 30, arcAgi_sigma: 5, sweBench_sigma: 0.5, trainingFlopsLog_sigma: 0.3, horizon_sigma: 0.3, simToReal_sigma: 0.5, moravec_sigma: 2, autoAssembly_sigma: 0.2,
     notes: "LMSYS base Elo = 1000. Агентность нулевая."
   },
   {
     year: 2023.25, event: "GPT-4 Release",
-    arenaElo: 1150, arcAgi: 12.0, sweBench: 0.1, trainingFlopsLog: 25.32, horizon: 1.0,
-    arenaElo_sigma: 30, arcAgi_sigma: 6, sweBench_sigma: 1, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.3,
+    arenaElo: 1150, arcAgi: 12.0, sweBench: 0.1, trainingFlopsLog: 25.32, horizon: 1.0, simToReal: 0.0, moravec: 8.0, autoAssembly: 0.1,
+    arenaElo_sigma: 30, arcAgi_sigma: 6, sweBench_sigma: 1, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.3, simToReal_sigma: 0.5, moravec_sigma: 2, autoAssembly_sigma: 0.2,
     notes: "Epoch AI: 2.1e25 FLOPs. Появление зачатков абстрактного рассуждения."
   },
   {
     year: 2023.85, event: "GPT-4 Turbo",
-    arenaElo: 1250, arcAgi: 15.0, sweBench: 1.5, trainingFlopsLog: 25.4, horizon: 1.0,
-    arenaElo_sigma: 25, arcAgi_sigma: 6, sweBench_sigma: 2, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.3,
+    arenaElo: 1250, arcAgi: 15.0, sweBench: 1.5, trainingFlopsLog: 25.4, horizon: 1.0, simToReal: 0.5, moravec: 10.0, autoAssembly: 0.1,
+    arenaElo_sigma: 25, arcAgi_sigma: 6, sweBench_sigma: 2, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.3, simToReal_sigma: 1, moravec_sigma: 3, autoAssembly_sigma: 0.2,
     notes: "Слабый рост reasoning, улучшенное следование инструкциям."
   },
 
   // --- ЭПОХА ИНСТРУМЕНТОВ И TTC ---
   {
     year: 2024.20, event: "Claude 3 Opus",
-    arenaElo: 1255, arcAgi: 20.0, sweBench: 4.0, trainingFlopsLog: 25.5, horizon: 1.5,
-    arenaElo_sigma: 25, arcAgi_sigma: 7, sweBench_sigma: 3, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.3,
+    arenaElo: 1255, arcAgi: 20.0, sweBench: 4.0, trainingFlopsLog: 25.5, horizon: 1.5, simToReal: 1.0, moravec: 12.0, autoAssembly: 0.2,
+    arenaElo_sigma: 25, arcAgi_sigma: 7, sweBench_sigma: 3, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.3, simToReal_sigma: 1, moravec_sigma: 3, autoAssembly_sigma: 0.2,
     notes: "Первое серьезное покушение на лидерство OpenAI в Arena."
   },
   {
     year: 2024.45, event: "Claude 3.5 Sonnet",
-    arenaElo: 1270, arcAgi: 43.0, sweBench: 31.4, trainingFlopsLog: 25.55, horizon: 2.0,
-    arenaElo_sigma: 25, arcAgi_sigma: 8, sweBench_sigma: 5, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
+    arenaElo: 1270, arcAgi: 43.0, sweBench: 31.4, trainingFlopsLog: 25.55, horizon: 2.0, simToReal: 2.0, moravec: 15.0, autoAssembly: 0.3,
+    arenaElo_sigma: 25, arcAgi_sigma: 8, sweBench_sigma: 5, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 1.5, moravec_sigma: 3, autoAssembly_sigma: 0.2,
     notes: "Шок на SWE-bench (31.4%). Метод Райана Гринблатта показал 43% на ARC-AGI через сэмплирование."
   },
   {
     year: 2024.75, event: "OpenAI o1-preview",
-    arenaElo: 1320, arcAgi: 65.0, sweBench: 36.0, trainingFlopsLog: 25.8, horizon: 4.0,
-    arenaElo_sigma: 20, arcAgi_sigma: 6, sweBench_sigma: 5, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
+    arenaElo: 1320, arcAgi: 65.0, sweBench: 36.0, trainingFlopsLog: 25.8, horizon: 4.0, simToReal: 4.0, moravec: 18.0, autoAssembly: 0.5,
+    arenaElo_sigma: 20, arcAgi_sigma: 6, sweBench_sigma: 5, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 2, moravec_sigma: 3, autoAssembly_sigma: 0.3,
     notes: "Первый масштабный Test-Time Compute. Резкий рост эффективности на сложных задачах."
   },
   {
     year: 2024.95, event: "OpenAI o3-preview",
-    arenaElo: 1350, arcAgi: 87.5, sweBench: 45.0, trainingFlopsLog: 26.0, horizon: 8.0,
-    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 5, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
+    arenaElo: 1350, arcAgi: 87.5, sweBench: 45.0, trainingFlopsLog: 26.0, horizon: 8.0, simToReal: 6.0, moravec: 22.0, autoAssembly: 0.8,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 5, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 2, moravec_sigma: 4, autoAssembly_sigma: 0.3,
     notes: "Декабрь 2024. ARC-AGI (High Compute) достигает 87.5%, демонстрируя силу RLHF в reasoning."
   },
 
   // --- МАССОВОЕ МАСШТАБИРОВАНИЕ 2025 ---
   {
     year: 2025.15, event: "GPT-4.5 Preview",
-    arenaElo: 1439, arcAgi: 70.0, sweBench: 56.0, trainingFlopsLog: 26.2, horizon: 4.0,
-    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
+    arenaElo: 1439, arcAgi: 70.0, sweBench: 56.0, trainingFlopsLog: 26.2, horizon: 4.0, simToReal: 8.0, moravec: 25.0, autoAssembly: 1.0,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 2, moravec_sigma: 4, autoAssembly_sigma: 0.3,
     notes: "Смещение фокуса на базовую надежность моделей (без тяжелого CoT)."
   },
   {
     year: 2025.30, event: "o3-2025-04-16",
-    arenaElo: 1444, arcAgi: 89.0, sweBench: 62.0, trainingFlopsLog: 26.3, horizon: 12.0,
-    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
+    arenaElo: 1444, arcAgi: 89.0, sweBench: 62.0, trainingFlopsLog: 26.3, horizon: 12.0, simToReal: 10.0, moravec: 28.0, autoAssembly: 1.3,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 2, moravec_sigma: 4, autoAssembly_sigma: 0.3,
     notes: "Промежуточный релиз. Улучшенная агентность в средах программирования."
   },
   {
     year: 2025.65, event: "Gemini 2.5 Pro",
-    arenaElo: 1456, arcAgi: 82.0, sweBench: 65.0, trainingFlopsLog: 26.5, horizon: 24.0,
-    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
+    arenaElo: 1456, arcAgi: 82.0, sweBench: 65.0, trainingFlopsLog: 26.5, horizon: 24.0, simToReal: 14.0, moravec: 32.0, autoAssembly: 1.5,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 3, moravec_sigma: 4, autoAssembly_sigma: 0.3,
     notes: "Август 2025. Топ-1 LMSYS на момент релиза. Преодолен барьер 1450 Elo."
   },
   {
     year: 2025.95, event: "GPT-5-2 Thinking",
-    arenaElo: 1480, arcAgi: 78.7, sweBench: 72.0, trainingFlopsLog: 26.8, horizon: 48.0,
-    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
+    arenaElo: 1480, arcAgi: 78.7, sweBench: 72.0, trainingFlopsLog: 26.8, horizon: 48.0, simToReal: 18.0, moravec: 38.0, autoAssembly: 1.7,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 3, moravec_sigma: 5, autoAssembly_sigma: 0.3,
     notes: "Декабрь 2025. Базовая стоимость reasoning упала в 10 раз ($0.52 за задачу ARC)."
   },
 
   // --- СОВРЕМЕННЫЙ ФРОНТИР (Первая половина 2026) ---
   {
     year: 2026.15, event: "GPT-5.4 Web",
-    arenaElo: 1484, arcAgi: 92.0, sweBench: 78.2, trainingFlopsLog: 26.9, horizon: 72.0,
-    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
+    arenaElo: 1484, arcAgi: 92.0, sweBench: 78.2, trainingFlopsLog: 26.9, horizon: 72.0, simToReal: 25.0, moravec: 44.0, autoAssembly: 1.8,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 4, moravec_sigma: 5, autoAssembly_sigma: 0.3,
     notes: "Массовое внедрение агентов браузинга."
   },
   {
     year: 2026.30, event: "Claude Opus 4.7",
-    arenaElo: 1504, arcAgi: 94.0, sweBench: 82.0, trainingFlopsLog: 27.0, horizon: 120.0,
-    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
+    arenaElo: 1504, arcAgi: 94.0, sweBench: 82.0, trainingFlopsLog: 27.0, horizon: 120.0, simToReal: 35.0, moravec: 50.0, autoAssembly: 1.85,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 4, moravec_sigma: 5, autoAssembly_sigma: 0.3,
     notes: "Апрель 2026. Пробит барьер в 1500 Elo. Насыщение оригинального SWE-bench."
   },
   {
     year: 2026.40, event: "GPT-5.5 Pro",
-    arenaElo: 1561, arcAgi: 96.5, sweBench: 82.6, trainingFlopsLog: 27.2, horizon: 168.0,
-    arenaElo_sigma: 20, arcAgi_sigma: 4, sweBench_sigma: 3, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4,
+    arenaElo: 1561, arcAgi: 96.5, sweBench: 82.6, trainingFlopsLog: 27.2, horizon: 168.0, simToReal: 50.0, moravec: 60.0, autoAssembly: 1.9,
+    arenaElo_sigma: 20, arcAgi_sigma: 4, sweBench_sigma: 3, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 5, moravec_sigma: 5, autoAssembly_sigma: 0.3,
     notes: "Май 2026. Абсолютный SOTA. Эффективный предел текущих бенчмарков."
   }
 ];
@@ -1051,10 +1111,11 @@ async function loadHistoricalBenchmarks() {
 // Преобразование латентных переменных трекера в численные бенчмарки
 // r10, a10 — reasoning и agency в шкале модели (0..~15)
 // Возвращает предсказанные значения бенчмарков + log10(FLOPs) для сопоставления с training compute
-function getNumericObservables(r10, a10, expertCfg) {
+function getNumericObservables(r10, a10, e10, expertCfg) {
     const autonomyWeight = expertCfg ? expertCfg.toolUseVsAutonomyWeight : 0.6;
     const reasoningWeight = 1.0 - autonomyWeight;
     const blendedReasoning = r10 * reasoningWeight + a10 * autonomyWeight;
+    const embodimentVal = (typeof e10 === 'number') ? e10 : 4.0; // fallback если не передано
 
     return {
         sweBench: 100 * sigmoid(0.55 * blendedReasoning - 2.5),
@@ -1065,7 +1126,13 @@ function getNumericObservables(r10, a10, expertCfg) {
         flopsLog: 23.5 + 0.3 * r10,
         // log10(autonomous task hours). Калибровка: a10=0 → 0.5h, a10=5 → 6h, a10=10 → 74h, a10=13 → 443h
         // (формула та же что в mapToObservables, но в log-шкале)
-        horizon: Math.log10(Math.min(365 * 24, 0.5 * Math.exp(0.5 * a10)))
+        horizon: Math.log10(Math.min(365 * 24, 0.5 * Math.exp(0.5 * a10))),
+        // Sim-to-Real: % роботизированных задач. e=0 → 0%, e=5 → 12%, e=10 → 73%, e=13 → 95%
+        simToReal: 100 * sigmoid(0.5 * embodimentVal - 2.5),
+        // Moravec: 1-100, моторика+восприятие. e=0 → 0, e=5 → 8, e=10 → 50, e=13 → 88
+        moravec: Math.max(0, Math.min(100, 2 + 7.5 * (embodimentVal - 0.5))),
+        // Auto-Assembly: log10(часы сборки фабрики). e=0 → 0.1h, e=5 → 7.4h, e=10 → 550h, e=13 → 18000h
+        autoAssembly: Math.log10(Math.max(0.1, 0.5 * Math.exp(0.7 * embodimentVal)))
     };
 }
 
@@ -1079,7 +1146,7 @@ function v3GetTracker() {
 }
 
 // Backtest: тренируемся на первых trainEnd точках, предсказываем trainEnd+1..K.
-// Возвращает: { residuals: [...], perDim: {sweBench: RMSE, arcAgi, arenaElo, flopsLog, horizon}, coverage90: %, nPred: K - trainEnd }
+// Возвращает: { residuals: [...], perDim: {sweBench, arcAgi, arenaElo, flopsLog, horizon, simToReal, moravec, autoAssembly}, coverage90: %, nPred: K - trainEnd }
 function runBacktest(trainEnd, kPred) {
   const data = REAL_BENCHMARK_HISTORY;
   if (!data || data.length < trainEnd + kPred) {
@@ -1092,9 +1159,9 @@ function runBacktest(trainEnd, kPred) {
   trainData.forEach(d => btTracker.observeRealData(d.year, d));
 
   const residuals = [];
-  const dims = ['sweBench', 'arcAgi', 'arenaElo', 'flopsLog', 'horizon'];
-  const sqErr = { sweBench:0, arcAgi:0, arenaElo:0, flopsLog:0, horizon:0 };
-  const cnt = { sweBench:0, arcAgi:0, arenaElo:0, flopsLog:0, horizon:0 };
+  const dims = ['sweBench', 'arcAgi', 'arenaElo', 'flopsLog', 'horizon', 'simToReal', 'moravec', 'autoAssembly'];
+  const sqErr = { sweBench:0, arcAgi:0, arenaElo:0, flopsLog:0, horizon:0, simToReal:0, moravec:0, autoAssembly:0 };
+  const cnt = { sweBench:0, arcAgi:0, arenaElo:0, flopsLog:0, horizon:0, simToReal:0, moravec:0, autoAssembly:0 };
   let inCI90 = 0, totalCIEval = 0;
 
   for (let t = 0; t < testData.length; t++) {
@@ -1102,7 +1169,7 @@ function runBacktest(trainEnd, kPred) {
     const samples = [];
     for (let i = 0; i < btTracker.n; i += 10) {
       const pred = v3SimulateToYear(btTracker.particles[i], obs.year, btTracker.cfg);
-      const m = getNumericObservables(pred.reasoning, pred.agency, btTracker.cfg.EXPERT);
+      const m = getNumericObservables(pred.reasoning, pred.agency, pred.embodiment, btTracker.cfg.EXPERT);
       samples.push(m);
     }
     const medianSample = {};
@@ -1112,10 +1179,12 @@ function runBacktest(trainEnd, kPred) {
       const p10 = vals.length > 0 ? vals[Math.floor(vals.length * 0.10)] : 0;
       const p90 = vals.length > 0 ? vals[Math.floor(vals.length * 0.90)] : 0;
       if (obs[dim] !== undefined) {
-        const err = obs[dim] - medianSample[dim];
+        // autoAssembly в метрике — log10(часы), в obs — часы. Конвертируем в log-шкалу для сравнения.
+        const obsInModelScale = (dim === 'autoAssembly') ? Math.log10(Math.max(0.001, obs[dim])) : obs[dim];
+        const err = obsInModelScale - medianSample[dim];
         sqErr[dim] += err * err;
         cnt[dim]++;
-        if (obs[dim] >= p10 && obs[dim] <= p90) inCI90++;
+        if (obsInModelScale >= p10 && obsInModelScale <= p90) inCI90++;
         totalCIEval++;
       }
     }
@@ -1152,7 +1221,11 @@ function benchmarksToAA(arcAgiPct, horizonHours) {
   const intel = Math.max(0, Math.min(100, r10 * 10));
   const agency = Math.max(0, Math.min(100, a10 * 10));
 
-  return { intel, agency, r10, a10 };
+  // e10 (embodiment) — аппроксимация: a10 с лёгким смещением (Embodiment идёт позади agency)
+  // типично: при a10=5 → e10≈3.5, при a10=10 → e10≈8.0
+  const e10 = Math.max(0, a10 * 0.8);
+
+  return { intel, agency, r10, a10, e10 };
 }
 
 function v3AddObservation() {
@@ -1161,7 +1234,7 @@ function v3AddObservation() {
   
   // Конвертируем horizonVal обратно в r10/a10, чтобы аппроксимировать SWE-bench
   const aa = benchmarksToAA(arcVal, horizonVal);
-  const fakeMetrics = getNumericObservables(aa.r10, aa.a10, EXPERT_CONFIG);
+  const fakeMetrics = getNumericObservables(aa.r10, aa.a10, aa.e10, EXPERT_CONFIG);
   const sweVal = fakeMetrics.sweBench;
   const eloVal = fakeMetrics.arenaElo;
 
@@ -1198,13 +1271,13 @@ function v3CheckWarning(tracker) {
   const arcVal = +document.getElementById('v3ARC').value || 0;
   const horizonVal = +document.getElementById('v3Horizon').value || 0;
   const aa = benchmarksToAA(arcVal, horizonVal);
-  const testMetrics = getNumericObservables(aa.r10, aa.a10, tracker.cfg.EXPERT);
+  const testMetrics = getNumericObservables(aa.r10, aa.a10, aa.e10, tracker.cfg.EXPERT);
 
   let minDist = Infinity;
   for (let i = 0; i < tracker.n; i += 10) { 
     if (tracker.weights[i] < 1e-5) continue;
     const pred = v3SimulateToYear(tracker.particles[i], tracker.cfg.CURRENT_YEAR, tracker.cfg);
-    const m = getNumericObservables(pred.reasoning, pred.agency, tracker.cfg.EXPERT);
+    const m = getNumericObservables(pred.reasoning, pred.agency, pred.embodiment, tracker.cfg.EXPERT);
     
     // Считаем Евклидово расстояние в пространстве нормализованных бенчмарков
     const dist = Math.sqrt(
@@ -1239,7 +1312,7 @@ async function runSimulation() {
     const horizonVal = +document.getElementById('v3Horizon').value;
     const aa = benchmarksToAA(arcVal, horizonVal);
     const currentY = v3Tracker ? v3Tracker.cfg.CURRENT_YEAR : (new Date().getFullYear() + new Date().getMonth() / 12);
-    const fakeMetrics = getNumericObservables(aa.r10, aa.a10, EXPERT_CONFIG);
+    const fakeMetrics = getNumericObservables(aa.r10, aa.a10, aa.e10, EXPERT_CONFIG);
     v3Tracker = new BayesianTracker(1000);
     REAL_BENCHMARK_HISTORY.forEach(d => v3Tracker.observeRealData(d.year, d));
     
@@ -1656,6 +1729,13 @@ const LANG = {
     // Наблюдательный шум (per-observation sigma)
     expert_p_observationSigmaMode:'Режим шума наблюдений',
     expert_d_observationSigmaMode:'Global: BENCHMARK_SIGMAS. PerPoint: локальные *_sigma (если заданы).',
+    // Embodiment (4-е латентное измерение: физическая воплощённость)
+    expert_p_embodimentPriorMean:'Embodiment: prior mean',
+    expert_d_embodimentPriorMean:'Априорное среднее embodiment_ceiling (робототехника сложна)',
+    expert_p_embodimentBypassThreshold:'Embodiment: bypass threshold',
+    expert_d_embodimentBypassThreshold:'Embodiment > порога → ИИ строит дата-центры (HW-рост ×3)',
+    expert_p_embodimentT4Requirement:'Embodiment: T4 requirement',
+    expert_d_embodimentT4Requirement:'Минимальный embodiment для засчитывания T4 (контроль атомов)',
     // Observable Metrics
     obs_current:'Прогноз при текущих бенчмарках:',
     obs_swe:'SWE-bench',
@@ -1905,6 +1985,13 @@ const LANG = {
     // Observation noise mode
     expert_p_observationSigmaMode:'Observation noise mode',
     expert_d_observationSigmaMode:'Global: BENCHMARK_SIGMAS. PerPoint: local *_sigma (when present).',
+    // Embodiment (4th latent dim: physical embodiment)
+    expert_p_embodimentPriorMean:'Embodiment: prior mean',
+    expert_d_embodimentPriorMean:'Prior mean of embodiment_ceiling (robotics is hard)',
+    expert_p_embodimentBypassThreshold:'Embodiment: bypass threshold',
+    expert_d_embodimentBypassThreshold:'Embodiment > threshold → AI builds its own data centers (HW growth ×3)',
+    expert_p_embodimentT4Requirement:'Embodiment: T4 requirement',
+    expert_d_embodimentT4Requirement:'Minimum embodiment for T4 to count (control of atoms)',
     // Observable Metrics
     obs_current:'Forecast at current benchmarks:',
     obs_swe:'SWE-bench',
@@ -3068,7 +3155,7 @@ function updateObsMetrics() {
 
   const _cfg = Object.assign({}, EXPERT_CONFIG, { _lang: window._lang || 'ru' });
   const m = mapToObservables(aa.r10, aa.a10, _cfg);
-  const n = getNumericObservables(aa.r10, aa.a10, _cfg);
+  const n = getNumericObservables(aa.r10, aa.a10, aa.e10, _cfg);
 
   const el = document.getElementById('obsMetrics');
   if (el) el.style.display = 'block';

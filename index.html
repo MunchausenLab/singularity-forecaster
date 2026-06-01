@@ -785,6 +785,33 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
         </select>
         <div class="expert-param-desc" data-i18n="expert_d_observationSigmaMode">Режим вычисления σ в likelihood</div>
       </div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_embodimentPriorMean">Embodiment prior mean</span>
+        </div>
+        <input type="range" id="e-embodimentPriorMean" min="1" max="8" step="0.1" value="4.0" oninput="expertUpdate('embodimentPriorMean',this.value)">
+        <span class="expert-param-value" id="ev-embodimentPriorMean">4.0</span>
+        <div class="expert-param-desc" data-i18n="expert_d_embodimentPriorMean">Априорное среднее embodiment_ceiling (робототехника сложна)</div>
+      </div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_embodimentBypassThreshold">Embodiment bypass threshold</span>
+        </div>
+        <input type="range" id="e-embodimentBypassThreshold" min="4" max="14" step="0.1" value="8.0" oninput="expertUpdate('embodimentBypassThreshold',this.value)">
+        <span class="expert-param-value" id="ev-embodimentBypassThreshold">8.0</span>
+        <div class="expert-param-desc" data-i18n="expert_d_embodimentBypassThreshold">Embodiment > порога → ИИ строит дата-центры (HW-рост ×3)</div>
+      </div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_embodimentT4Requirement">T4 embodiment requirement</span>
+        </div>
+        <input type="range" id="e-embodimentT4Requirement" min="3" max="10" step="0.1" value="6.0" oninput="expertUpdate('embodimentT4Requirement',this.value)">
+        <span class="expert-param-value" id="ev-embodimentT4Requirement">6.0</span>
+        <div class="expert-param-desc" data-i18n="expert_d_embodimentT4Requirement">Минимальный embodiment для засчитывания T4 (контроль атомов)</div>
+      </div>
     </div>
 
   </div><!-- /expert-grid -->
