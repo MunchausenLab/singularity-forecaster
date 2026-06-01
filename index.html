@@ -152,6 +152,18 @@ body{font-family:var(--font);background:var(--bg-primary);color:var(--text-prima
   border-bottom: 1px solid var(--border);
   padding: 20px 32px;
 }
+#expertPanel.collapsed .expert-grid { display:none; }
+#expertPanel.collapsed { padding: 0 32px; }
+.expert-toggle {
+  display:flex; align-items:center; justify-content:space-between;
+  width:100%; background:none; border:none; cursor:pointer;
+  color:var(--text-primary); font-size:.9rem; font-weight:600;
+  padding:10px 0; margin-bottom:8px;
+  font-family:inherit; text-transform:uppercase; letter-spacing:.04em;
+}
+.expert-toggle:hover { color:var(--purple); }
+.expert-arrow { font-size:1rem; transition:transform .2s; display:inline-block; }
+.expert-arrow.open { transform:rotate(180deg); }
 .expert-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -312,6 +324,10 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 
 <!-- ===== EXPERT SANDBOX ===== -->
 <div class="expert-panel" id="expertPanel">
+  <button class="expert-toggle" onclick="toggleExpertPanel()" data-i18n="[title]expert_toggle_title" title="Свернуть/развернуть панель">
+    <span class="expert-toggle-label" data-i18n="expert_toggle_label">Expert Sandbox</span>
+    <span class="expert-arrow" id="expertArrow">▾</span>
+  </button>
   <div class="expert-grid">
 
     <!-- ═══════════════════════════════════════════════ -->
@@ -1108,7 +1124,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   <div class="about" id="aboutSection">
     <h2 data-i18n="about_title">О модели v4</h2>
     <p data-i18n="about_intro">Модель v4 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных бенчмарков (ARC-AGI, SWE-bench, Arena Elo). Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге. Панель Expert Sandbox позволяет настраивать 30+ параметров модели и проверять гипотезы о будущем в реальном времени.</p>
-    <div class="sec-label" data-i18n="defs_label">Архитектура модели</div>
+    <div class="sec-label" data-i18n="defs_label_arch">Архитектура модели</div>
     <div class="fgrid">
       <div class="fc">
         <h4 data-i18n="arch_tracker_title">Байесовский трекер</h4>
@@ -1146,7 +1162,7 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
   </div>
 
   <div class="about" id="defsSection">
-    <div class="sec-label" data-i18n="defs_label">Концептуальные контуры модели</div>
+    <div class="sec-label" data-i18n="defs_label_contours">Концептуальные контуры модели</div>
     <p style="font-size:.82rem;color:#9898b0;margin-bottom:14px" data-i18n="defs_intro">В модели v4 описываются четыре контрольные точки технологической сингулярности:</p>
     <div class="defs-grid">
       <div class="def-card">

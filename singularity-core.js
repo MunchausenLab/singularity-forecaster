@@ -299,7 +299,12 @@ function v3SimulateToYear(particle, targetYear, cfg) {
     // RSI (deterministic)
     const rsi = v3CalculateRSI(reasoning, agency, cap, cfg.EXPERT);
 
-    flopsLog += hwK * damping * nashDamping * demandDamping * hwBonus * dt;
+    // [NEW] Проклятие атомов: жёсткий потолок удвоений/год (лог-единицы)
+    let hwDelta = hwK * damping * nashDamping * demandDamping * hwBonus;
+    hwDelta = Math.min(hwDelta, cfg.EXPERT.barrierAtomsLimit * Math.LN2);
+    // [NEW] Термодинамика: hard wall на log FLOPs
+    if (flopsLog >= cfg.EXPERT.barrierEnergyLog) hwDelta = 0;
+    flopsLog += hwDelta * dt;
     algoLog += (algoK * algoKMult * damping * nashDamping * demandDamping + rsi) * dt;
   }
   
@@ -706,6 +711,10 @@ class BayesianTracker {
 
         // Физический предел роста железа (Material Cycle)
         dynamicHwK = Math.min(dynamicHwK, this.cfg.EXPERT.maxPhysicalHwGrowth);
+        // [NEW] Проклятие атомов: жёсткий потолок удвоений/год (лог-единицы)
+        dynamicHwK = Math.min(dynamicHwK, this.cfg.EXPERT.barrierAtomsLimit * Math.LN2);
+        // [NEW] Термодинамика: hard wall на log FLOPs
+        if (flopsLog >= this.cfg.EXPERT.barrierEnergyLog) dynamicHwK = 0;
 
         // Shock damping applied symmetrically to both hw and algo
         flopsLog += dynamicHwK * shockDamping * dt;
@@ -810,9 +819,11 @@ class BayesianTracker {
       let algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
       let cR = cfg.DIMENSIONS.reasoning.ceiling;
       let cA = p.agency_ceiling;
+      let cE = p.embodiment_ceiling || cfg.EXPERT.embodimentPriorMean;
       // Apply World Model constraints
       if (p.world_model === 'hard_wall') {
         cA = Math.min(cA, cfg.EXPERT.plateauHardWallCeiling);
+        cE = Math.min(cE, 4.0);
       } else if (p.world_model === 'slow_takeoff') {
         algoK *= 0.6;
       }
@@ -829,19 +840,22 @@ class BayesianTracker {
         const logDiff = flopsLog + algoLog - baseLog;
         const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
         const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
+        const rawE = v3ComputeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, cE);
         const reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
         const agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
+        const embodiment = v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
 
         // ИСПРАВЛЕНИЕ: Сдвиг только при насыщении, и делаем временный откат алгоритмов (как в MC)
         const saturation = Math.max(reasoning / cR, agency / cA);
         if (y > cfg.CURRENT_YEAR && saturation > cfg.EXPERT.saturationThreshold && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
           cA *= cfg.SCALING_LAW.shift_multiplier;
           cR *= cfg.SCALING_LAW.shift_multiplier;
+          cE *= cfg.SCALING_LAW.shift_multiplier;
           algoLog = Math.max(algoLog - (0.4 + paradigmGeneration * 0.1), -3.0);
           paradigmGeneration++;
         }
         years.push(y);
-        caps.push(Math.min(reasoning, agency));
+        caps.push(Math.min(reasoning, agency, embodiment));
 
         let damping = 1.0;
 
@@ -872,7 +886,7 @@ class BayesianTracker {
             damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
         }
 
-        const cap = Math.min(reasoning, agency);
+        const cap = Math.min(reasoning, agency, embodiment);
         const rsi = v3CalculateRSI(reasoning, agency, cap, cfg.EXPERT);
 
         // [PATCH] Embodiment bypass: при высоком embodiment ИИ строит свои дата-центры
@@ -883,6 +897,10 @@ class BayesianTracker {
         if (dataExhaustionHit) currentAlgoK *= cfg.EXPERT.dataWallPenalty;
         let currentHwK = hwK * damping;
         if (gpuBubbleBurst) currentHwK *= 0.2;
+        // [NEW] Проклятие атомов: жёсткий потолок удвоений/год (лог-единицы)
+        currentHwK = Math.min(currentHwK, cfg.EXPERT.barrierAtomsLimit * Math.LN2);
+        // [NEW] Термодинамика: hard wall на log FLOPs
+        if (flopsLog >= cfg.EXPERT.barrierEnergyLog) currentHwK = 0;
 
         flopsLog += currentHwK * hwBonus * dt;
         algoLog += (currentAlgoK + rsi) * dt;
@@ -983,7 +1001,11 @@ class BayesianTracker {
       rsiComp.push(accumulatedRsi);
       const bypassActivation = sigmoid(1.5 * (embodiment - cfg.EXPERT.embodimentBypassThreshold));
       const hwBonus = 1.0 + bypassActivation * (cfg.EXPERT.embodimentHWBonusMultiplier - 1.0);
-      flopsLog += hwK * damping * hwBonus * dt;
+      // [NEW] Проклятие атомов + термодинамика
+      let hwDelta = hwK * damping * hwBonus;
+      hwDelta = Math.min(hwDelta, cfg.EXPERT.barrierAtomsLimit * Math.LN2);
+      if (flopsLog >= cfg.EXPERT.barrierEnergyLog) hwDelta = 0;
+      flopsLog += hwDelta * dt;
       algoLog += (algoK * algoKMultiplier * damping + rsi) * dt;
       pureAlgoLog += (algoK * algoKMultiplier * damping) * dt;
     }
@@ -1401,9 +1423,10 @@ async function runSimulation() {
 
     currentResults = {
       histogram: buildHistogramBins(t1List, t2List, t3List, t4List),
-      trajectory: runData.trajectory, 
-      cumulative: { 
-        x: yqAbs, 
+      trajectory: runData.trajectory,
+      embodimentTrajectory: runData.embodimentTrajectory,
+      cumulative: {
+        x: yqAbs,
         t1: yq.map(y => cdf(t1List, y)), t2: yq.map(y => cdf(t2List, y)),
         t3: yq.map(y => cdf(t3List, y)), t4: yq.map(y => cdf(t4List, y))
       },
@@ -1443,7 +1466,7 @@ function updateUI(r) {
     requestAnimationFrame(() => {
       plotScenarioFan(tracker);
       plotDecomposition(tracker);
-      plotEmbodimentDiagnostics(tracker);
+      plotEmbodimentDiagnostics(tracker, r.embodimentTrajectory);
     });
   });
 }
@@ -1597,7 +1620,7 @@ function plotDecomposition(tracker) {
   }, PLOT_CFG);
 }
 
-function plotEmbodimentDiagnostics(tracker) {
+function plotEmbodimentDiagnostics(tracker, embodimentTrajectory) {
   const t = LANG[window._lang || 'ru'];
   const cfg = tracker.cfg;
 
@@ -1613,9 +1636,12 @@ function plotEmbodimentDiagnostics(tracker) {
     if (idx >= 0 && idx < binCounts.length) binCounts[idx]++;
   });
 
-  // 2) Embodiment trajectory (percentiles) — последний MC прогон
-  const mc = tracker.runMonteCarloForecast(1); // быстрый прогон для trajectory
-  const et = mc.embodimentTrajectory;
+  // 2) Embodiment trajectory (percentiles) — переиспользуем результат runMonteCarloForecast из runSimulation
+  //    Если не передан (вызов из другого места) — fallback на nRuns=20 для адекватных бэндов
+  const et = embodimentTrajectory || (() => {
+    const mc = tracker.runMonteCarloForecast(20);
+    return mc.embodimentTrajectory;
+  })();
 
   // 3) Real robotics scatter markers
   const realYears = REAL_ROBOTICS_DATA.map(d => d.year);
@@ -1712,7 +1738,9 @@ const LANG = {
     // About
     about_title:'О модели v4',
     about_intro:'Модель v4 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных бенчмарков (ARC-AGI, SWE-bench, Arena Elo). Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге. Панель Expert Sandbox позволяет настраивать 30+ параметров модели и проверять гипотезы о будущем в реальном времени.',
-    defs_label:'Концептуальные контуры модели',
+    defs_label:'Архитектура и контуры',
+    defs_label_arch:'Архитектура модели',
+    defs_label_contours:'Концептуальные контуры модели',
     arch_tracker_title:'Байесовский трекер',
     arch_tracker_desc:'1000 частиц с настраиваемыми априорными распределениями: hw_months, algo_months, agency_ceiling (mean/std через Expert Sandbox). Каждое наблюдение AA (Intelligence + Agentic) обновляет веса через гауссово правдоподобие. ESS-ресэмплинг предотвращает вырождение. Поддержка трёх World Models: Cascade, Hard Wall, Slow Takeoff.',
     arch_dims_title:'Два измерения интеллекта',
@@ -1812,6 +1840,8 @@ const LANG = {
     expert_blkA2:'Смена парадигм',
     expert_blkB:'Самоулучшение (RSI)',
     expert_blkB2:'Железо',
+    expert_toggle_label:'Expert Sandbox',
+    expert_toggle_title:'Свернуть/развернуть панель',
     expert_blkC:'Кризисы и штрафы',
     expert_blkD:'Бенчмарки и наблюдения',
     expert_blkD2:'Test-Time Compute',
@@ -1974,7 +2004,9 @@ const LANG = {
     // About
     about_title:'About v4 Model',
     about_intro:'The v4 model uses a Bayesian Particle Filter to calibrate predictions on real benchmark data (ARC-AGI, SWE-bench, Arena Elo). Each particle is a hypothesis about the future: hardware growth rate, algorithm progress, and agency ceiling. Observations update particle weights via likelihood, and unlikely hypotheses die during resampling. Expert Sandbox panel provides 30+ tunable parameters for real-time hypothesis testing.',
-    defs_label:'Conceptual Contours of the Model',
+    defs_label:'Architecture and Contours',
+    defs_label_arch:'Model Architecture',
+    defs_label_contours:'Conceptual Contours of the Model',
     arch_tracker_title:'Bayesian Tracker',
     arch_tracker_desc:'1000 particles with tunable priors: hw_months, algo_months, agency_ceiling (mean/std via Expert Sandbox). Each AA observation updates weights via Gaussian likelihood. ESS resampling prevents degeneracy. Three World Models supported: Cascade, Hard Wall, Slow Takeoff.',
     arch_dims_title:'Two Dimensions of Intelligence',
@@ -2070,8 +2102,10 @@ const LANG = {
     expert_p_horizon:'Autonomy (hours)',
     expert_d_horizon:'Autonomy horizon for current benchmarks',
     // Block headers
-    expert_blkA:'Paradigms & Ceilings',
+    expert_blkA:'Paradigms and Ceilings',
     expert_blkA2:'Paradigm Shifts',
+    expert_toggle_label:'Expert Sandbox',
+    expert_toggle_title:'Collapse/Expand panel',
     expert_blkB:'Self-Improvement (RSI)',
     expert_blkB2:'Hardware',
     expert_blkC:'Crises & Penalties',
@@ -2330,24 +2364,6 @@ function swarmSetMode(m) {
     // Show play button in learn mode
     const playBtn = document.getElementById('swarmPlayBtn');
     if (playBtn) playBtn.style.display = '';
-  }
-  swarmDraw();
-}
-
-function swarmSetTarget(target) {
-  swarm.showT4 = (target === 't4');
-  document.getElementById('swarmTargetT2').classList.toggle('active', target === 't2');
-  document.getElementById('swarmTargetT4').classList.toggle('active', target === 't4');
-  const slider = document.getElementById('swarmSlider');
-  const labels = document.getElementById('swarmSliderLabels');
-  if (swarm.showT4) {
-    if (slider) { slider.min = 2020; slider.max = 2068; slider.value = 2068; }
-    swarm.forecastSliderMax = 2068;
-    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2040</span><span></span><span>2050</span><span></span><span>2060</span><span>2068</span>';
-  } else {
-    if (slider) { slider.min = 2020; slider.max = 2068; slider.value = 2068; }
-    swarm.forecastSliderMax = 2068;
-    if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2038</span><span></span><span>2048</span><span></span><span>2058</span><span>2068</span>';
   }
   swarmDraw();
 }
@@ -3113,21 +3129,18 @@ function setLang(lang) {
 
 function toggleExpertPanel() {
   const panel = document.getElementById('expertPanel');
+  if (!panel) return;
   const arrow = document.getElementById('expertArrow');
 
   if (panel.classList.contains('collapsed')) {
-    // Открыть
     panel.classList.remove('collapsed');
-    arrow.classList.add('open');
-
-    // Скролл к панели после того, как она раскроется
+    if (arrow) arrow.classList.add('open');
     requestAnimationFrame(() => {
       panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   } else {
-    // Закрыть
     panel.classList.add('collapsed');
-    arrow.classList.remove('open');
+    if (arrow) arrow.classList.remove('open');
   }
 }
 
