@@ -78,6 +78,9 @@ const EXPERT_CONFIG = {
   barrierGeopoliticsRisk: 0.25,    // [Монополия на насилие] Шанс государственного шока после T2
   barrierNashFriction: 0.15,       // [Конкуренция ИИ] Координационная деградация после T3
   barrierDemandGrace: 5.0,         // [Смысловой предел] Лет на адаптацию экономики к T2
+  // --- COMPUTE GOVERNANCE (пред-T2 моратории и регулирование) ---
+  governanceMoratoriumProb: 0.04,  // [Compute Governance] Ожидаемая доля лет, потерянных на регуляторные паузы (0.04 = ~1 мораторий за 25 лет)
+  governanceShockDamping: 0.5,     // [Compute Governance] Множитель HW-роста во время шока (0.5 = рост в 2 раза медленнее)
 
   // Категория 4: Эпистемология (World Models)
   worldModels: { cascade: 0.60, hardWall: 0.25, slowTakeoff: 0.15 },
@@ -240,6 +243,12 @@ function v3SimulateToYear(particle, targetYear, cfg) {
       if (gap > 2.0) damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (gap - 2.0));
     }
 
+    // --- COMPUTE GOVERNANCE (пред-T2 моратории, ожидаемое демпфирование) ---
+    // Детерминированная аппроксимация: вместо случайных шоков используем среднее демпфирование.
+    // Если governanceMoratoriumProb=0.04 и damping=0.5, ожидаемый множитель роста = 0.5*0.04 + 1.0*0.96 = 0.98.
+    const govFactor = cfg.EXPERT.governanceMoratoriumProb * cfg.EXPERT.governanceShockDamping + (1.0 - cfg.EXPERT.governanceMoratoriumProb);
+    damping *= govFactor;
+
     // --- БАРЬЕР 3: Геополитика (государственный шок после T2) ---
     // Детерминированный: срабатывает при превышении порога риска (не случайно)
     if (cap >= cfg.THRESHOLDS.t2 && !stateIntervention && cfg.EXPERT.barrierGeopoliticsRisk > 0.5) {
@@ -335,6 +344,12 @@ class BayesianTracker {
         logLik -= 0.5 * ((obs.trainingFlopsLog - metrics.flopsLog) / (sigmas.flopsLog * baseSigmaMult))**2;
         count++;
       }
+      if (obs.horizon !== undefined) {
+        // Наблюдение в log-шкале (log10 hours), модель предсказывает в той же шкале
+        const obsHorizonLog = Math.log10(Math.max(0.01, obs.horizon));
+        logLik -= 0.5 * ((obsHorizonLog - metrics.horizon) / (sigmas.horizon * baseSigmaMult))**2;
+        count++;
+      }
 
       // Усредняем ошибку, чтобы штраф не зависел от количества доступных бенчмарков в этот год
       if (count > 0) {
@@ -359,9 +374,9 @@ class BayesianTracker {
         while (j < this.n - 1 && cumsum[j] < u) j++;
         const p = this.particles[j];
         newP.push({
-          hw_months: Math.max(3.0, p.hw_months + randnRange(0, 0.2)),
-          algo_months: Math.max(2.0, p.algo_months + randnRange(0, 0.3)),
-          agency_ceiling: Math.max(1.5, p.agency_ceiling + randnRange(0, 0.2)),
+          hw_months: Math.max(3.0, p.hw_months + randnRange(0, 0.4)),
+          algo_months: Math.max(2.0, p.algo_months + randnRange(0, 0.6)),
+          agency_ceiling: Math.max(1.5, p.agency_ceiling + randnRange(0, 0.4)),
           world_model: p.world_model || 'cascade',
         });
       }
@@ -727,6 +742,8 @@ class BayesianTracker {
       let dataExhaustionHit = false;
       let isWinter = false;
       let gpuBubbleBurst = false;
+      let govMoratorium = false;
+      let govMoratoriumYears = 0;
       const years = [], caps = [];
       for (let step = 0; step < steps; step++) {
         const y = cfg.BASE_YEAR + step * dt;
@@ -749,6 +766,17 @@ class BayesianTracker {
         caps.push(Math.min(reasoning, agency));
 
         let damping = 1.0;
+
+        // [PATCH] Compute governance shock: пред-T2 мораторий/регулирование, периодический шок на 1 год
+        if (y > cfg.CURRENT_YEAR && !govMoratorium && Math.random() < cfg.EXPERT.governanceMoratoriumProb) {
+          govMoratorium = true;
+          govMoratoriumYears = 1.0;
+        }
+        if (govMoratorium) {
+          govMoratoriumYears -= dt;
+          if (govMoratoriumYears <= 0) govMoratorium = false;
+          damping *= cfg.EXPERT.governanceShockDamping;
+        }
 
         // [PATCH] Shocks for scenario fan consistency with MC
         if (!dataExhaustionHit && y > 2026.5 && Math.random() < 0.15 * dt) dataExhaustionHit = true;
@@ -890,7 +918,8 @@ const BENCHMARK_SIGMAS = {
   arenaElo: 40.0,    // Elo (LMSYS Chatbot Arena)
   arcAgi: 8.0,       // ARC-AGI (%)
   sweBench: 10.0,    // SWE-bench Verified (%)
-  flopsLog: 0.5      // log10(FLOPs)
+  flopsLog: 0.5,     // log10(FLOPs)
+  horizon: 0.5       // log10(autonomous task hours)
 };
 
 let REAL_BENCHMARK_HISTORY = [];
@@ -899,80 +928,80 @@ let REAL_BENCHMARK_HISTORY = [];
 // Источники: LMSYS Leaderboard, SWE-bench Official, ARC Prize Reports, Epoch AI.
 const FALLBACK_BENCHMARK_HISTORY = [
   // --- РАННЯЯ ЭПОХА (Пре-Агенты) ---
-  { 
-    year: 2022.90, event: "ChatGPT (GPT-3.5)", 
-    arenaElo: 1000, arcAgi: 3.0, sweBench: 0.0, trainingFlopsLog: 23.5,
+  {
+    year: 2022.90, event: "ChatGPT (GPT-3.5)",
+    arenaElo: 1000, arcAgi: 3.0, sweBench: 0.0, trainingFlopsLog: 23.5, horizon: 0.5,
     notes: "LMSYS base Elo = 1000. Агентность нулевая."
   },
-  { 
-    year: 2023.25, event: "GPT-4 Release",     
-    arenaElo: 1150, arcAgi: 12.0, sweBench: 0.1, trainingFlopsLog: 25.32,
+  {
+    year: 2023.25, event: "GPT-4 Release",
+    arenaElo: 1150, arcAgi: 12.0, sweBench: 0.1, trainingFlopsLog: 25.32, horizon: 1.0,
     notes: "Epoch AI: 2.1e25 FLOPs. Появление зачатков абстрактного рассуждения."
   },
-  { 
-    year: 2023.85, event: "GPT-4 Turbo",       
-    arenaElo: 1250, arcAgi: 15.0, sweBench: 1.5, trainingFlopsLog: 25.4,
+  {
+    year: 2023.85, event: "GPT-4 Turbo",
+    arenaElo: 1250, arcAgi: 15.0, sweBench: 1.5, trainingFlopsLog: 25.4, horizon: 1.0,
     notes: "Слабый рост reasoning, улучшенное следование инструкциям."
   },
 
   // --- ЭПОХА ИНСТРУМЕНТОВ И TTC ---
-  { 
-    year: 2024.20, event: "Claude 3 Opus", 
-    arenaElo: 1255, arcAgi: 20.0, sweBench: 4.0, trainingFlopsLog: 25.5,
+  {
+    year: 2024.20, event: "Claude 3 Opus",
+    arenaElo: 1255, arcAgi: 20.0, sweBench: 4.0, trainingFlopsLog: 25.5, horizon: 1.5,
     notes: "Первое серьезное покушение на лидерство OpenAI в Arena."
   },
-  { 
-    year: 2024.45, event: "Claude 3.5 Sonnet", 
-    arenaElo: 1270, arcAgi: 43.0, sweBench: 31.4, trainingFlopsLog: 25.55,
+  {
+    year: 2024.45, event: "Claude 3.5 Sonnet",
+    arenaElo: 1270, arcAgi: 43.0, sweBench: 31.4, trainingFlopsLog: 25.55, horizon: 2.0,
     notes: "Шок на SWE-bench (31.4%). Метод Райана Гринблатта показал 43% на ARC-AGI через сэмплирование."
   },
-  { 
-    year: 2024.75, event: "OpenAI o1-preview",        
-    arenaElo: 1320, arcAgi: 65.0, sweBench: 36.0, trainingFlopsLog: 25.8,
+  {
+    year: 2024.75, event: "OpenAI o1-preview",
+    arenaElo: 1320, arcAgi: 65.0, sweBench: 36.0, trainingFlopsLog: 25.8, horizon: 4.0,
     notes: "Первый масштабный Test-Time Compute. Резкий рост эффективности на сложных задачах."
   },
-  { 
-    year: 2024.95, event: "OpenAI o3-preview",        
-    arenaElo: 1350, arcAgi: 87.5, sweBench: 45.0, trainingFlopsLog: 26.0,
+  {
+    year: 2024.95, event: "OpenAI o3-preview",
+    arenaElo: 1350, arcAgi: 87.5, sweBench: 45.0, trainingFlopsLog: 26.0, horizon: 8.0,
     notes: "Декабрь 2024. ARC-AGI (High Compute) достигает 87.5%, демонстрируя силу RLHF в reasoning."
   },
 
   // --- МАССОВОЕ МАСШТАБИРОВАНИЕ 2025 ---
-  { 
-    year: 2025.15, event: "GPT-4.5 Preview", 
-    arenaElo: 1439, arcAgi: 70.0, sweBench: 56.0, trainingFlopsLog: 26.2,
+  {
+    year: 2025.15, event: "GPT-4.5 Preview",
+    arenaElo: 1439, arcAgi: 70.0, sweBench: 56.0, trainingFlopsLog: 26.2, horizon: 4.0,
     notes: "Смещение фокуса на базовую надежность моделей (без тяжелого CoT)."
   },
-  { 
-    year: 2025.30, event: "o3-2025-04-16", 
-    arenaElo: 1444, arcAgi: 89.0, sweBench: 62.0, trainingFlopsLog: 26.3,
+  {
+    year: 2025.30, event: "o3-2025-04-16",
+    arenaElo: 1444, arcAgi: 89.0, sweBench: 62.0, trainingFlopsLog: 26.3, horizon: 12.0,
     notes: "Промежуточный релиз. Улучшенная агентность в средах программирования."
   },
-  { 
-    year: 2025.65, event: "Gemini 2.5 Pro",      
-    arenaElo: 1456, arcAgi: 82.0, sweBench: 65.0, trainingFlopsLog: 26.5,
+  {
+    year: 2025.65, event: "Gemini 2.5 Pro",
+    arenaElo: 1456, arcAgi: 82.0, sweBench: 65.0, trainingFlopsLog: 26.5, horizon: 24.0,
     notes: "Август 2025. Топ-1 LMSYS на момент релиза. Преодолен барьер 1450 Elo."
   },
-  { 
-    year: 2025.95, event: "GPT-5-2 Thinking", 
-    arenaElo: 1480, arcAgi: 78.7, sweBench: 72.0, trainingFlopsLog: 26.8,
+  {
+    year: 2025.95, event: "GPT-5-2 Thinking",
+    arenaElo: 1480, arcAgi: 78.7, sweBench: 72.0, trainingFlopsLog: 26.8, horizon: 48.0,
     notes: "Декабрь 2025. Базовая стоимость reasoning упала в 10 раз ($0.52 за задачу ARC)."
   },
 
   // --- СОВРЕМЕННЫЙ ФРОНТИР (Первая половина 2026) ---
-  { 
-    year: 2026.15, event: "GPT-5.4 Web",       
-    arenaElo: 1484, arcAgi: 92.0, sweBench: 78.2, trainingFlopsLog: 26.9,
+  {
+    year: 2026.15, event: "GPT-5.4 Web",
+    arenaElo: 1484, arcAgi: 92.0, sweBench: 78.2, trainingFlopsLog: 26.9, horizon: 72.0,
     notes: "Массовое внедрение агентов браузинга."
   },
-  { 
-    year: 2026.30, event: "Claude Opus 4.7",     
-    arenaElo: 1504, arcAgi: 94.0, sweBench: 82.0, trainingFlopsLog: 27.0,
+  {
+    year: 2026.30, event: "Claude Opus 4.7",
+    arenaElo: 1504, arcAgi: 94.0, sweBench: 82.0, trainingFlopsLog: 27.0, horizon: 120.0,
     notes: "Апрель 2026. Пробит барьер в 1500 Elo. Насыщение оригинального SWE-bench."
   },
-  { 
-    year: 2026.40, event: "GPT-5.5 Pro",     
-    arenaElo: 1561, arcAgi: 96.5, sweBench: 82.6, trainingFlopsLog: 27.2,
+  {
+    year: 2026.40, event: "GPT-5.5 Pro",
+    arenaElo: 1561, arcAgi: 96.5, sweBench: 82.6, trainingFlopsLog: 27.2, horizon: 168.0,
     notes: "Май 2026. Абсолютный SOTA. Эффективный предел текущих бенчмарков."
   }
 ];
@@ -1006,7 +1035,10 @@ function getNumericObservables(r10, a10, expertCfg) {
         arenaElo: 800 + 70 * r10,
         // Предсказанный log10(FLOPs): калибровка ~23.5 при r10≈0, растёт с reasoning
         // k ≈ 0.13: при r10=7 → ~25.5, при r10=10 → ~26.5, при r10=13 → ~27.5
-        flopsLog: 23.5 + 0.3 * r10
+        flopsLog: 23.5 + 0.3 * r10,
+        // log10(autonomous task hours). Калибровка: a10=0 → 0.5h, a10=5 → 6h, a10=10 → 74h, a10=13 → 443h
+        // (формула та же что в mapToObservables, но в log-шкале)
+        horizon: Math.log10(Math.min(365 * 24, 0.5 * Math.exp(0.5 * a10)))
     };
 }
 
@@ -1017,6 +1049,63 @@ function v3GetTracker() {
     v3Observations.forEach(d => v3Tracker.observeRealData(d.year, d));
   }
   return v3Tracker;
+}
+
+// Backtest: тренируемся на первых trainEnd точках, предсказываем trainEnd+1..K.
+// Возвращает: { residuals: [...], perDim: {sweBench: RMSE, arcAgi, arenaElo, flopsLog, horizon}, coverage90: %, nPred: K - trainEnd }
+function runBacktest(trainEnd, kPred) {
+  const data = REAL_BENCHMARK_HISTORY;
+  if (!data || data.length < trainEnd + kPred) {
+    return { error: 'Недостаточно данных для бэктеста (нужно trainEnd + kPred наблюдений)', dataLen: data ? data.length : 0 };
+  }
+  const trainData = data.slice(0, trainEnd);
+  const testData = data.slice(trainEnd, trainEnd + kPred);
+
+  const btTracker = new BayesianTracker(1000);
+  trainData.forEach(d => btTracker.observeRealData(d.year, d));
+
+  const residuals = [];
+  const dims = ['sweBench', 'arcAgi', 'arenaElo', 'flopsLog', 'horizon'];
+  const sqErr = { sweBench:0, arcAgi:0, arenaElo:0, flopsLog:0, horizon:0 };
+  const cnt = { sweBench:0, arcAgi:0, arenaElo:0, flopsLog:0, horizon:0 };
+  let inCI90 = 0, totalCIEval = 0;
+
+  for (let t = 0; t < testData.length; t++) {
+    const obs = testData[t];
+    const samples = [];
+    for (let i = 0; i < btTracker.n; i += 10) {
+      const pred = v3SimulateToYear(btTracker.particles[i], obs.year, btTracker.cfg);
+      const m = getNumericObservables(pred.reasoning, pred.agency, btTracker.cfg.EXPERT);
+      samples.push(m);
+    }
+    const medianSample = {};
+    for (const dim of dims) {
+      const vals = samples.map(s => s[dim]).filter(v => isFinite(v)).sort((a,b)=>a-b);
+      medianSample[dim] = vals.length > 0 ? vals[Math.floor(vals.length / 2)] : 0;
+      const p10 = vals.length > 0 ? vals[Math.floor(vals.length * 0.10)] : 0;
+      const p90 = vals.length > 0 ? vals[Math.floor(vals.length * 0.90)] : 0;
+      if (obs[dim] !== undefined) {
+        const err = obs[dim] - medianSample[dim];
+        sqErr[dim] += err * err;
+        cnt[dim]++;
+        if (obs[dim] >= p10 && obs[dim] <= p90) inCI90++;
+        totalCIEval++;
+      }
+    }
+    residuals.push({ year: obs.year, observed: obs, predicted: medianSample });
+  }
+  const perDim = {};
+  for (const dim of dims) {
+    perDim[dim] = cnt[dim] > 0 ? Math.sqrt(sqErr[dim] / cnt[dim]) : null;
+  }
+  return {
+    trainEnd, kPred,
+    trainYears: `${trainData[0].year}..${trainData[trainData.length-1].year}`,
+    testYears: `${testData[0].year}..${testData[testData.length-1].year}`,
+    residuals, perDim,
+    coverage90: totalCIEval > 0 ? (inCI90 / totalCIEval * 100) : null,
+    nPred: testData.length
+  };
 }
 
 // Обратная конвертация: бенчмарки → AA Intelligence/Agentic
@@ -2933,4 +3022,9 @@ function updateObsMetrics() {
 // v2026.05.30c: fix expertApplyAndRun worldSlider
 // v2026.05.30d: physics patches
 // v2026.05.30e: year-fix, deep-copy, noise-sensitivity, cleanup
+// v2026.06.01a: horizon in likelihood, larger jitter, governance shock, backtest utility
+
+// Глобальный экспорт для бэктеста из консоли:
+//   runBacktest(5, 3) → train on 5 points, predict next 3
+window.runBacktest = runBacktest;
 // v2026.05.30f: fix decomp RSI + paradigm algoLog reset
