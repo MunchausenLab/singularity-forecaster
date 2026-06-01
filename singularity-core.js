@@ -724,6 +724,9 @@ class BayesianTracker {
         algoK *= 0.6;
       }
       let paradigmGeneration = 0;
+      let dataExhaustionHit = false;
+      let isWinter = false;
+      let gpuBubbleBurst = false;
       const years = [], caps = [];
       for (let step = 0; step < steps; step++) {
         const y = cfg.BASE_YEAR + step * dt;
@@ -746,13 +749,33 @@ class BayesianTracker {
         caps.push(Math.min(reasoning, agency));
 
         let damping = 1.0;
-        if (y > cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
-          damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
+
+        // [PATCH] Shocks for scenario fan consistency with MC
+        if (!dataExhaustionHit && y > 2026.5 && Math.random() < 0.15 * dt) dataExhaustionHit = true;
+        if (!gpuBubbleBurst && y > 2027.0 && agency < 4.0 && Math.random() < cfg.EXPERT.bubbleBurstRisk * dt) {
+            gpuBubbleBurst = true;
+            flopsLog -= 0.5;
         }
+        if (!isWinter && y > 2026.5 && (reasoning - agency) > cfg.EXPERT.hypeGapThreshold && Math.random() < 0.10 * dt) {
+            isWinter = true;
+        }
+        if (isWinter) {
+            damping = cfg.EXPERT.winterDamping;
+            if (agency >= reasoning - 1.0) isWinter = false;
+        } else if (y > cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
+            damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
+        }
+
         const cap = Math.min(reasoning, agency);
         const rsi = v3CalculateRSI(reasoning, agency, cap, cfg.EXPERT);
-        flopsLog += hwK * damping * dt;
-        algoLog += (algoK * damping + rsi) * dt;
+
+        let currentAlgoK = algoK * damping;
+        if (dataExhaustionHit) currentAlgoK *= cfg.EXPERT.dataWallPenalty;
+        let currentHwK = hwK * damping;
+        if (gpuBubbleBurst) currentHwK *= 0.2;
+
+        flopsLog += currentHwK * dt;
+        algoLog += (currentAlgoK + rsi) * dt;
       }
       scenarios.push({ years, caps });
     }
@@ -804,6 +827,7 @@ class BayesianTracker {
     // Blend: hard_wall caps agency at 5.5, slow_takeoff reduces algoK
     if (hardWallWeight > 0.5) cA = Math.min(cA, 5.5);
     const algoKMultiplier = slowTakeoffWeight > 0.5 ? 0.6 : 1.0;
+    let paradigmGeneration = 0;
     for (let step = 0; step < steps; step++) {
       const y = cfg.BASE_YEAR + step * dt;
       let paradigmBonus = 0;
@@ -820,7 +844,8 @@ class BayesianTracker {
       if (y > cfg.CURRENT_YEAR && saturation > cfg.EXPERT.saturationThreshold && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
         cA *= cfg.SCALING_LAW.shift_multiplier;
         cR *= cfg.SCALING_LAW.shift_multiplier;
-        algoLog -= 0.5;
+        algoLog = Math.max(algoLog - (0.4 + paradigmGeneration * 0.1), -3.0);
+        paradigmGeneration++;
         paradigmBonus = cfg.SCALING_LAW.shift_multiplier;
         accumulatedParadigm += paradigmBonus;
       }
@@ -981,7 +1006,7 @@ function getNumericObservables(r10, a10, expertCfg) {
         arenaElo: 800 + 70 * r10,
         // Предсказанный log10(FLOPs): калибровка ~23.5 при r10≈0, растёт с reasoning
         // k ≈ 0.13: при r10=7 → ~25.5, при r10=10 → ~26.5, при r10=13 → ~27.5
-        flopsLog: 23.5 + 0.13 * r10 * 10
+        flopsLog: 23.5 + 0.3 * r10
     };
 }
 
@@ -2822,84 +2847,49 @@ function expertWorldSlider() {
 }
 
 function expertResetDefaults() {
-  // Reset to defaults from single source of truth
+  // 1. Reset to defaults from single source of truth
   Object.assign(EXPERT_CONFIG, JSON.parse(JSON.stringify(DEFAULT_EXPERT_CONFIG)));
-  // Обновить все UI элементы
-  const fields = [
-    'ceilingReasoningBase', 'hypeGracePeriod', 'saturationThreshold', 'overhangShiftMultiplier',
-    'baseShiftMultiplier', 'paradigmDecayRate', 'minShiftMultiplier',
-    'rsiMultiplier', 'rsiTriggerReasoning', 'rsiTriggerAgency', 'hwCoDesignBonus',
-    'coordinationFriction', 'maxPhysicalHwGrowth', 'bubbleBurstRisk',
-    'alignmentCooldown', 'maxCapitalMultiplier',
-    'priorAgencyMean', 'priorAgencyStd', 'toolUseVsAutonomyWeight',
-    'maxInferenceBonusReasoning', 'maxInferenceBonusAgency', 'inferenceSaturationCap',
-    'reasoningScalingSlope', 'agencyScalingSlope', 'dataWallPenalty',
-    'hypeGapThreshold', 'winterDamping', 'observationNoiseSigma',
-    't1Threshold', 't2Threshold', 't3Threshold', 't4Threshold',
-    'barrierAtomsLimit', 'barrierEnergyLog', 'barrierGeopoliticsRisk', 'barrierNashFriction', 'barrierDemandGrace'
-  ];
-  const formats = {
-    ceilingReasoningBase: v => v.toFixed(1),
-    hypeGracePeriod: v => v.toFixed(1),
-    saturationThreshold: v => v.toFixed(2),
-    overhangShiftMultiplier: v => v.toFixed(2),
-    baseShiftMultiplier: v => v.toFixed(1),
-    paradigmDecayRate: v => v.toFixed(1),
-    minShiftMultiplier: v => v.toFixed(2),
-    rsiMultiplier: v => v.toFixed(1),
-    rsiTriggerReasoning: v => v.toFixed(1),
-    rsiTriggerAgency: v => v.toFixed(1),
-    hwCoDesignBonus: v => v.toFixed(1),
-    coordinationFriction: v => v.toFixed(2),
-    maxPhysicalHwGrowth: v => v.toFixed(1),
-    bubbleBurstRisk: v => v.toFixed(2),
-    alignmentCooldown: v => v.toFixed(1),
-    maxCapitalMultiplier: v => v.toFixed(1),
-    priorAgencyMean: v => v.toFixed(1),
-    priorAgencyStd: v => v.toFixed(1),
-    toolUseVsAutonomyWeight: v => v.toFixed(2),
-    maxInferenceBonusReasoning: v => v.toFixed(2),
-    maxInferenceBonusAgency: v => v.toFixed(2),
-    inferenceSaturationCap: v => v.toFixed(1),
-    reasoningScalingSlope: v => v.toFixed(2),
-    agencyScalingSlope: v => v.toFixed(2),
-    dataWallPenalty: v => v.toFixed(2),
-    hypeGapThreshold: v => v.toFixed(1),
-    winterDamping: v => v.toFixed(2),
-    observationNoiseSigma: v => v.toFixed(2),
-    t1Threshold: v => v.toFixed(1),
-    t2Threshold: v => v.toFixed(1),
-    t3Threshold: v => v.toFixed(1),
-    t4Threshold: v => v.toFixed(1),
-    barrierAtomsLimit: v => v.toFixed(2),
-    barrierEnergyLog: v => v.toFixed(1),
-    barrierGeopoliticsRisk: v => v.toFixed(2),
-    barrierNashFriction: v => v.toFixed(2),
-    barrierDemandGrace: v => v.toFixed(1)
-  };
-  for (const f of fields) {
-    document.getElementById('e-' + f).value = DEFAULT_EXPERT_CONFIG[f];
-    document.getElementById('ev-' + f).textContent = formats[f](DEFAULT_EXPERT_CONFIG[f]);
+
+  // 2. Dynamically update all inputs and labels from config
+  for (const [key, val] of Object.entries(DEFAULT_EXPERT_CONFIG)) {
+    const inputEl = document.getElementById('e-' + key);
+    const valEl = document.getElementById('ev-' + key);
+    if (inputEl) inputEl.value = val;
+    if (valEl) {
+      if (typeof val === 'number') {
+        valEl.textContent = (val % 1 === 0) ? val.toFixed(1) : val.toFixed(2);
+      } else {
+        valEl.textContent = val;
+      }
+    }
   }
-  document.getElementById('e-world-cascade').value = 60;
-  document.getElementById('e-world-hardWall').value = 25;
-  document.getElementById('e-world-slowTakeoff').value = 15;
-  document.getElementById('ew-cascade').textContent = '60%';
-  document.getElementById('ew-hardWall').textContent = '25%';
-  document.getElementById('ew-slowTakeoff').textContent = '15%';
-  document.getElementById('expertWorldError').style.display = 'none';
-  // Reset simulation parameters
-  document.getElementById('e-rN').value = 3000;
-  document.getElementById('ev-rN').textContent = '3000';
-  document.getElementById('rN').value = 3000;
-  document.getElementById('e-v3ARC').value = 52;
-  document.getElementById('ev-v3ARC').textContent = '52';
-  document.getElementById('v3ARC').value = 52;
-  document.getElementById('e-v3Horizon').value = 18.3;
-  document.getElementById('ev-v3Horizon').textContent = '18.3';
-  document.getElementById('v3Horizon').value = 18.3;
-  document.getElementById('e-toolUseVsAutonomyWeight').value = 0.60;
-  document.getElementById('ev-toolUseVsAutonomyWeight').textContent = '0.60';
+
+  // 3. World Models percentages (sum to 100%)
+  const wmCascade = Math.round(DEFAULT_EXPERT_CONFIG.worldModels.cascade * 100) || 60;
+  const wmHardWall = Math.round(DEFAULT_EXPERT_CONFIG.worldModels.hardWall * 100) || 25;
+  const wmSlowTakeoff = Math.round(DEFAULT_EXPERT_CONFIG.worldModels.slowTakeoff * 100) || 15;
+  if (document.getElementById('e-world-cascade')) {
+    document.getElementById('e-world-cascade').value = wmCascade;
+    document.getElementById('e-world-hardWall').value = wmHardWall;
+    document.getElementById('e-world-slowTakeoff').value = wmSlowTakeoff;
+    document.getElementById('ew-cascade').textContent = wmCascade + '%';
+    document.getElementById('ew-hardWall').textContent = wmHardWall + '%';
+    document.getElementById('ew-slowTakeoff').textContent = wmSlowTakeoff + '%';
+  }
+  const err = document.getElementById('expertWorldError');
+  if (err) err.style.display = 'none';
+
+  // 4. Reset simulation UI inputs (outside EXPERT_CONFIG)
+  const simIds = ['rN', 'v3ARC', 'v3Horizon'];
+  const simDefs = [3000, 52, 18.3];
+  simIds.forEach((id, i) => {
+    const inputExpert = document.getElementById('e-' + id);
+    const inputMain = document.getElementById(id);
+    const valLabel = document.getElementById('ev-' + id);
+    if (inputExpert) inputExpert.value = simDefs[i];
+    if (inputMain) inputMain.value = simDefs[i];
+    if (valLabel) valLabel.textContent = simDefs[i];
+  });
 }
 
 function expertApplyAndRun() {
