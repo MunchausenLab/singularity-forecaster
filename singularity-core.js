@@ -165,7 +165,7 @@ function v3CalculateRSI(reasoning, agency, cap, expertCfg) {
 
 function v3SimulateToYear(particle, targetYear, cfg) {
   const dt = 1.0 / 12.0;
-  const steps = Math.max(1, Math.floor((targetYear - cfg.BASE_YEAR) * 12));
+  const steps = Math.max(0, Math.floor((targetYear - cfg.BASE_YEAR) * 12));
   let flopsLog = cfg.BASE_LOG_FLOPS;
   let algoLog = 0; 
   const baseLog = flopsLog;
@@ -1144,13 +1144,8 @@ async function runSimulation() {
     for (let y = 11; y <= 40; y++) yq.push(y);
     const yqAbs = yq.map(y => +(CUR_Y + y).toFixed(2));
 
-    const dummySensitivity = {
-        base: percentile(finite, 50),
-        variations: { info: { label: LANG[window._lang||'ru'].v3_variations_label || '(v3: Дисперсия в облаке частиц)', agiMedian: percentile(finite, 50) } }
-    };
-
     currentResults = {
-      histogram: buildHistogramBins(t1List, t2List, t3List, t4List), 
+      histogram: buildHistogramBins(t1List, t2List, t3List, t4List),
       trajectory: runData.trajectory, 
       cumulative: { 
         x: yqAbs, 
@@ -1167,7 +1162,6 @@ async function runSimulation() {
         pAgi2029: cdf(t2List, 3), pAgi2033: cdf(t2List, 7), pAgi2040: cdf(t2List, 14),
         pAsi2035: cdf(t4List, 9), pAsi2045: cdf(t4List, 19), nRuns: n
       },
-      sensitivity: dummySensitivity,
     };
     updateUI(currentResults);
     if (typeof liveSwarm !== 'undefined') liveSwarm.tracker = tracker;
@@ -1199,7 +1193,6 @@ function updateUI(r) {
 }
 
 function setVal(id, txt, cls) { const el = document.getElementById(id); if (el) { el.innerHTML = txt; el.className = 'status-value ' + (cls||''); } }
-function colorProb(id, val) { const el = document.getElementById(id); el.classList.remove('green','orange','red'); el.classList.add(val > 50 ? 'green' : val > 10 ? 'orange' : 'red'); }
 function yearsText(yrs) {
   if (!isFinite(yrs) || yrs > 40) return LANG[window._lang||'ru'].fY_gt;
   return yrs.toFixed(1) + LANG[window._lang||'ru'].fY_suffix;
@@ -1429,7 +1422,6 @@ const LANG = {
     expert_cat3:'Экономика и Риски',
     expert_cat4:'Эпистемология (World Models)',
     expert_cat5:'Априорные допущения',
-    expert_cat7:'Симуляции и Бенчмарки',
     expert_p_ceilingReasoningBase:'Потолок Трансформеров',
     expert_d_ceilingReasoningBase:'Когда текущая архитектура упрется в стену',
     expert_p_hypeGracePeriod:'Венчурный хайп (лет)',
@@ -1515,8 +1507,6 @@ const LANG = {
     expert_d_winterDamping:'Множитель инвестиций и алгоритмов в Зиму ИИ',
     expert_p_observationNoiseSigma:'Шум наблюдений (σ)',
     expert_d_observationNoiseSigma:'Уровень доверия к бенчмаркам (меньше = строже фильтр)',
-    expert_p_t4Threshold:'Порог T4',
-    expert_d_t4Threshold:'Уровень capability для наступления T4 (Влияние)',
     expert_p_t1Threshold:'Порог T1',
     expert_d_t1Threshold:'Порог capability для T1 (Понимание)',
     expert_p_t2Threshold:'Порог T2',
@@ -1557,51 +1547,10 @@ const LANG = {
     forecast_overlay:'T2 \u2264', forecast_overlay_desc:'Показаны гипотезы с T2 до',
     live_swarm_title:'Симуляция в реальном времени', live_swarm_desc:'Каждые 0.25 сек рой перерисовывается из нового прогона Monte Carlo.',
     // Event Horizon
-    eh_title:'Визуализация: «Сфера Сингулярности»',
-    eh_desc:'Каждая частица — один прогон Monte Carlo. Вылетает из центра (2026) и застывает на орбите своего года T1/T2/T3/T4. Плотные кольца = высокая вероятность. Жёлтые орбиты = T1, оранжевые = T2, красные = T3, фиолетовые = T4.',
-
-    // Swarm Learning desc card
-    swarm_learn_p1:'Интерактивная визуализация байесовского обучения в реальном времени. Каждая точка — гипотеза о мире (частица): скорость роста железа <em>hw_months</em> и потолок агентности <em>agency_ceiling</em>.',
-    swarm_learn_p2:'<b>Режим «Обучение» (Learn):</b> ползунок прикладывает наблюдения AA одно за другим. При каждом наблюдении пересчитываются веса:',
-    swarm_learn_p3:'где R<sub>i</sub> и Ag<sub>i</sub> — предсказания частицы i на год наблюдения, σ — нешумящее правдоподобие. Частицы, чьи предсказания далеки от наблюдения, экспоненциально теряют вес.',
-    swarm_learn_p4:'<b>Режим «Прогноз» (Forecast):</b> все наблюдения применены. Ползунок фильтрует гипотезы по году T2 — показывая, какие частицы предсказывают T2 до выбранного года.',
-    swarm_learn_p5:'<b>Визуальный язык:</b> яркие области = высокая плотность весов; оранжевый круг = медиана роя; красный = текущее наблюдение. В режиме покой рой «дышит» — перестраивается из нового MC прогона каждые 0.25 сек.',
-    swarm_learn_p6:'<b>Что влияет:</b> количество и точность наблюдений AA, априорные допущения (priorAgencyMean/Std в Expert Sandbox), сам состав частиц.',
-    // Live Swarm desc card
-    live_swarm_p1:'Четыре параллельные симуляции — T1, T2, T3, T4 — обновляются каждые 0.25 сек из нового прогона Monte Carlo. Показывает «живой» posterior без необходимости нажимать «Запуск».',
-    live_swarm_p2:'<b>Точки:</b> каждая частица = один прогон <code>runMonteCarloForecast(500)</code>. Цвет кодирует год этапа: жёлтый = T1, оранжевый = T2, красный = T3, фиолетовый = T4. Прозрачность = вес частицы.',
-    live_swarm_p3:'<b>Формула:</b> для каждого из 500 прогонов моделируется траектория от BASE_YEAR (2023) до 2068 с месячным шагом. T1 = первый год, где <code>cap ≥ 8.0</code>. T2 = <code>cap ≥ 10.0</code>. T3 = <code>cap ≥ 25.0</code>. T4 = <code>cap ≥ 100.0</code>.',
-    live_swarm_p4:'Статистика справа: медиана, P10–P90, количество частиц. Обновляется в реальном времени — видна дисперсия posterior.',
-    live_swarm_p5:'<b>Что влияет:</b> текущий набор наблюдений, веса частиц, случайность MC прогона. Стабильность картинки ← уверенность модели. Хаотичность ← высокая неопределённость.',
-    // Histogram desc
-    hist_p1:'Результат 3000 прогонов Monte Carlo из апостериорного распределения. По оси X — год, по Y — количество прогонов, в которых T1/T2/T3/T4 достигнут в этот год.',
-    hist_p2:'<b>Ключевое уравнение:</b> каждый прогон выбирается из весов частиц (systematic resampling), затем симулируется полная траектория до 2068:',
-    hist_p3:'<b>Пик гистограммы</b> = наиболее вероятный год. Широкое распределение = высокая неопределённость. Бимодальность = два конкурирующих сценария (например, «быстрый прорыв» vs «стагнация»).',
-    hist_p4:'<b>Что сдвигает гистограмму:</b> новые наблюдения AA (через байесовское обновление весов), параметры Expert Sandbox (пороги RSI, парадигмы, потолки), количество частиц.',
-    // Cumulative desc
-    cum_p1:'Накопленная функция распределения: P(T2 ≤ X) и P(T4 ≤ X). Отвечает на вопрос «какова вероятность, что T2/T4 случится не позднее года X?»',
-    cum_p2:'<b>Вычисление:</b> из тех же 3000 прогонов. Для каждого года T:',
-    cum_p3:'<b>Ступенчатый подъём</b> = концентрация прогнозов в узком окне. <b>Плато</b> = затор (data wall, энергетика, регуляция). <b>Резкий скачок</b> = почти все частицы сходятся в одном сценарии.',
-    cum_p4:'<b>T4-кривая</b> всегда лежит правее T2 — T4 требует cap ≥ 100. Расстояние между кривыми = время между T2 и T4.',
-    cum_p5:'<b>Что влияет:</b> те же факторы, что и гистограмма. Кривые дополняют друг друга — гистограмма показывает «где пик», кумулятивная — «какова вероятность к году X».',
-    // Sensitivity desc
-    sens_p1:'Карта чувствительности: как прогноз зависит от последнего наблюдения Intelligence × Agentic. Ячейка (i,j) = медианный год T2 если последнее наблюдение = (Intel=i, Agentic=j).',
-    sens_p2:'<b>Вычисление:</b> для каждой пары (i,j) из сетки [40,45,...,85] × [10,20,...,100] выполняется <code>runSensitivityMatrix()</code> — берётся текущий tracker, клонируются частицы, заменяется последнее наблюдение на (i,j), запускается MC.',
-    sens_p3:'<b>Интерпретация цвета:</b> синий = ранний T2 (модель «верит» что мы близко); красный = поздний T2 (далеко). Градиенты показывают, какой параметр доминирует:',
-    sens_li1:'Вертикальный градиент → доминирует Intelligence',
-    sens_li2:'Горизонтальный градиент → доминирует Agency',
-    sens_li3:'Диагональный → оба параметра равноценны',
-    sens_p4:'<b>Что влияет:</b> текущий posterior (после всех наблюдений), архитектура модели (slope reasoning/agency, потолки). Смотрите — сдвиг на 1 пункт по какой оси сильнее всего сдвигает прогноз.',
-    // Fan desc
-    fan_p1:'30 случайных прогонов из posterior, наложенных полупрозрачно. Показывает разброс возможных путей capability от 2026 до 2050 года (логарифмическая шкала).',
-    fan_p2:'<b>Каждый прогон:</b> случайная частица (по весам) симулируется до 2050 с месячным шагом. На каждом шаге: paradigm shift, RSI, экономические бутылочные горлышки.',
-    fan_p3:'<b>Плотные пучки</b> = сценарии сходятся. <b>Разброс</b> = высокая неопределённость. <b>Горизонтальные линии cap=8, 10, 25, 100:</b> пороги T1, T2, T3, T4 соответственно.',
-    fan_p4:'<b>Что формирует веер:</b><br>• Ширина ← различие в hw_months, algo_months между частицами<br>• Наклон ← FLOPs-scaling (hwK и algoK)<br>• Изгибы ← paradigm shifts, RSI onset, экономические стены',
-    // Decomposition desc
-    decomp_p1:'Stacked area: разбивка суммарной capability на 4 компоненты. Показывает <em>что</em> движет прогрессом в каждый момент времени.',
-    decomp_p2:'<b>Компоненты:</b>',
-    decomp_p3:'Вычисляется через <code>runDecomposition()</code> — усреднение по всем частицам с весами. Переход от «железа» к «алгоритмам» к «RSI» = путь к сингулярности.',
-    // Event Horizon desc
+    eh_p1:'Анимированная визуализация распределения T2/T4. Каждая частица = один MC прогон. Вылетает из центра (2026) и застывает на орбите своего года T2/T4.',
+    eh_p2:'<b>Метафора:</b> плотные кольца = высокая вероятность (много частиц предсказывают AGI в этот год). Редкие точки = маловероятные сценарии.',
+    eh_p3:'<b>Механика:</b> при запуске частицы «взлетают» из центра с задержкой, пропорциональной году T2/T4. Цвета орбит кодируют стадии. Расстояние от центра = вес частицы.',
+    eh_p4:'<b>Что влияет:</b> распределение T2/T4 лет из posterior, случайность MC прогона. Симметричная сфера = один чёткий пик. Фрактальная структура = множество конкурирующих сценариев.',
     eh_p1_desc:'Анимированная визуализация распределения 4 этапов сингулярности. Каждая частица = один MC прогон. Вылетает из центра (2026) и застывает на орбите T1/T2/T3/T4.',
     eh_p2_desc:'<b>Метафора:</b> плотные кольца = высокая вероятность (много частиц предсказывают этап в этот год). Редкие точки = маловероятные сценарии.',
     eh_p3_desc:'<b>Механика:</b> при запуске частицы «взлетают» из центра с задержкой, пропорциональной году этапа. Жёлтые орбиты = T1, оранжевые = T2, красные = T3, фиолетовые = T4. Расстояние от центра = вес частицы.',
@@ -1610,6 +1559,7 @@ const LANG = {
     eh_play:'Запуск', eh_reset:'Сброс',
     eh_legend_t2:'достигнут', eh_legend_t4:'достигнут', eh_legend_flight:'в полёте',
     v3_variations_label:'(v4: Дисперсия в облаке частиц)',
+    v3_no_agi:'Ни одна частица не достигла T2 к 2068 — модель считает AGI маловероятным при текущих параметрах.',
     // Canvas / overlay hardcoded strings (Swarm learn mode)
     swarm_canvas_median:'Медиана роя', canvas_hw_doubling:'Удвоение HW (мес)',
     canvas_agency_ceiling:'Потолок Agency', canvas_observation:'Наблюдение',
@@ -1709,7 +1659,6 @@ const LANG = {
     expert_cat3:'Economy & Risks',
     expert_cat4:'Epistemology (World Models)',
     expert_cat5:'Philosophical Priors',
-    expert_cat7:'Simulation & Benchmarks',
     expert_p_ceilingReasoningBase:'Transformer Ceiling',
     expert_d_ceilingReasoningBase:'When current architecture hits a wall',
     expert_p_hypeGracePeriod:'Hype Grace Period (yrs)',
@@ -1795,8 +1744,6 @@ const LANG = {
     expert_d_winterDamping:'Investment and algorithm multiplier during AI Winter',
     expert_p_observationNoiseSigma:'Observation Noise (σ)',
     expert_d_observationNoiseSigma:'Trust level in benchmarks (lower = stricter filter)',
-    expert_p_t4Threshold:'T4 Threshold',
-    expert_d_t4Threshold:'Capability level for T4 (Influence)',
     expert_p_t1Threshold:'T1 Threshold',
     expert_d_t1Threshold:'Capability threshold for T1 (Understanding)',
     expert_p_t2Threshold:'T2 Threshold',
@@ -1882,6 +1829,10 @@ const LANG = {
     decomp_p2:'<b>Components:</b>',
     decomp_p3:'Computed via <code>runDecomposition()</code> &mdash; averaging over all particles with weights. The transition from &quot;hardware&quot; to &quot;algorithms&quot; to &quot;RSI&quot; = the path to singularity.',
     // Event Horizon desc
+    eh_p1:'Animated visualization of the T2/T4 distribution. Each particle = one MC run. Flies from the center (2026) and freezes on the orbit of its T2/T4 year.',
+    eh_p2:'<b>Metaphor:</b> dense rings = high probability (many particles predict AGI in that year). Rare dots = unlikely scenarios.',
+    eh_p3:'<b>Mechanics:</b> on launch, particles &quot;take off&quot; from the center with a delay proportional to their T2/T4 year. Orbit colors encode the stages. Distance from center = particle weight.',
+    eh_p4:'<b>What affects it:</b> T2/T4 year distribution from posterior, MC run randomness. Symmetric sphere = one clear peak. Fractal structure = many competing scenarios.',
     eh_p1_desc:'Animated visualization of the 4 singularity stages distribution. Each particle = one MC run. Flies from center (2026) and freezes at its T1/T2/T3/T4 year orbit.',
     eh_p2_desc:'<b>Metaphor:</b> dense rings = high probability (many particles predict a stage in that year). Rare dots = unlikely scenarios.',
     eh_p3_desc:'<b>Mechanics:</b> on launch, particles &quot;take off&quot; from the center with a delay proportional to stage year. Yellow orbits = T1, orange = T2, red = T3, purple = T4. Distance from center = particle weight.',
@@ -1890,6 +1841,7 @@ const LANG = {
     eh_play:'Play', eh_reset:'Reset',
     eh_legend_t2:'reached', eh_legend_t4:'reached', eh_legend_flight:'in flight',
     v3_variations_label:'(v4: Variance in particle cloud)',
+    v3_no_agi:'No particle reached T2 by 2068 &mdash; the model considers AGI unlikely with the current parameters.',
     // Canvas / overlay hardcoded strings (Swarm learn mode)
     swarm_canvas_median:'Swarm Median', canvas_hw_doubling:'HW Doubling (mo)',
     canvas_agency_ceiling:'Agency Ceiling', canvas_observation:'Observation',
