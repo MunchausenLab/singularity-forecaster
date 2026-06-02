@@ -159,25 +159,17 @@ function v3ApplyInference(rawCap, maxBonus, satCap) {
   return rawCap * (1.0 + bonus);
 }
 
-function v3CalculateRSI(reasoning, agency, cap, expertCfg) {
-  // 1. Непрерывная активация (S-кривая). 
-  // Мы сдвигаем центр сигмоиды на -2.0 пункта от порогов в UI.
-  // Это значит, что при пороге 8.0, модели уровня 6.0 (сегодняшний фронтир) 
-  // уже имеют 50% активации от своего текущего (небольшого) потенциала.
-  const actR = sigmoid(1.2 * (reasoning - (expertCfg.rsiTriggerReasoning - 2.0)));
-  const actA = sigmoid(1.2 * (agency - (expertCfg.rsiTriggerAgency - 2.0)));
-  const rsiActivation = actR * actA;
+function v3CalculateRSI(S, C, expertCfg) {
+  // 1. Активация на базе Науки и Координации
+  const actS = sigmoid(1.2 * (S - (expertCfg.rsiTriggerReasoning - 2.0)));
+  const actC = sigmoid(1.2 * (C - (expertCfg.rsiTriggerAgency - 2.0)));
+  const rsiActivation = actS * actC;
 
-  // 2. Базовый потенциал растет экспоненциально от общего интеллекта (cap).
-  // При cap=6 (код-ассистенты) baseRsi ~ 0.22
-  // При cap=10 (AGI) baseRsi ~ 0.47
-  const baseRsi = 0.015 * Math.pow(Math.max(0, cap), 1.5) * expertCfg.rsiMultiplier;
+  // 2. Базовый потенциал рекурсивного улучшения растёт от Науки (S)
+  const baseRsi = 0.015 * Math.pow(Math.max(0, S), 1.5) * expertCfg.rsiMultiplier;
 
-  // 3. Координационное трение (замедление при развертывании миллиардов агентов)
-  const friction = 1.0 / (1.0 + expertCfg.coordinationFriction * Math.max(0, cap - 10.0));
-
-  // Итоговый RSI плавно нарастает от ~0.05 сейчас до 2.0 в эпоху T4
-  return Math.min(2.0, baseRsi * rsiActivation * friction);
+  // 3. Координационное трение встроено в ось C, здесь просто произведение
+  return Math.min(2.0, baseRsi * rsiActivation);
 }
 
 function v3SimulateToYear(particle, targetYear, cfg) {
@@ -222,19 +214,26 @@ function v3SimulateToYear(particle, targetYear, cfg) {
     // World Modeling: каузальное понимание мира (медленнее логики)
     let rawWM = v3ComputeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, ceilingR);
 
-    let reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
-    let agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
-    let embodiment = v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
-    let worldModeling = v3ApplyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap);
-    // Базовый софтверный capability зависит только от логики и автономности.
-    // Embodiment потребуется только для T4.
-    const cap = Math.min(reasoning, agency);
+    const R = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
+    const A = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
+    const E = v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
+    const W = v3ApplyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap);
 
-    // Deterministic paradigm shift (same logic as MC, but no randomness — threshold-based)
+    // Слой 2. Производные цивилизационные способности
+    const C = Math.sqrt(A * W) * Math.max(0, 1.0 - cfg.EXPERT.coordinationFriction);
+    const S = Math.pow(R, 0.4) * Math.pow(W, 0.4) * Math.pow(A, 0.2);
+    const M = Math.sqrt(E * C);
+
+    // Новые метрики Capability
+    const softCap = Math.cbrt(R * A * W);
+    const civCap = Math.pow(R * A * W * E * C * M, 1 / 6);
+    const cap = softCap; // fallback для T1-T3 и барьеров
+
+    // Deterministic paradigm shift: наука драйвит архитектуры
     const canShift = (paradigmGeneration === 0 && currentYear > 2026.5)
                    || (paradigmGeneration > 0 && currentYear > lastShiftYear + 4.0);
     if (canShift) {
-      const saturation = Math.max(reasoning / ceilingR, agency / ceilingA);
+      const saturation = S / ceilingR; // Наука упирается в текущий архитектурный потолок
       if (saturation > cfg.EXPERT.saturationThreshold) {
         paradigmGeneration++;
         lastShiftYear = currentYear;
@@ -265,7 +264,7 @@ function v3SimulateToYear(particle, targetYear, cfg) {
     // Economic bottleneck
     let damping = 1.0;
     if (currentYear > cfg.BOTTLENECKS.econ_wall_start) {
-      const gap = reasoning - agency;
+      const gap = R - A;
       if (gap > 2.0) damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (gap - 2.0));
     }
 
@@ -277,7 +276,7 @@ function v3SimulateToYear(particle, targetYear, cfg) {
 
     // --- EMBODIMENT BYPASS: при высоком embodiment ИИ строит свои дата-центры ---
     // Детерминированная аппроксимация: sigmoid активности bypass; умножаем HW-рост на бонус
-    const bypassActivation = sigmoid(1.5 * (embodiment - cfg.EXPERT.embodimentBypassThreshold));
+    const bypassActivation = sigmoid(1.5 * (E - cfg.EXPERT.embodimentBypassThreshold));
     const hwBonus = 1.0 + bypassActivation * (cfg.EXPERT.embodimentHWBonusMultiplier - 1.0);
 
     // --- БАРЬЕР 3: Геополитика (государственный шок после T2) ---
@@ -305,7 +304,7 @@ function v3SimulateToYear(particle, targetYear, cfg) {
     }
 
     // RSI (deterministic)
-    const rsi = v3CalculateRSI(reasoning, agency, cap, cfg.EXPERT);
+    const rsi = v3CalculateRSI(S, C, cfg.EXPERT);
 
     // [NEW] Проклятие атомов: жёсткий потолок удвоений/год (лог-единицы)
     let hwDelta = hwK * damping * nashDamping * demandDamping * hwBonus;
@@ -538,25 +537,29 @@ class BayesianTracker {
         const rawE = v3ComputeDim(0.5 * logDiff, this.cfg.EXPERT.embodimentScalingSlope, ceilingEmbodiment);
         const rawWM = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.worldModeling.slope, ceilingReasoning);
 
-        const reasoning = v3ApplyInference(rawR, this.cfg.INFERENCE_SCALING.max_bonus_reasoning, this.cfg.INFERENCE_SCALING.saturation_cap);
-        const agency = v3ApplyInference(rawA, this.cfg.INFERENCE_SCALING.max_bonus_agency, this.cfg.INFERENCE_SCALING.saturation_cap);
-        const embodiment = v3ApplyInference(rawE, this.cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, this.cfg.INFERENCE_SCALING.saturation_cap);
-        const worldModeling = v3ApplyInference(rawWM, 1.2, this.cfg.INFERENCE_SCALING.saturation_cap);
+        const R = v3ApplyInference(rawR, this.cfg.INFERENCE_SCALING.max_bonus_reasoning, this.cfg.INFERENCE_SCALING.saturation_cap);
+        const A = v3ApplyInference(rawA, this.cfg.INFERENCE_SCALING.max_bonus_agency, this.cfg.INFERENCE_SCALING.saturation_cap);
+        const E = v3ApplyInference(rawE, this.cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, this.cfg.INFERENCE_SCALING.saturation_cap);
+        const W = v3ApplyInference(rawWM, 1.2, this.cfg.INFERENCE_SCALING.saturation_cap);
 
-        const cap = Math.min(reasoning, agency);
+        const C = Math.sqrt(A * W) * Math.max(0, 1.0 - this.cfg.EXPERT.coordinationFriction);
+        const S = Math.pow(R, 0.4) * Math.pow(W, 0.4) * Math.pow(A, 0.2);
+        const M = Math.sqrt(E * C);
 
-        // Архитектурный каскад (множественные смены парадигм)
-        // Первая смена — не раньше 2026.5, последующие — не чаще раза в 4 года
+        const softCap = Math.cbrt(R * A * W);
+        const civCap = Math.pow(R * A * W * E * C * M, 1 / 6);
+        const cap = softCap;
+
+        // Архитектурный каскад
         const canShift = (paradigmGeneration === 0 && currentYear > 2026.5)
                        || (paradigmGeneration > 0 && currentYear > lastShiftYear + 4.0);
         if (canShift) {
-            // Насколько мы уперлись в текущий потолок? (от 0.0 до 1.0+)
-            const saturation = Math.max(reasoning / ceilingReasoning, agency / ceilingAgency);
+            const saturation = S / ceilingReasoning; // Прорыв зависит от развития науки
 
             // Прорыв зависит от насыщения и от compute overhang (избыток капитал/вычисления)
             if (saturation > this.cfg.EXPERT.saturationThreshold) {
               // Вычисляем capitalMultiplier для compute overhang (полный расчёт ниже)
-              const _marketUtility = reasoning * 0.3 + agency * 0.7;
+              const _marketUtility = R * 0.3 + A * 0.7;
               const _investorExpectations = (currentYear - 2023.0) * 1.5;
               const _capMult = Math.max(0.1, Math.min(this.cfg.EXPERT.maxCapitalMultiplier,
                   _marketUtility / Math.max(1.0, _investorExpectations)));
@@ -621,12 +624,12 @@ class BayesianTracker {
         }
 
         // Шок 2: Инцидент безопасности / Регуляторный бан (Alignment Incident)
-        if (alignmentIncidentCooldown <= 0 && agency > 6.0 && Math.random() < (agency * 0.01) * dt) {
+        if (alignmentIncidentCooldown <= 0 && A > 6.0 && Math.random() < (A * 0.01) * dt) {
           alignmentIncidentCooldown = this.cfg.EXPERT.alignmentCooldown;
         }
 
         // Шок 3: Схлопывание GPU-пузыря
-        if (!gpuBubbleBurst && currentYear > 2027.0 && agency < 4.0 && Math.random() < this.cfg.EXPERT.bubbleBurstRisk * dt) {
+        if (!gpuBubbleBurst && currentYear > 2027.0 && A < 4.0 && Math.random() < this.cfg.EXPERT.bubbleBurstRisk * dt) {
           gpuBubbleBurst = true;
           flopsLog -= 0.5; // Списание устаревших капитальных вложений / банкротства
         }
@@ -667,9 +670,9 @@ class BayesianTracker {
         if (currentYear >= this.cfg.CURRENT_YEAR && plotIdx < plotSteps) {
             trajYears[plotIdx] = currentYear;
             trajCaps[plotIdx].push(cap);
-            trajEmbodiment[plotIdx].push(embodiment);
-            trajReasoning[plotIdx].push(reasoning);
-            trajWM[plotIdx].push(worldModeling);
+            trajEmbodiment[plotIdx].push(E);
+            trajReasoning[plotIdx].push(R);
+            trajWM[plotIdx].push(W);
             plotIdx++;
         }
         
@@ -677,17 +680,17 @@ class BayesianTracker {
                 if (yT1 === null && cap >= this.cfg.THRESHOLDS.t1) yT1 = currentYear;
                 if (yT2 === null && cap >= this.cfg.THRESHOLDS.t2) yT2 = currentYear;
                 if (yT3 === null && cap >= this.cfg.THRESHOLDS.t3) yT3 = currentYear;
-                // T4 требует не только cap >= 100, но и embodiment >= embodimentT4Requirement (контроль атомов)
-                if (yT4 === null && cap >= this.cfg.THRESHOLDS.t4 && embodiment >= this.cfg.EXPERT.embodimentT4Requirement) {
+                // T4 теперь оценивается по civCap, включающему C, M и E
+                if (yT4 === null && civCap >= this.cfg.THRESHOLDS.t4) {
                     yT4 = currentYear;
-                    break; // Останавливаем симуляцию на фазовом переходе
+                    break;
                 }
         
         // [FIX] Строка `let damping = 1.0;` отсюда удалена, т.к. переменная объявлена выше
 
         // Проверка на лопнувший пузырь (AI Winter)
         if (!isWinter && currentYear > 2026.5) {
-          const hypeGap = reasoning - agency;
+          const hypeGap = R - A;
           if (hypeGap > this.cfg.EXPERT.hypeGapThreshold && Math.random() < 0.10 * dt) {
             isWinter = true;
           }
@@ -697,23 +700,23 @@ class BayesianTracker {
           // Зима ИИ: инвестиции в железо падают, алгоритмы развиваются медленнее
           damping = this.cfg.EXPERT.winterDamping;
           // Выход из зимы: если RSI дотянет agency до reasoning
-          if (agency >= reasoning - 1.0) {
+          if (A >= R - 1.0) {
             isWinter = false;
           }
         } else {
           // Мягкое экономическое горлышко (оригинальный код)
-          if (currentYear > this.cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
-            damping *= Math.exp(-this.cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
+          if (currentYear > this.cfg.BOTTLENECKS.econ_wall_start && (R - A) > 2.0) {
+            damping *= Math.exp(-this.cfg.BOTTLENECKS.econ_damping * (R - A - 2.0));
           }
         }
 
         // Единый расчет RSI
-        const rsi = v3CalculateRSI(reasoning, agency, cap, this.cfg.EXPERT);
+        const rsi = v3CalculateRSI(S, C, this.cfg.EXPERT);
         
         // dataExhaustionHit обрабатывается ниже в currentAlgoK
         // Экономика исследований: динамический hwK зависит от ROI
         // capitalMultiplier уже вычислен выше для compute overhang — переиспользуем логику
-        const marketUtility = reasoning * 0.3 + agency * 0.7;
+        const marketUtility = R * 0.3 + A * 0.7;
         const investorExpectations = (currentYear - 2023.0) * 1.5;
         let capitalMultiplier = Math.max(0.1, Math.min(this.cfg.EXPERT.maxCapitalMultiplier,
             marketUtility / Math.max(1.0, investorExpectations)));
@@ -723,7 +726,7 @@ class BayesianTracker {
         }
         // Hardware co-design: непрерывное внедрение ИИ в EDA (проектирование чипов).
         // Центр сигмоиды настраиваем на reasoning=7.5 (модели уровня o1/GPT-5).
-        const hwAct = sigmoid(1.0 * (reasoning - 7.5)) * sigmoid(1.0 * (agency - 5.0));
+        const hwAct = sigmoid(1.0 * (R - 7.5)) * sigmoid(1.0 * (A - 5.0));
         let hardwareCoDesign = 1.0 + (this.cfg.EXPERT.hwCoDesignBonus - 1.0) * hwAct;
         let dynamicHwK = hwK * capitalMultiplier * hardwareCoDesign * damping * nashDamping * demandDamping;
         if (gpuBubbleBurst) dynamicHwK *= 0.2;
@@ -882,19 +885,25 @@ class BayesianTracker {
         const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
         const rawE = v3ComputeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, cE);
 
-        const reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
-        const agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
-        const embodiment = v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
+        const rawWM = v3ComputeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, cR);
+        const R = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
+        const A = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
+        const E = v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
+        const W = v3ApplyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap);
 
-        const cap = Math.min(reasoning, agency);
+        const C = Math.sqrt(A * W) * Math.max(0, 1.0 - cfg.EXPERT.coordinationFriction);
+        const S = Math.pow(R, 0.4) * Math.pow(W, 0.4) * Math.pow(A, 0.2);
+        const M = Math.sqrt(E * C);
+
+        const cap = Math.cbrt(R * A * W);
 
         // [PATCH Bug 4] Парадигмальные сдвиги + Hype Overhang
         const canShift = (paradigmGeneration === 0 && y > 2026.5)
                        || (paradigmGeneration > 0 && y > lastShiftYear + 4.0);
         if (canShift) {
-            const saturation = Math.max(reasoning / cR, agency / cA);
+            const saturation = S / cR;
             if (saturation > cfg.EXPERT.saturationThreshold) {
-              const _marketUtility = reasoning * 0.3 + agency * 0.7;
+              const _marketUtility = R * 0.3 + A * 0.7;
               const _investorExpectations = (y - 2023.0) * 1.5;
               const _capMult = Math.max(0.1, Math.min(cfg.EXPERT.maxCapitalMultiplier, _marketUtility / Math.max(1.0, _investorExpectations)));
               const _hypeMult = (paradigmGeneration > 0 && hypeGracePeriod > 0) ? Math.max(_capMult, 2.0) : _capMult;
@@ -929,16 +938,16 @@ class BayesianTracker {
         }
 
         years.push(y);
-        caps.push(Math.min(reasoning, agency)); // [FIX] Базовый интеллект не ограничивается embodiment
+        caps.push(Math.min(R, A)); // [FIX] Базовый интеллект не ограничивается embodiment
 
         // --- ДИНАМИЧЕСКИЕ ШОКИ И БАРЬЕРЫ ---
         if (!dataExhaustionHit && y > 2026.5 && Math.random() < 0.15 * dt) dataExhaustionHit = true;
 
-        if (alignmentIncidentCooldown <= 0 && agency > 6.0 && Math.random() < (agency * 0.01) * dt) {
+        if (alignmentIncidentCooldown <= 0 && A > 6.0 && Math.random() < (A * 0.01) * dt) {
           alignmentIncidentCooldown = cfg.EXPERT.alignmentCooldown;
         }
 
-        if (!gpuBubbleBurst && y > 2027.0 && agency < 4.0 && Math.random() < cfg.EXPERT.bubbleBurstRisk * dt) {
+        if (!gpuBubbleBurst && y > 2027.0 && A < 4.0 && Math.random() < cfg.EXPERT.bubbleBurstRisk * dt) {
             gpuBubbleBurst = true;
             flopsLog -= 0.5;
         }
@@ -987,7 +996,7 @@ class BayesianTracker {
         }
 
         if (!isWinter && y > 2026.5) {
-          const hypeGap = reasoning - agency;
+          const hypeGap = R - A;
           if (hypeGap > cfg.EXPERT.hypeGapThreshold && Math.random() < 0.10 * dt) {
             isWinter = true;
           }
@@ -995,27 +1004,27 @@ class BayesianTracker {
 
         if (isWinter) {
           damping *= cfg.EXPERT.winterDamping;
-          if (agency >= reasoning - 1.0) isWinter = false;
+          if (A >= R - 1.0) isWinter = false;
         } else {
-          if (y > cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
-            damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
+          if (y > cfg.BOTTLENECKS.econ_wall_start && (R - A) > 2.0) {
+            damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (R - A - 2.0));
           }
         }
 
-        const rsi = v3CalculateRSI(reasoning, agency, cap, cfg.EXPERT);
+        const rsi = v3CalculateRSI(S, C, cfg.EXPERT);
 
         // HW с притоком капитала (синхронизация с MC)
-        const marketUtility = reasoning * 0.3 + agency * 0.7;
+        const marketUtility = R * 0.3 + A * 0.7;
         const investorExpectations = (y - 2023.0) * 1.5;
         let capitalMultiplier = Math.max(0.1, Math.min(cfg.EXPERT.maxCapitalMultiplier, marketUtility / Math.max(1.0, investorExpectations)));
         if (paradigmGeneration > 0 && hypeGracePeriod > 0) {
           capitalMultiplier = Math.max(capitalMultiplier, 2.0);
         }
 
-        const hwAct = sigmoid(1.0 * (reasoning - 7.5)) * sigmoid(1.0 * (agency - 5.0));
+        const hwAct = sigmoid(1.0 * (R - 7.5)) * sigmoid(1.0 * (A - 5.0));
         let hardwareCoDesign = 1.0 + (cfg.EXPERT.hwCoDesignBonus - 1.0) * hwAct;
 
-        const bypassActivation = sigmoid(1.5 * (embodiment - cfg.EXPERT.embodimentBypassThreshold));
+        const bypassActivation = sigmoid(1.5 * (E - cfg.EXPERT.embodimentBypassThreshold));
         const hwBonus = 1.0 + bypassActivation * (cfg.EXPERT.embodimentHWBonusMultiplier - 1.0);
 
         let currentHwK = hwK * capitalMultiplier * hardwareCoDesign * damping * nashDamping * demandDamping;
@@ -1103,13 +1112,20 @@ class BayesianTracker {
       const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
       const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
       const rawE = v3ComputeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, cE);
-      const reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
-      const agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
-      const embodiment = v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
-      const cap = Math.min(reasoning, agency);
+      const rawWM = v3ComputeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, cR);
+      const R = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
+      const A = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
+      const E = v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
+      const W = v3ApplyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap);
+
+      const C = Math.sqrt(A * W) * Math.max(0, 1.0 - cfg.EXPERT.coordinationFriction);
+      const S = Math.pow(R, 0.4) * Math.pow(W, 0.4) * Math.pow(A, 0.2);
+      const M = Math.sqrt(E * C);
+
+      const cap = Math.cbrt(R * A * W);
 
       // ИСПРАВЛЕНИЕ: Логика парадигм синхронизирована
-      const saturation = Math.max(reasoning / cR, agency / cA);
+      const saturation = S / cR;
       if (y > cfg.CURRENT_YEAR && saturation > cfg.EXPERT.saturationThreshold && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
         cA *= cfg.SCALING_LAW.shift_multiplier;
         cR *= cfg.SCALING_LAW.shift_multiplier;
@@ -1125,13 +1141,13 @@ class BayesianTracker {
       paradigmComp.push(accumulatedParadigm);
 
       let damping = 1.0;
-      if (y > cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
-        damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
+      if (y > cfg.BOTTLENECKS.econ_wall_start && (R - A) > 2.0) {
+        damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (R - A - 2.0));
       }
-      const rsi = v3CalculateRSI(reasoning, agency, cap, cfg.EXPERT);
+      const rsi = v3CalculateRSI(S, C, cfg.EXPERT);
       accumulatedRsi += rsi * dt;
       rsiComp.push(accumulatedRsi);
-      const bypassActivation = sigmoid(1.5 * (embodiment - cfg.EXPERT.embodimentBypassThreshold));
+      const bypassActivation = sigmoid(1.5 * (E - cfg.EXPERT.embodimentBypassThreshold));
       const hwBonus = 1.0 + bypassActivation * (cfg.EXPERT.embodimentHWBonusMultiplier - 1.0);
       // [NEW] Проклятие атомов + термодинамика
       let hwDelta = hwK * damping * hwBonus;
