@@ -3688,7 +3688,8 @@ function injectExpertPresets() {
     { id: 'pessimist', label: L.preset_pessimist || 'Технопессимизм',  color: '#ef4444' }
   ];
   
-  presets.forEach(p => {
+  // Insert preset buttons as first children (left side)
+  [...presets].reverse().forEach(p => {
     const btn = document.createElement('button');
     btn.textContent = p.label;
     btn.className = 'btn btn-sm';
@@ -3705,7 +3706,7 @@ function injectExpertPresets() {
     btn.onmouseout  = () => btn.style.background = 'rgba(22,22,32,0.8)';
     
     btn.onclick = () => applyExpertPreset(p.id);
-    actions.appendChild(btn);
+    actions.insertBefore(btn, actions.firstChild);
   });
 }
 
