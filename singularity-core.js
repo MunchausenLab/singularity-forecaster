@@ -2115,6 +2115,8 @@ const LANG = {
     live_swarm_stats_n:'N =',
     // Observable metrics warning
     v3_warning_far:'⚠️ Значения далеко от диапазона частиц — модель не может надёжно экстраполировать. Прогноз ближе к априорному.',
+    // Expert presets
+    preset_default:'Базовый (Байес)', preset_optimist:'Оптимист (Скейлинг)', preset_skeptic:'Скептик (Медленный старт)', preset_pessimist:'Пессимист (Стена)',
     // Data panel
     data_panel_year:'Год', data_panel_event:'Модель', data_panel_source:'Источники',
     data_panel_loading:'Данные загружаются...',
@@ -2435,6 +2437,8 @@ const LANG = {
     live_swarm_stats_n:'N =',
     // Observable metrics warning
     v3_warning_far:'Values far from particle range — model cannot reliably extrapolate. Forecast is closer to prior.',
+    // Expert presets
+    preset_default:'Default (Bayesian)', preset_optimist:'Optimist (Scaling)', preset_skeptic:'Skeptic (Slow Takeoff)', preset_pessimist:'Pessimist (Hard Wall)',
     // v3 params panel
     v3_params_title:'Simulation Parameters', v3_no_t4:'No T4 by 2068 in any particle',
     // Footer / misc
@@ -3260,6 +3264,7 @@ function eventHorizonReset() {
 // ===== SINGLE LOAD HANDLER (ordered initialization) =====
 window.addEventListener('load', async () => {
   setLang('ru');
+  injectExpertPresets();
 
   // Показываем оверлей загрузки
   const overlay = document.getElementById('overlay');
@@ -3389,34 +3394,27 @@ function expertWorldSlider() {
   }
 }
 
-function expertResetDefaults() {
-  // 1. Reset to defaults from single source of truth
-  Object.assign(EXPERT_CONFIG, JSON.parse(JSON.stringify(DEFAULT_EXPERT_CONFIG)));
-
-  // 2. Dynamically update all inputs and labels from config
-  for (const [key, val] of Object.entries(DEFAULT_EXPERT_CONFIG)) {
+// Универсальная синхронизация UI с текущим объектом EXPERT_CONFIG
+function syncExpertUIToConfig() {
+  for (const [key, val] of Object.entries(EXPERT_CONFIG)) {
+    if (key === 'worldModels') continue;
     const inputEl = document.getElementById('e-' + key);
     const valEl = document.getElementById('ev-' + key);
     if (inputEl) {
-      if (inputEl.tagName === 'SELECT') {
-        inputEl.value = val;
-      } else {
-        inputEl.value = val;
-      }
+      if (inputEl.tagName === 'SELECT') inputEl.value = val;
+      else inputEl.value = val;
     }
     if (valEl) {
-      if (typeof val === 'number') {
-        valEl.textContent = (val % 1 === 0) ? val.toFixed(1) : val.toFixed(2);
-      } else {
-        valEl.textContent = val;
-      }
+      valEl.textContent = (typeof val === 'number' && val % 1 !== 0) ? val.toFixed(2) : val;
     }
   }
 
-  // 3. World Models percentages (sum to 100%)
-  const wmCascade = Math.round(DEFAULT_EXPERT_CONFIG.worldModels.cascade * 100) || 60;
-  const wmHardWall = Math.round(DEFAULT_EXPERT_CONFIG.worldModels.hardWall * 100) || 25;
-  const wmSlowTakeoff = Math.round(DEFAULT_EXPERT_CONFIG.worldModels.slowTakeoff * 100) || 15;
+  // Обновляем ползунки World Models
+  const wms = EXPERT_CONFIG.worldModels;
+  const wmCascade = Math.round(wms.cascade * 100);
+  const wmHardWall = Math.round(wms.hardWall * 100);
+  const wmSlowTakeoff = Math.round(wms.slowTakeoff * 100);
+  
   if (document.getElementById('e-world-cascade')) {
     document.getElementById('e-world-cascade').value = wmCascade;
     document.getElementById('e-world-hardWall').value = wmHardWall;
@@ -3425,19 +3423,104 @@ function expertResetDefaults() {
     document.getElementById('ew-hardWall').textContent = wmHardWall + '%';
     document.getElementById('ew-slowTakeoff').textContent = wmSlowTakeoff + '%';
   }
+}
+
+// Применение конкретного сценария будущего
+function applyExpertPreset(type) {
+  // Сначала откатываемся к базе
+  Object.assign(EXPERT_CONFIG, JSON.parse(JSON.stringify(DEFAULT_EXPERT_CONFIG)));
+  
+  if (type === 'optimist') {
+    // OpenAI scale: быстрый RSI, долгий хайп, каскады сменяются легко
+    EXPERT_CONFIG.worldModels = { cascade: 0.80, hardWall: 0.10, slowTakeoff: 0.10 };
+    EXPERT_CONFIG.ceilingReasoningBase = 20.0;
+    EXPERT_CONFIG.rsiMultiplier = 1.5;
+    EXPERT_CONFIG.paradigmDecayRate = 0.2;
+    EXPERT_CONFIG.barrierAtomsLimit = 2.0;
+    EXPERT_CONFIG.hypeGracePeriod = 4.0;
+    EXPERT_CONFIG.priorAgencyMean = 12.0;
+  } else if (type === 'pessimist') {
+    // Зима ИИ: упираемся в стену, робототехника буксует, жесткое регулирование
+    EXPERT_CONFIG.worldModels = { cascade: 0.10, hardWall: 0.80, slowTakeoff: 0.10 };
+    EXPERT_CONFIG.ceilingReasoningBase = 10.0;
+    EXPERT_CONFIG.plateauHardWallCeiling = 4.0;
+    EXPERT_CONFIG.rsiMultiplier = 0.2;
+    EXPERT_CONFIG.barrierAtomsLimit = 0.5;
+    EXPERT_CONFIG.alignmentCooldown = 3.0;
+    EXPERT_CONFIG.priorAgencyMean = 4.0;
+  } else if (type === 'skeptic') {
+    // Нейросимволика: старт долгий, но первый сдвиг парадигмы дает огромный скачок
+    EXPERT_CONFIG.worldModels = { cascade: 0.10, hardWall: 0.10, slowTakeoff: 0.80 };
+    EXPERT_CONFIG.ceilingReasoningBase = 12.0;
+    EXPERT_CONFIG.baseShiftMultiplier = 5.0;
+    EXPERT_CONFIG.rsiMultiplier = 1.0;
+    EXPERT_CONFIG.barrierAtomsLimit = 0.8;
+    EXPERT_CONFIG.priorAgencyMean = 6.0;
+  } else if (type === 'default') {
+    // clean default already applied above
+  }
+  
+  syncExpertUIToConfig();
+  expertApplyAndRun();
+}
+
+function injectExpertPresets() {
+  const panel = document.getElementById('expertPanel');
+  if (!panel) return;
+  
+  // Создаем обертку для кнопок
+  const wrapper = document.createElement('div');
+  wrapper.style.display = 'flex';
+  wrapper.style.gap = '8px';
+  wrapper.style.flexWrap = 'wrap';
+  wrapper.style.marginBottom = '12px';
+  
+  const L = LANG[window._lang || 'ru'];
+  
+  const presets = [
+    { id: 'default', label: L.preset_default || 'Базовый', color: '#58a6ff' },
+    { id: 'optimist', label: L.preset_optimist || 'Оптимист', color: '#22c55e' },
+    { id: 'skeptic', label: L.preset_skeptic || 'Скептик', color: '#eab308' },
+    { id: 'pessimist', label: L.preset_pessimist || 'Пессимист', color: '#ef4444' }
+  ];
+  
+  presets.forEach(p => {
+    const btn = document.createElement('button');
+    btn.textContent = p.label;
+    btn.style.padding = '6px 12px';
+    btn.style.background = 'rgba(22, 22, 32, 0.8)';
+    btn.style.border = `1px solid ${p.color}`;
+    btn.style.color = p.color;
+    btn.style.borderRadius = '4px';
+    btn.style.cursor = 'pointer';
+    btn.style.fontSize = '0.75rem';
+    btn.style.fontFamily = 'var(--mono, monospace)';
+    btn.style.transition = 'background 0.2s';
+    
+    btn.onmouseover = () => btn.style.background = p.color + '33';
+    btn.onmouseout = () => btn.style.background = 'rgba(22, 22, 32, 0.8)';
+    
+    btn.onclick = () => applyExpertPreset(p.id);
+    wrapper.appendChild(btn);
+  });
+  
+  // Вставляем обертку ПЕРЕД панелью
+  panel.parentNode.insertBefore(wrapper, panel);
+}
+
+function expertResetDefaults() {
+  Object.assign(EXPERT_CONFIG, JSON.parse(JSON.stringify(DEFAULT_EXPERT_CONFIG)));
+  syncExpertUIToConfig();
+  
   const err = document.getElementById('expertWorldError');
   if (err) err.style.display = 'none';
 
-  // 4. Reset simulation UI inputs (outside EXPERT_CONFIG)
+  // Сброс базовых инпутов UI симуляции, которые вне EXPERT_CONFIG
   const simIds = ['rN', 'v3ARC', 'v3Horizon'];
   const simDefs = [3000, 52, 18.3];
   simIds.forEach((id, i) => {
-    const inputExpert = document.getElementById('e-' + id);
     const inputMain = document.getElementById(id);
-    const valLabel = document.getElementById('ev-' + id);
-    if (inputExpert) inputExpert.value = simDefs[i];
     if (inputMain) inputMain.value = simDefs[i];
-    if (valLabel) valLabel.textContent = simDefs[i];
   });
 }
 
