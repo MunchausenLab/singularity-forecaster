@@ -3276,19 +3276,21 @@ window.addEventListener('load', async () => {
   const overlay = document.getElementById('overlay');
   if (overlay) {
     overlay.classList.add('show');
-    document.getElementById('overlayText').textContent = 'Загрузка исторических бенчмарков...';
+    const textEl = document.getElementById('overlayText');
+    if (textEl) textEl.textContent = 'Загрузка исторических бенчмарков...';
   }
 
-  // Загружаем данные параллельно (не блокирует init)
-  // Fallback сработает внутри loadHistoricalBenchmarks если API недоступен
-  const dataLoadPromise = loadHistoricalBenchmarks();
+  // [FIX] Даём браузеру 50мс на отрисовку оверлея перед блокировкой потока
+  await new Promise(r => setTimeout(r, 50));
 
-  // Инициализируем UI и канвасы сразу (с fallback данными)
+  // [FIX] Обязательно ДОЖИДАЕМСЯ загрузки данных ПЕРЕД запуском симуляции!
+  await loadHistoricalBenchmarks();
+
+  // Инициализируем UI и канвасы (теперь REAL_BENCHMARK_HISTORY гарантированно заполнен)
   swarmInit();
   ehInitCanvas();
   ehDraw();
 
-  // Запускаем симуляцию (создаёт v3Tracker)
   const tracker = v3GetTracker();
   v3UpdateUI(tracker);
   renderDataPanel();
@@ -3299,13 +3301,8 @@ window.addEventListener('load', async () => {
     liveSwarmInit();
   }
 
-  if (overlay) overlay.classList.remove('show');
-  runSimulation();
-
-  // После загрузки данных — пересчитываем с реальными данными
-  await dataLoadPromise;
-  const tracker2 = v3GetTracker();
-  v3UpdateUI(tracker2);
+  // Запускаем симуляцию (она скроет оверлей по завершении)
+  await runSimulation();
 });
 
 function setLang(lang) {
