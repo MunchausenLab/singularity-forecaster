@@ -84,8 +84,233 @@ const EXPERT_CONFIG = {
 const DEFAULT_EXPERT_CONFIG = JSON.parse(JSON.stringify(EXPERT_CONFIG));
 
 // ============================================================================
-// v3.0 — BAYESIAN PARTICLE FILTER (Исправлено: Якорь на 2023 год + Inference)
+// 3. DATA & HISTORY (API & Fallbacks)
 // ============================================================================
+
+// DATA & OBSERVABLES (Dynamic Benchmark History)
+// ============================================================================
+
+// URL вашего JSON с актуальными бенчмарками (можно заменить на GitHub Raw или ваш API)
+const BENCHMARKS_API_URL = 'https://raw.githubusercontent.com/slavabelik79/ai-metrics/main/benchmarks_history.json';
+
+// Шум (дисперсия) для каждого бенчмарка. Отражает степень доверия к тесту.
+const BENCHMARK_SIGMAS = {
+  arenaElo: 40.0,    // Elo (LMSYS Chatbot Arena)
+  arcAgi: 8.0,       // ARC-AGI (%)
+  sweBench: 10.0,    // SWE-bench Verified (%)
+  flopsLog: 0.5,     // log10(FLOPs)
+  horizon: 0.5,      // log10(autonomous task hours)
+  simToReal: 5.0,    // % роботизированных задач, решаемых в реальном мире
+  moravec: 6.0,      // Балл Moravec (1-100, моторика+восприятие)
+  autoAssembly: 0.5  // log10(часы автономной сборки фабрики)
+};
+
+let REAL_BENCHMARK_HISTORY = [];
+
+// Фундаментальная база данных бенчмарков (Данные до 31 мая 2026 года)
+// Источники: LMSYS Leaderboard, SWE-bench Official, ARC Prize Reports, Epoch AI.
+const FALLBACK_BENCHMARK_HISTORY = [
+  // --- РАННЯЯ ЭПОХА (Пре-Агенты) ---
+  {
+    year: 2022.90, event: "ChatGPT (GPT-3.5)",
+    arenaElo: 1000, arcAgi: 3.0, sweBench: 0.0, trainingFlopsLog: 23.5, horizon: 0.5, simToReal: 0.0, moravec: 5.0, autoAssembly: 0.05,
+    arenaElo_sigma: 30, arcAgi_sigma: 5, sweBench_sigma: 0.5, trainingFlopsLog_sigma: 0.3, horizon_sigma: 0.3, simToReal_sigma: 0.5, moravec_sigma: 2, autoAssembly_sigma: 0.2,
+    notes: "LMSYS base Elo = 1000. Агентность нулевая."
+  },
+  {
+    year: 2023.25, event: "GPT-4 Release",
+    arenaElo: 1150, arcAgi: 12.0, sweBench: 0.1, trainingFlopsLog: 25.32, horizon: 1.0, simToReal: 0.0, moravec: 8.0, autoAssembly: 0.1,
+    arenaElo_sigma: 30, arcAgi_sigma: 6, sweBench_sigma: 1, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.3, simToReal_sigma: 0.5, moravec_sigma: 2, autoAssembly_sigma: 0.2,
+    notes: "Epoch AI: 2.1e25 FLOPs. Появление зачатков абстрактного рассуждения."
+  },
+  {
+    year: 2023.85, event: "GPT-4 Turbo",
+    arenaElo: 1250, arcAgi: 15.0, sweBench: 1.5, trainingFlopsLog: 25.4, horizon: 1.0, simToReal: 0.5, moravec: 10.0, autoAssembly: 0.1,
+    arenaElo_sigma: 25, arcAgi_sigma: 6, sweBench_sigma: 2, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.3, simToReal_sigma: 1, moravec_sigma: 3, autoAssembly_sigma: 0.2,
+    notes: "Слабый рост reasoning, улучшенное следование инструкциям."
+  },
+
+  // --- ЭПОХА ИНСТРУМЕНТОВ И TTC ---
+  {
+    year: 2024.20, event: "Claude 3 Opus",
+    arenaElo: 1255, arcAgi: 20.0, sweBench: 4.0, trainingFlopsLog: 25.5, horizon: 1.5, simToReal: 1.0, moravec: 12.0, autoAssembly: 0.2,
+    arenaElo_sigma: 25, arcAgi_sigma: 7, sweBench_sigma: 3, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.3, simToReal_sigma: 1, moravec_sigma: 3, autoAssembly_sigma: 0.2,
+    notes: "Первое серьезное покушение на лидерство OpenAI в Arena."
+  },
+  {
+    year: 2024.45, event: "Claude 3.5 Sonnet",
+    arenaElo: 1270, arcAgi: 43.0, sweBench: 31.4, trainingFlopsLog: 25.55, horizon: 2.0, simToReal: 2.0, moravec: 15.0, autoAssembly: 0.3,
+    arenaElo_sigma: 25, arcAgi_sigma: 8, sweBench_sigma: 5, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 1.5, moravec_sigma: 3, autoAssembly_sigma: 0.2,
+    notes: "Шок на SWE-bench (31.4%). Метод Райана Гринблатта показал 43% на ARC-AGI через сэмплирование."
+  },
+  {
+    year: 2024.75, event: "OpenAI o1-preview",
+    arenaElo: 1320, arcAgi: 65.0, sweBench: 36.0, trainingFlopsLog: 25.8, horizon: 4.0, simToReal: 4.0, moravec: 18.0, autoAssembly: 0.5,
+    arenaElo_sigma: 20, arcAgi_sigma: 6, sweBench_sigma: 5, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 2, moravec_sigma: 3, autoAssembly_sigma: 0.3,
+    notes: "Первый масштабный Test-Time Compute. Резкий рост эффективности на сложных задачах."
+  },
+  {
+    year: 2024.95, event: "OpenAI o3-preview",
+    arenaElo: 1350, arcAgi: 87.5, sweBench: 45.0, trainingFlopsLog: 26.0, horizon: 8.0, simToReal: 6.0, moravec: 22.0, autoAssembly: 0.8,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 5, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 2, moravec_sigma: 4, autoAssembly_sigma: 0.3,
+    notes: "Декабрь 2024. ARC-AGI (High Compute) достигает 87.5%, демонстрируя силу RLHF в reasoning."
+  },
+
+  // --- МАССОВОЕ МАСШТАБИРОВАНИЕ 2025 ---
+  {
+    year: 2025.15, event: "GPT-4.5 Preview",
+    arenaElo: 1439, arcAgi: 70.0, sweBench: 56.0, trainingFlopsLog: 26.2, horizon: 4.0, simToReal: 8.0, moravec: 25.0, autoAssembly: 1.0,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 2, moravec_sigma: 4, autoAssembly_sigma: 0.3,
+    notes: "Смещение фокуса на базовую надежность моделей (без тяжелого CoT)."
+  },
+  {
+    year: 2025.30, event: "o3-2025-04-16",
+    arenaElo: 1444, arcAgi: 89.0, sweBench: 62.0, trainingFlopsLog: 26.3, horizon: 12.0, simToReal: 10.0, moravec: 28.0, autoAssembly: 1.3,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 2, moravec_sigma: 4, autoAssembly_sigma: 0.3,
+    notes: "Промежуточный релиз. Улучшенная агентность в средах программирования."
+  },
+  {
+    year: 2025.65, event: "Gemini 2.5 Pro",
+    arenaElo: 1456, arcAgi: 82.0, sweBench: 65.0, trainingFlopsLog: 26.5, horizon: 24.0, simToReal: 14.0, moravec: 32.0, autoAssembly: 1.5,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 3, moravec_sigma: 4, autoAssembly_sigma: 0.3,
+    notes: "Август 2025. Топ-1 LMSYS на момент релиза. Преодолен барьер 1450 Elo."
+  },
+  {
+    year: 2025.95, event: "GPT-5-2 Thinking",
+    arenaElo: 1480, arcAgi: 78.7, sweBench: 72.0, trainingFlopsLog: 26.8, horizon: 48.0, simToReal: 18.0, moravec: 38.0, autoAssembly: 1.7,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 3, moravec_sigma: 5, autoAssembly_sigma: 0.3,
+    notes: "Декабрь 2025. Базовая стоимость reasoning упала в 10 раз ($0.52 за задачу ARC)."
+  },
+
+  // --- СОВРЕМЕННЫЙ ФРОНТИР (Первая половина 2026) ---
+  {
+    year: 2026.15, event: "GPT-5.4 Web",
+    arenaElo: 1484, arcAgi: 92.0, sweBench: 78.2, trainingFlopsLog: 26.9, horizon: 72.0, simToReal: 25.0, moravec: 44.0, autoAssembly: 1.8,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 4, moravec_sigma: 5, autoAssembly_sigma: 0.3,
+    notes: "Массовое внедрение агентов браузинга."
+  },
+  {
+    year: 2026.30, event: "Claude Opus 4.7",
+    arenaElo: 1504, arcAgi: 94.0, sweBench: 82.0, trainingFlopsLog: 27.0, horizon: 120.0, simToReal: 35.0, moravec: 50.0, autoAssembly: 1.85,
+    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 4, moravec_sigma: 5, autoAssembly_sigma: 0.3,
+    notes: "Апрель 2026. Пробит барьер в 1500 Elo. Насыщение оригинального SWE-bench."
+  },
+  {
+    year: 2026.40, event: "GPT-5.5 Pro",
+    arenaElo: 1561, arcAgi: 96.5, sweBench: 82.6, trainingFlopsLog: 27.2, horizon: 168.0, simToReal: 50.0, moravec: 60.0, autoAssembly: 1.9,
+    arenaElo_sigma: 20, arcAgi_sigma: 4, sweBench_sigma: 3, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 5, moravec_sigma: 5, autoAssembly_sigma: 0.3,
+    notes: "Май 2026. Абсолютный SOTA. Эффективный предел текущих бенчмарков."
+  }
+];
+
+async function loadHistoricalBenchmarks() {
+  const FALLBACK = JSON.parse(JSON.stringify(FALLBACK_BENCHMARK_HISTORY));
+
+  // Race: fetch vs timeout — гарантируем возврат даже при зависании
+  let didResolve = false;
+  const fetchPromise = (async () => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const response = await fetch(BENCHMARKS_API_URL, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const data = await response.json();
+      if (data && data.length > 0) {
+        REAL_BENCHMARK_HISTORY = data;
+        didResolve = true;
+        console.log('Historical benchmarks loaded from API (' + data.length + ' points).');
+      }
+    } catch (e) {
+      // silent — fallback below
+    }
+  })();
+
+  const timeoutPromise = new Promise(r => setTimeout(r, 3000));
+  await Promise.race([fetchPromise, timeoutPromise]);
+
+  if (!didResolve) {
+    REAL_BENCHMARK_HISTORY = FALLBACK;
+    if (typeof console !== 'undefined') console.warn('Benchmarks: used fallback data.');
+  }
+}
+
+// ============================================================================
+// REAL ROBOTICS INDEX (Embodiment grounding)
+//
+// Калибровка на основе публичных данных о серийных гуманоидах и quad-роботах.
+// Каждая запись — (год, индекс 0..10, имя модели, capability-флаги).
+// Индекс = максимум из {mobility, manipulation, autonomy, dexterity}, усреднённый
+// с весом 0.4 / 0.3 / 0.2 / 0.1 (мобильность+манипуляция = "тело", autonomy = "мозг").
+// Используется в observeRealData как prior на embodiment_ceiling.
+// ============================================================================
+const REAL_ROBOTICS_DATA = [
+  { year: 2018.0, name: "Boston Dynamics Spot (proto)",     index: 1.5, mobility: 7, manipulation: 0, autonomy: 4, dexterity: 0 },
+  { year: 2020.0, name: "Spot (commercial)",                 index: 2.5, mobility: 8, manipulation: 0, autonomy: 6, dexterity: 0 },
+  { year: 2021.5, name: "Tesla Optimus Gen 1 (announce)",   index: 1.0, mobility: 3, manipulation: 2, autonomy: 2, dexterity: 2 },
+  { year: 2022.5, name: "Optimus Bumblebee",                 index: 1.5, mobility: 3, manipulation: 3, autonomy: 2, dexterity: 3 },
+  { year: 2023.5, name: "1X Neo Beta / Figure 01",           index: 2.5, mobility: 5, manipulation: 4, autonomy: 3, dexterity: 4 },
+  { year: 2024.0, name: "Apptronik Apollo / Figure 02",     index: 3.5, mobility: 6, manipulation: 5, autonomy: 4, dexterity: 5 },
+  { year: 2024.5, name: "Unitree H1 (commercial)",          index: 3.0, mobility: 7, manipulation: 3, autonomy: 3, dexterity: 4 },
+  { year: 2025.0, name: "Optimus Gen 2 / Figure 02 prod",   index: 4.5, mobility: 7, manipulation: 6, autonomy: 5, dexterity: 6 },
+  { year: 2025.5, name: "1X Neo Home (limited deploy)",     index: 5.0, mobility: 7, manipulation: 7, autonomy: 5, dexterity: 7 },
+  { year: 2026.0, name: "Optimus Gen 3 / Figure 03 (forecast)", index: 6.0, mobility: 8, manipulation: 8, autonomy: 6, dexterity: 8 },
+  { year: 2027.0, name: "Mass humanoid pilot (forecast)",  index: 7.0, mobility: 8, manipulation: 9, autonomy: 7, dexterity: 8 },
+  { year: 2028.5, name: "Factory fleet (forecast)",         index: 8.0, mobility: 9, manipulation: 9, autonomy: 8, dexterity: 9 }
+];
+
+// ============================================================================
+// 4. MAPPING (Latent Engine -> Observable Reality)
+// ============================================================================
+
+// Линейная интерполяция realEmbodimentIndex по году
+function realEmbodimentIndexAt(year) {
+  if (year <= REAL_ROBOTICS_DATA[0].year) return REAL_ROBOTICS_DATA[0].index;
+  if (year >= REAL_ROBOTICS_DATA[REAL_ROBOTICS_DATA.length - 1].year) {
+    return REAL_ROBOTICS_DATA[REAL_ROBOTICS_DATA.length - 1].index;
+  }
+  for (let i = 0; i < REAL_ROBOTICS_DATA.length - 1; i++) {
+    const a = REAL_ROBOTICS_DATA[i], b = REAL_ROBOTICS_DATA[i + 1];
+    if (year >= a.year && year <= b.year) {
+      const t = (year - a.year) / (b.year - a.year);
+      return a.index + t * (b.index - a.index);
+    }
+  }
+  return 0;
+}
+
+// Преобразование латентных переменных трекера в численные бенчмарки
+// r10, a10 — reasoning и agency в шкале модели (0..~15)
+// Возвращает предсказанные значения бенчмарков + log10(FLOPs) для сопоставления с training compute
+function getNumericObservables(r10, a10, e10, expertCfg) {
+    const autonomyWeight = expertCfg ? expertCfg.toolUseVsAutonomyWeight : 0.6;
+    const reasoningWeight = 1.0 - autonomyWeight;
+    const blendedReasoning = r10 * reasoningWeight + a10 * autonomyWeight;
+    const embodimentVal = (typeof e10 === 'number') ? e10 : 4.0; // fallback если не передано
+
+    return {
+        sweBench: 100 * sigmoid(0.55 * blendedReasoning - 2.5),
+        arcAgi: 100 * sigmoid(0.6 * r10 - 4.0),
+        arenaElo: 800 + 70 * r10,
+        // Предсказанный log10(FLOPs): калибровка ~23.5 при r10≈0, растёт с reasoning
+        // k ≈ 0.13: при r10=7 → ~25.5, при r10=10 → ~26.5, при r10=13 → ~27.5
+        flopsLog: 23.5 + 0.3 * r10,
+        // log10(autonomous task hours). Калибровка: a10=0 → 0.5h, a10=5 → 6h, a10=10 → 74h, a10=13 → 443h
+        // (формула та же что в mapToObservables, но в log-шкале)
+        horizon: Math.log10(Math.min(365 * 24, 0.5 * Math.exp(0.5 * a10))),
+        // Sim-to-Real: % роботизированных задач. e=0 → 0%, e=5 → 12%, e=10 → 73%, e=13 → 95%
+        simToReal: 100 * sigmoid(0.5 * embodimentVal - 2.5),
+        // Moravec: 1-100, моторика+восприятие. e=0 → 0, e=5 → 8, e=10 → 50, e=13 → 88
+        moravec: Math.max(0, Math.min(100, 2 + 7.5 * (embodimentVal - 0.5))),
+        // Auto-Assembly: log10(часы сборки фабрики). e=0 → 0.1h, e=5 → 7.4h, e=10 → 550h, e=13 → 18000h
+        autoAssembly: Math.log10(Math.max(0.1, 0.5 * Math.exp(0.7 * embodimentVal)))
+    };
+}
+
+// ============================================================================
+// 5. MATH & PHYSICS ENGINE (Bayesian Particle Filter)
+// ============================================================================
+
 const DEFAULT_PARTICLES = 1000;
 
 function createConfig() {
@@ -1128,229 +1353,9 @@ class BayesianTracker {
 }
 
 // ============================================================================
-// UI AND STATE MANAGEMENT
-// ============================================================================
-let currentResults = null;
-let simulationRunning = false;
-let coreTracker = null;
-let userObservations = [];
-
-// ============================================================================
-// DATA & OBSERVABLES (Dynamic Benchmark History)
+// 6. UI STATE & CONTROLLERS
 // ============================================================================
 
-// URL вашего JSON с актуальными бенчмарками (можно заменить на GitHub Raw или ваш API)
-const BENCHMARKS_API_URL = 'https://raw.githubusercontent.com/slavabelik79/ai-metrics/main/benchmarks_history.json';
-
-// Шум (дисперсия) для каждого бенчмарка. Отражает степень доверия к тесту.
-const BENCHMARK_SIGMAS = {
-  arenaElo: 40.0,    // Elo (LMSYS Chatbot Arena)
-  arcAgi: 8.0,       // ARC-AGI (%)
-  sweBench: 10.0,    // SWE-bench Verified (%)
-  flopsLog: 0.5,     // log10(FLOPs)
-  horizon: 0.5,      // log10(autonomous task hours)
-  simToReal: 5.0,    // % роботизированных задач, решаемых в реальном мире
-  moravec: 6.0,      // Балл Moravec (1-100, моторика+восприятие)
-  autoAssembly: 0.5  // log10(часы автономной сборки фабрики)
-};
-
-let REAL_BENCHMARK_HISTORY = [];
-
-// Фундаментальная база данных бенчмарков (Данные до 31 мая 2026 года)
-// Источники: LMSYS Leaderboard, SWE-bench Official, ARC Prize Reports, Epoch AI.
-const FALLBACK_BENCHMARK_HISTORY = [
-  // --- РАННЯЯ ЭПОХА (Пре-Агенты) ---
-  {
-    year: 2022.90, event: "ChatGPT (GPT-3.5)",
-    arenaElo: 1000, arcAgi: 3.0, sweBench: 0.0, trainingFlopsLog: 23.5, horizon: 0.5, simToReal: 0.0, moravec: 5.0, autoAssembly: 0.05,
-    arenaElo_sigma: 30, arcAgi_sigma: 5, sweBench_sigma: 0.5, trainingFlopsLog_sigma: 0.3, horizon_sigma: 0.3, simToReal_sigma: 0.5, moravec_sigma: 2, autoAssembly_sigma: 0.2,
-    notes: "LMSYS base Elo = 1000. Агентность нулевая."
-  },
-  {
-    year: 2023.25, event: "GPT-4 Release",
-    arenaElo: 1150, arcAgi: 12.0, sweBench: 0.1, trainingFlopsLog: 25.32, horizon: 1.0, simToReal: 0.0, moravec: 8.0, autoAssembly: 0.1,
-    arenaElo_sigma: 30, arcAgi_sigma: 6, sweBench_sigma: 1, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.3, simToReal_sigma: 0.5, moravec_sigma: 2, autoAssembly_sigma: 0.2,
-    notes: "Epoch AI: 2.1e25 FLOPs. Появление зачатков абстрактного рассуждения."
-  },
-  {
-    year: 2023.85, event: "GPT-4 Turbo",
-    arenaElo: 1250, arcAgi: 15.0, sweBench: 1.5, trainingFlopsLog: 25.4, horizon: 1.0, simToReal: 0.5, moravec: 10.0, autoAssembly: 0.1,
-    arenaElo_sigma: 25, arcAgi_sigma: 6, sweBench_sigma: 2, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.3, simToReal_sigma: 1, moravec_sigma: 3, autoAssembly_sigma: 0.2,
-    notes: "Слабый рост reasoning, улучшенное следование инструкциям."
-  },
-
-  // --- ЭПОХА ИНСТРУМЕНТОВ И TTC ---
-  {
-    year: 2024.20, event: "Claude 3 Opus",
-    arenaElo: 1255, arcAgi: 20.0, sweBench: 4.0, trainingFlopsLog: 25.5, horizon: 1.5, simToReal: 1.0, moravec: 12.0, autoAssembly: 0.2,
-    arenaElo_sigma: 25, arcAgi_sigma: 7, sweBench_sigma: 3, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.3, simToReal_sigma: 1, moravec_sigma: 3, autoAssembly_sigma: 0.2,
-    notes: "Первое серьезное покушение на лидерство OpenAI в Arena."
-  },
-  {
-    year: 2024.45, event: "Claude 3.5 Sonnet",
-    arenaElo: 1270, arcAgi: 43.0, sweBench: 31.4, trainingFlopsLog: 25.55, horizon: 2.0, simToReal: 2.0, moravec: 15.0, autoAssembly: 0.3,
-    arenaElo_sigma: 25, arcAgi_sigma: 8, sweBench_sigma: 5, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 1.5, moravec_sigma: 3, autoAssembly_sigma: 0.2,
-    notes: "Шок на SWE-bench (31.4%). Метод Райана Гринблатта показал 43% на ARC-AGI через сэмплирование."
-  },
-  {
-    year: 2024.75, event: "OpenAI o1-preview",
-    arenaElo: 1320, arcAgi: 65.0, sweBench: 36.0, trainingFlopsLog: 25.8, horizon: 4.0, simToReal: 4.0, moravec: 18.0, autoAssembly: 0.5,
-    arenaElo_sigma: 20, arcAgi_sigma: 6, sweBench_sigma: 5, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 2, moravec_sigma: 3, autoAssembly_sigma: 0.3,
-    notes: "Первый масштабный Test-Time Compute. Резкий рост эффективности на сложных задачах."
-  },
-  {
-    year: 2024.95, event: "OpenAI o3-preview",
-    arenaElo: 1350, arcAgi: 87.5, sweBench: 45.0, trainingFlopsLog: 26.0, horizon: 8.0, simToReal: 6.0, moravec: 22.0, autoAssembly: 0.8,
-    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 5, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 2, moravec_sigma: 4, autoAssembly_sigma: 0.3,
-    notes: "Декабрь 2024. ARC-AGI (High Compute) достигает 87.5%, демонстрируя силу RLHF в reasoning."
-  },
-
-  // --- МАССОВОЕ МАСШТАБИРОВАНИЕ 2025 ---
-  {
-    year: 2025.15, event: "GPT-4.5 Preview",
-    arenaElo: 1439, arcAgi: 70.0, sweBench: 56.0, trainingFlopsLog: 26.2, horizon: 4.0, simToReal: 8.0, moravec: 25.0, autoAssembly: 1.0,
-    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 2, moravec_sigma: 4, autoAssembly_sigma: 0.3,
-    notes: "Смещение фокуса на базовую надежность моделей (без тяжелого CoT)."
-  },
-  {
-    year: 2025.30, event: "o3-2025-04-16",
-    arenaElo: 1444, arcAgi: 89.0, sweBench: 62.0, trainingFlopsLog: 26.3, horizon: 12.0, simToReal: 10.0, moravec: 28.0, autoAssembly: 1.3,
-    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 2, moravec_sigma: 4, autoAssembly_sigma: 0.3,
-    notes: "Промежуточный релиз. Улучшенная агентность в средах программирования."
-  },
-  {
-    year: 2025.65, event: "Gemini 2.5 Pro",
-    arenaElo: 1456, arcAgi: 82.0, sweBench: 65.0, trainingFlopsLog: 26.5, horizon: 24.0, simToReal: 14.0, moravec: 32.0, autoAssembly: 1.5,
-    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 3, moravec_sigma: 4, autoAssembly_sigma: 0.3,
-    notes: "Август 2025. Топ-1 LMSYS на момент релиза. Преодолен барьер 1450 Elo."
-  },
-  {
-    year: 2025.95, event: "GPT-5-2 Thinking",
-    arenaElo: 1480, arcAgi: 78.7, sweBench: 72.0, trainingFlopsLog: 26.8, horizon: 48.0, simToReal: 18.0, moravec: 38.0, autoAssembly: 1.7,
-    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 3, moravec_sigma: 5, autoAssembly_sigma: 0.3,
-    notes: "Декабрь 2025. Базовая стоимость reasoning упала в 10 раз ($0.52 за задачу ARC)."
-  },
-
-  // --- СОВРЕМЕННЫЙ ФРОНТИР (Первая половина 2026) ---
-  {
-    year: 2026.15, event: "GPT-5.4 Web",
-    arenaElo: 1484, arcAgi: 92.0, sweBench: 78.2, trainingFlopsLog: 26.9, horizon: 72.0, simToReal: 25.0, moravec: 44.0, autoAssembly: 1.8,
-    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 4, moravec_sigma: 5, autoAssembly_sigma: 0.3,
-    notes: "Массовое внедрение агентов браузинга."
-  },
-  {
-    year: 2026.30, event: "Claude Opus 4.7",
-    arenaElo: 1504, arcAgi: 94.0, sweBench: 82.0, trainingFlopsLog: 27.0, horizon: 120.0, simToReal: 35.0, moravec: 50.0, autoAssembly: 1.85,
-    arenaElo_sigma: 20, arcAgi_sigma: 5, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 4, moravec_sigma: 5, autoAssembly_sigma: 0.3,
-    notes: "Апрель 2026. Пробит барьер в 1500 Elo. Насыщение оригинального SWE-bench."
-  },
-  {
-    year: 2026.40, event: "GPT-5.5 Pro",
-    arenaElo: 1561, arcAgi: 96.5, sweBench: 82.6, trainingFlopsLog: 27.2, horizon: 168.0, simToReal: 50.0, moravec: 60.0, autoAssembly: 1.9,
-    arenaElo_sigma: 20, arcAgi_sigma: 4, sweBench_sigma: 3, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 5, moravec_sigma: 5, autoAssembly_sigma: 0.3,
-    notes: "Май 2026. Абсолютный SOTA. Эффективный предел текущих бенчмарков."
-  }
-];
-
-async function loadHistoricalBenchmarks() {
-  const FALLBACK = JSON.parse(JSON.stringify(FALLBACK_BENCHMARK_HISTORY));
-
-  // Race: fetch vs timeout — гарантируем возврат даже при зависании
-  let didResolve = false;
-  const fetchPromise = (async () => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
-      const response = await fetch(BENCHMARKS_API_URL, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (!response.ok) throw new Error('HTTP ' + response.status);
-      const data = await response.json();
-      if (data && data.length > 0) {
-        REAL_BENCHMARK_HISTORY = data;
-        didResolve = true;
-        console.log('Historical benchmarks loaded from API (' + data.length + ' points).');
-      }
-    } catch (e) {
-      // silent — fallback below
-    }
-  })();
-
-  const timeoutPromise = new Promise(r => setTimeout(r, 3000));
-  await Promise.race([fetchPromise, timeoutPromise]);
-
-  if (!didResolve) {
-    REAL_BENCHMARK_HISTORY = FALLBACK;
-    if (typeof console !== 'undefined') console.warn('Benchmarks: used fallback data.');
-  }
-}
-
-// ============================================================================
-// REAL ROBOTICS INDEX (Embodiment grounding)
-//
-// Калибровка на основе публичных данных о серийных гуманоидах и quad-роботах.
-// Каждая запись — (год, индекс 0..10, имя модели, capability-флаги).
-// Индекс = максимум из {mobility, manipulation, autonomy, dexterity}, усреднённый
-// с весом 0.4 / 0.3 / 0.2 / 0.1 (мобильность+манипуляция = "тело", autonomy = "мозг").
-// Используется в observeRealData как prior на embodiment_ceiling.
-// ============================================================================
-const REAL_ROBOTICS_DATA = [
-  { year: 2018.0, name: "Boston Dynamics Spot (proto)",     index: 1.5, mobility: 7, manipulation: 0, autonomy: 4, dexterity: 0 },
-  { year: 2020.0, name: "Spot (commercial)",                 index: 2.5, mobility: 8, manipulation: 0, autonomy: 6, dexterity: 0 },
-  { year: 2021.5, name: "Tesla Optimus Gen 1 (announce)",   index: 1.0, mobility: 3, manipulation: 2, autonomy: 2, dexterity: 2 },
-  { year: 2022.5, name: "Optimus Bumblebee",                 index: 1.5, mobility: 3, manipulation: 3, autonomy: 2, dexterity: 3 },
-  { year: 2023.5, name: "1X Neo Beta / Figure 01",           index: 2.5, mobility: 5, manipulation: 4, autonomy: 3, dexterity: 4 },
-  { year: 2024.0, name: "Apptronik Apollo / Figure 02",     index: 3.5, mobility: 6, manipulation: 5, autonomy: 4, dexterity: 5 },
-  { year: 2024.5, name: "Unitree H1 (commercial)",          index: 3.0, mobility: 7, manipulation: 3, autonomy: 3, dexterity: 4 },
-  { year: 2025.0, name: "Optimus Gen 2 / Figure 02 prod",   index: 4.5, mobility: 7, manipulation: 6, autonomy: 5, dexterity: 6 },
-  { year: 2025.5, name: "1X Neo Home (limited deploy)",     index: 5.0, mobility: 7, manipulation: 7, autonomy: 5, dexterity: 7 },
-  { year: 2026.0, name: "Optimus Gen 3 / Figure 03 (forecast)", index: 6.0, mobility: 8, manipulation: 8, autonomy: 6, dexterity: 8 },
-  { year: 2027.0, name: "Mass humanoid pilot (forecast)",  index: 7.0, mobility: 8, manipulation: 9, autonomy: 7, dexterity: 8 },
-  { year: 2028.5, name: "Factory fleet (forecast)",         index: 8.0, mobility: 9, manipulation: 9, autonomy: 8, dexterity: 9 }
-];
-
-// Линейная интерполяция realEmbodimentIndex по году
-function realEmbodimentIndexAt(year) {
-  if (year <= REAL_ROBOTICS_DATA[0].year) return REAL_ROBOTICS_DATA[0].index;
-  if (year >= REAL_ROBOTICS_DATA[REAL_ROBOTICS_DATA.length - 1].year) {
-    return REAL_ROBOTICS_DATA[REAL_ROBOTICS_DATA.length - 1].index;
-  }
-  for (let i = 0; i < REAL_ROBOTICS_DATA.length - 1; i++) {
-    const a = REAL_ROBOTICS_DATA[i], b = REAL_ROBOTICS_DATA[i + 1];
-    if (year >= a.year && year <= b.year) {
-      const t = (year - a.year) / (b.year - a.year);
-      return a.index + t * (b.index - a.index);
-    }
-  }
-  return 0;
-}
-
-// Преобразование латентных переменных трекера в численные бенчмарки
-// r10, a10 — reasoning и agency в шкале модели (0..~15)
-// Возвращает предсказанные значения бенчмарков + log10(FLOPs) для сопоставления с training compute
-function getNumericObservables(r10, a10, e10, expertCfg) {
-    const autonomyWeight = expertCfg ? expertCfg.toolUseVsAutonomyWeight : 0.6;
-    const reasoningWeight = 1.0 - autonomyWeight;
-    const blendedReasoning = r10 * reasoningWeight + a10 * autonomyWeight;
-    const embodimentVal = (typeof e10 === 'number') ? e10 : 4.0; // fallback если не передано
-
-    return {
-        sweBench: 100 * sigmoid(0.55 * blendedReasoning - 2.5),
-        arcAgi: 100 * sigmoid(0.6 * r10 - 4.0),
-        arenaElo: 800 + 70 * r10,
-        // Предсказанный log10(FLOPs): калибровка ~23.5 при r10≈0, растёт с reasoning
-        // k ≈ 0.13: при r10=7 → ~25.5, при r10=10 → ~26.5, при r10=13 → ~27.5
-        flopsLog: 23.5 + 0.3 * r10,
-        // log10(autonomous task hours). Калибровка: a10=0 → 0.5h, a10=5 → 6h, a10=10 → 74h, a10=13 → 443h
-        // (формула та же что в mapToObservables, но в log-шкале)
-        horizon: Math.log10(Math.min(365 * 24, 0.5 * Math.exp(0.5 * a10))),
-        // Sim-to-Real: % роботизированных задач. e=0 → 0%, e=5 → 12%, e=10 → 73%, e=13 → 95%
-        simToReal: 100 * sigmoid(0.5 * embodimentVal - 2.5),
-        // Moravec: 1-100, моторика+восприятие. e=0 → 0, e=5 → 8, e=10 → 50, e=13 → 88
-        moravec: Math.max(0, Math.min(100, 2 + 7.5 * (embodimentVal - 0.5))),
-        // Auto-Assembly: log10(часы сборки фабрики). e=0 → 0.1h, e=5 → 7.4h, e=10 → 550h, e=13 → 18000h
-        autoAssembly: Math.log10(Math.max(0.1, 0.5 * Math.exp(0.7 * embodimentVal)))
-    };
-}
 
 function getTracker() {
   if (!coreTracker) {
@@ -1623,6 +1628,11 @@ function buildHistogramBins(l1, l2, l3, l4) {
 // ============================================================================
 // PLOTLY RENDERERS & i18n
 // ============================================================================
+
+// ============================================================================
+// 7. VISUALIZATION (Plotly Charts)
+// ============================================================================
+
 const LAYOUT_BASE = {
   paper_bgcolor: '#161620', plot_bgcolor: '#0e0e18',
   font: { color: '#9898b0', family: 'Inter, sans-serif', size: 11 },
@@ -1843,6 +1853,11 @@ function plotHallucinationGap(gt) {
   }
 }
 
+
+
+// ============================================================================
+// 10. LOCALIZATION & INITIALIZATION
+// ============================================================================
 
 window._lang = 'ru';
 const LANG = {
@@ -2448,6 +2463,11 @@ const LANG = {
 
 // ===== PARTICLE SWARM ANIMATION =====
 // ===== PARTICLE SWARM v3 =====
+
+// ============================================================================
+// 8. VISUALIZATION (Canvas: Swarm & Event Horizon)
+// ============================================================================
+
 let swarm = { mode:'learn', obsIdx:0, tracker:null, particles:[], weights:[], animating:false, rafId:null, agiYears:null, forecastSliderMax:0 };
 
 // Pre-compute T2 and T4 years using the same MC forecast as the main charts
@@ -3323,6 +3343,11 @@ function setLang(lang) {
 }
 
 // ===== EXPERT SANDBOX UI =====
+
+
+// ============================================================================
+// 9. EXPERT SANDBOX & PRESETS
+// ============================================================================
 
 function toggleExpertPanel() {
   const panel = document.getElementById('expertPanel');
