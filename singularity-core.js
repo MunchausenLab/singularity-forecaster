@@ -91,6 +91,14 @@ const DEFAULT_EXPERT_CONFIG = JSON.parse(JSON.stringify(EXPERT_CONFIG));
 // ============================================================================
 
 // URL вашего JSON с актуальными бенчмарками (можно заменить на GitHub Raw или ваш API)
+// ============================================================
+// ГЛОБАЛЬНОЕ СОСТОЯНИЕ ПРИЛОЖЕНИЯ
+// ============================================================
+let coreTracker = null;
+let userObservations = [];
+let simulationRunning = false;
+let currentResults = null;
+
 const BENCHMARKS_API_URL = 'https://raw.githubusercontent.com/slavabelik79/ai-metrics/main/benchmarks_history.json';
 
 // Шум (дисперсия) для каждого бенчмарка. Отражает степень доверия к тесту.
@@ -220,7 +228,7 @@ async function loadHistoricalBenchmarks() {
       return;
     }
   } catch (e) {
-    // timeout или сетевая ошибка — silent
+    console.warn('[Benchmarks] fetch failed:', e.message, '→ using fallback');
   }
   REAL_BENCHMARK_HISTORY = FALLBACK;
   console.warn('Benchmarks: used fallback data.');
@@ -3598,7 +3606,7 @@ function expertApplyAndRun() {
   // Синхронизируем EXPERT_CONFIG с текущими значениями UI (включая world models)
   expertWorldSlider();
   // Сбрасываем трекер и перезапускаем
-  v3ResetTracker();
+  resetTracker(); // ← было v3ResetTracker (не существовала)
   setTimeout(runSimulation, 100);
 }
 
