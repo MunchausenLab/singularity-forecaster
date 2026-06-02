@@ -120,9 +120,9 @@ const DEFAULT_EXPERT_CONFIG = JSON.parse(JSON.stringify(EXPERT_CONFIG));
 // ============================================================================
 // v3.0 — BAYESIAN PARTICLE FILTER (Исправлено: Якорь на 2023 год + Inference)
 // ============================================================================
-const V3_DEFAULT_PARTICLES = 1000;
+const DEFAULT_PARTICLES = 1000;
 
-function createV3Config() {
+function createConfig() {
   return {
     BASE_YEAR: 2023.0,          // Якорь (уровень GPT-4)
     BASE_LOG_FLOPS: 24.5,       // Начальные FLOPs в 2023
@@ -146,20 +146,20 @@ function createV3Config() {
   };
 }
 
-function v3ComputeDim(logDiff, slope, ceiling) {
+function computeDim(logDiff, slope, ceiling) {
   // Исправлено: при logDiff->inf сигмоида дает 1.0, формула возвращает ceiling.
   // При logDiff=0 сигмоида дает 0.5, формула возвращает 1.0.
   return Math.max(1.0 + (ceiling - 1.0) * (sigmoid(slope * logDiff) - 0.5) * 2.0, 0.01);
 }
 
-function v3ApplyInference(rawCap, maxBonus, satCap) {
+function applyInference(rawCap, maxBonus, satCap) {
   if (maxBonus <= 1.0) return rawCap;
   const k = Math.LN2 / satCap;
   const bonus = (maxBonus - 1.0) * (1.0 - Math.exp(-k * rawCap));
   return rawCap * (1.0 + bonus);
 }
 
-function v3CalculateRSI(S, C, expertCfg) {
+function calculateRSI(S, C, expertCfg) {
   // 1. Активация на базе Науки и Координации
   const actS = sigmoid(1.2 * (S - (expertCfg.rsiTriggerReasoning - 2.0)));
   const actC = sigmoid(1.2 * (C - (expertCfg.rsiTriggerAgency - 2.0)));
@@ -172,7 +172,7 @@ function v3CalculateRSI(S, C, expertCfg) {
   return Math.min(2.0, baseRsi * rsiActivation);
 }
 
-function v3SimulateToYear(particle, targetYear, cfg) {
+function simulateToYear(particle, targetYear, cfg) {
   const dt = 1.0 / 12.0;
   const steps = Math.max(0, Math.floor((targetYear - cfg.BASE_YEAR) * 12));
   let flopsLog = cfg.BASE_LOG_FLOPS;
@@ -207,17 +207,17 @@ function v3SimulateToYear(particle, targetYear, cfg) {
     const currentYear = cfg.BASE_YEAR + step * dt;
     const logDiff = flopsLog + algoLog - baseLog;
 
-    let rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, ceilingR);
-    let rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, ceilingA);
+    let rawR = computeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, ceilingR);
+    let rawA = computeDim(logDiff, cfg.DIMENSIONS.agency.slope, ceilingA);
     // Embodiment: scale with agency/2 + reasoning/3 (нужен и software, и физика)
-    let rawE = v3ComputeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, ceilingE);
+    let rawE = computeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, ceilingE);
     // World Modeling: каузальное понимание мира (медленнее логики)
-    let rawWM = v3ComputeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, ceilingR);
+    let rawWM = computeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, ceilingR);
 
-    const R = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
-    const A = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
-    const E = v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
-    const W = v3ApplyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap);
+    const R = applyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
+    const A = applyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
+    const E = applyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
+    const W = applyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap);
 
     // Слой 2. Производные цивилизационные способности
     const C = Math.sqrt(A * W) * Math.max(0, 1.0 - cfg.EXPERT.coordinationFriction);
@@ -304,7 +304,7 @@ function v3SimulateToYear(particle, targetYear, cfg) {
     }
 
     // RSI (deterministic)
-    const rsi = v3CalculateRSI(S, C, cfg.EXPERT);
+    const rsi = calculateRSI(S, C, cfg.EXPERT);
 
     // [NEW] Проклятие атомов: жёсткий потолок удвоений/год (лог-единицы)
     let hwDelta = hwK * damping * nashDamping * demandDamping * hwBonus;
@@ -316,23 +316,23 @@ function v3SimulateToYear(particle, targetYear, cfg) {
   }
   
   const logDiff = flopsLog + algoLog - baseLog;
-  let rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, ceilingR);
-  let rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, ceilingA);
-  let rawE = v3ComputeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, ceilingE);
-  let rawWM = v3ComputeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, ceilingR);
+  let rawR = computeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, ceilingR);
+  let rawA = computeDim(logDiff, cfg.DIMENSIONS.agency.slope, ceilingA);
+  let rawE = computeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, ceilingE);
+  let rawWM = computeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, ceilingR);
 
   return {
-    reasoning: v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap),
-    agency:    v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap),
-    embodiment: v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap),
-    worldModeling: v3ApplyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap),
+    reasoning: applyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap),
+    agency:    applyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap),
+    embodiment: applyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap),
+    worldModeling: applyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap),
   };
 }
 
 class BayesianTracker {
   constructor(nParticles) {
-    this.n = nParticles || V3_DEFAULT_PARTICLES;
-    this.cfg = createV3Config();
+    this.n = nParticles || DEFAULT_PARTICLES;
+    this.cfg = createConfig();
     this.particles = [];
     this.weights = new Float64Array(this.n).fill(1.0 / this.n);
     this.observationLog = [];
@@ -362,7 +362,7 @@ class BayesianTracker {
       const p = this.particles[i];
       if (p.hw_months < 1.0 || p.agency_ceiling < 1.0) { this.weights[i] = 0; continue; }
 
-      const pred = v3SimulateToYear(p, year, this.cfg);
+      const pred = simulateToYear(p, year, this.cfg);
       const metrics = getNumericObservables(pred.reasoning, pred.agency, pred.embodiment, this.cfg.EXPERT);
 
       let logLik = 0;
@@ -532,15 +532,15 @@ class BayesianTracker {
         const currentYear = this.cfg.BASE_YEAR + step * dt;
         
         const logDiff = flopsLog + algoLog - baseLog;
-        const rawR = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.reasoning.slope, ceilingReasoning);
-        const rawA = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.agency.slope, ceilingAgency);
-        const rawE = v3ComputeDim(0.5 * logDiff, this.cfg.EXPERT.embodimentScalingSlope, ceilingEmbodiment);
-        const rawWM = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.worldModeling.slope, ceilingReasoning);
+        const rawR = computeDim(logDiff, this.cfg.DIMENSIONS.reasoning.slope, ceilingReasoning);
+        const rawA = computeDim(logDiff, this.cfg.DIMENSIONS.agency.slope, ceilingAgency);
+        const rawE = computeDim(0.5 * logDiff, this.cfg.EXPERT.embodimentScalingSlope, ceilingEmbodiment);
+        const rawWM = computeDim(logDiff, this.cfg.DIMENSIONS.worldModeling.slope, ceilingReasoning);
 
-        const R = v3ApplyInference(rawR, this.cfg.INFERENCE_SCALING.max_bonus_reasoning, this.cfg.INFERENCE_SCALING.saturation_cap);
-        const A = v3ApplyInference(rawA, this.cfg.INFERENCE_SCALING.max_bonus_agency, this.cfg.INFERENCE_SCALING.saturation_cap);
-        const E = v3ApplyInference(rawE, this.cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, this.cfg.INFERENCE_SCALING.saturation_cap);
-        const W = v3ApplyInference(rawWM, 1.2, this.cfg.INFERENCE_SCALING.saturation_cap);
+        const R = applyInference(rawR, this.cfg.INFERENCE_SCALING.max_bonus_reasoning, this.cfg.INFERENCE_SCALING.saturation_cap);
+        const A = applyInference(rawA, this.cfg.INFERENCE_SCALING.max_bonus_agency, this.cfg.INFERENCE_SCALING.saturation_cap);
+        const E = applyInference(rawE, this.cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, this.cfg.INFERENCE_SCALING.saturation_cap);
+        const W = applyInference(rawWM, 1.2, this.cfg.INFERENCE_SCALING.saturation_cap);
 
         const C = Math.sqrt(A * W) * Math.max(0, 1.0 - this.cfg.EXPERT.coordinationFriction);
         const S = Math.pow(R, 0.4) * Math.pow(W, 0.4) * Math.pow(A, 0.2);
@@ -711,7 +711,7 @@ class BayesianTracker {
         }
 
         // Единый расчет RSI
-        const rsi = v3CalculateRSI(S, C, this.cfg.EXPERT);
+        const rsi = calculateRSI(S, C, this.cfg.EXPERT);
         
         // dataExhaustionHit обрабатывается ниже в currentAlgoK
         // Экономика исследований: динамический hwK зависит от ROI
@@ -881,15 +881,15 @@ class BayesianTracker {
         const y = cfg.BASE_YEAR + step * dt;
 
         const logDiff = flopsLog + algoLog - baseLog;
-        const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
-        const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
-        const rawE = v3ComputeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, cE);
+        const rawR = computeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
+        const rawA = computeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
+        const rawE = computeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, cE);
 
-        const rawWM = v3ComputeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, cR);
-        const R = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
-        const A = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
-        const E = v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
-        const W = v3ApplyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap);
+        const rawWM = computeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, cR);
+        const R = applyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
+        const A = applyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
+        const E = applyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
+        const W = applyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap);
 
         const C = Math.sqrt(A * W) * Math.max(0, 1.0 - cfg.EXPERT.coordinationFriction);
         const S = Math.pow(R, 0.4) * Math.pow(W, 0.4) * Math.pow(A, 0.2);
@@ -1011,7 +1011,7 @@ class BayesianTracker {
           }
         }
 
-        const rsi = v3CalculateRSI(S, C, cfg.EXPERT);
+        const rsi = calculateRSI(S, C, cfg.EXPERT);
 
         // HW с притоком капитала (синхронизация с MC)
         const marketUtility = R * 0.3 + A * 0.7;
@@ -1109,14 +1109,14 @@ class BayesianTracker {
       let paradigmBonus = 0;
 
       const logDiff = flopsLog + algoLog - baseLog;
-      const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
-      const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
-      const rawE = v3ComputeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, cE);
-      const rawWM = v3ComputeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, cR);
-      const R = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
-      const A = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
-      const E = v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
-      const W = v3ApplyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap);
+      const rawR = computeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
+      const rawA = computeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
+      const rawE = computeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, cE);
+      const rawWM = computeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, cR);
+      const R = applyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
+      const A = applyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
+      const E = applyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
+      const W = applyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap);
 
       const C = Math.sqrt(A * W) * Math.max(0, 1.0 - cfg.EXPERT.coordinationFriction);
       const S = Math.pow(R, 0.4) * Math.pow(W, 0.4) * Math.pow(A, 0.2);
@@ -1144,7 +1144,7 @@ class BayesianTracker {
       if (y > cfg.BOTTLENECKS.econ_wall_start && (R - A) > 2.0) {
         damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (R - A - 2.0));
       }
-      const rsi = v3CalculateRSI(S, C, cfg.EXPERT);
+      const rsi = calculateRSI(S, C, cfg.EXPERT);
       accumulatedRsi += rsi * dt;
       rsiComp.push(accumulatedRsi);
       const bypassActivation = sigmoid(1.5 * (E - cfg.EXPERT.embodimentBypassThreshold));
@@ -1162,12 +1162,12 @@ class BayesianTracker {
 }
 
 // ============================================================================
-// UI AND STATE MANAGEMENT (v3 only)
+// UI AND STATE MANAGEMENT
 // ============================================================================
 let currentResults = null;
 let simulationRunning = false;
-let v3Tracker = null;
-let v3Observations = [];
+let coreTracker = null;
+let userObservations = [];
 
 // ============================================================================
 // DATA & OBSERVABLES (Dynamic Benchmark History)
@@ -1386,13 +1386,13 @@ function getNumericObservables(r10, a10, e10, expertCfg) {
     };
 }
 
-function v3GetTracker() {
-  if (!v3Tracker) {
-    v3Tracker = new BayesianTracker(1000);
-    REAL_BENCHMARK_HISTORY.forEach(d => v3Tracker.observeRealData(d.year, d));
-    v3Observations.forEach(d => v3Tracker.observeRealData(d.year, d));
+function getTracker() {
+  if (!coreTracker) {
+    coreTracker = new BayesianTracker(1000);
+    REAL_BENCHMARK_HISTORY.forEach(d => coreTracker.observeRealData(d.year, d));
+    userObservations.forEach(d => coreTracker.observeRealData(d.year, d));
   }
-  return v3Tracker;
+  return coreTracker;
 }
 
 // Backtest: тренируемся на первых trainEnd точках, предсказываем trainEnd+1..K.
@@ -1418,7 +1418,7 @@ function runBacktest(trainEnd, kPred) {
     const obs = testData[t];
     const samples = [];
     for (let i = 0; i < btTracker.n; i += 10) {
-      const pred = v3SimulateToYear(btTracker.particles[i], obs.year, btTracker.cfg);
+      const pred = simulateToYear(btTracker.particles[i], obs.year, btTracker.cfg);
       const m = getNumericObservables(pred.reasoning, pred.agency, pred.embodiment, btTracker.cfg.EXPERT);
       samples.push(m);
     }
@@ -1480,7 +1480,7 @@ function benchmarksToAA(arcAgiPct, horizonHours) {
   return { intel, agency, r10, a10, e10 };
 }
 
-function v3AddObservation() {
+function addObservation() {
   const arcVal = +document.getElementById('v3ARC').value;
   const horizonVal = +document.getElementById('v3Horizon').value;
   
@@ -1490,36 +1490,36 @@ function v3AddObservation() {
   const sweVal = fakeMetrics.sweBench;
   const eloVal = fakeMetrics.arenaElo;
 
-  const y = v3Tracker ? v3Tracker.cfg.CURRENT_YEAR : (new Date().getFullYear() + new Date().getMonth() / 12);
+  const y = coreTracker ? coreTracker.cfg.CURRENT_YEAR : (new Date().getFullYear() + new Date().getMonth() / 12);
   
-  v3Observations = v3Observations.filter(o => o.year < y - 0.01);
-  v3Observations.push({ year: y, arcAgi: arcVal, sweBench: sweVal, arenaElo: eloVal });
+  userObservations = userObservations.filter(o => o.year < y - 0.01);
+  userObservations.push({ year: y, arcAgi: arcVal, sweBench: sweVal, arenaElo: eloVal });
   
-  v3Tracker = new BayesianTracker(1000);
-  REAL_BENCHMARK_HISTORY.forEach(d => v3Tracker.observeRealData(d.year, d));
-  v3Observations.forEach(d => v3Tracker.observeRealData(d.year, d));
-  v3UpdateUI(v3Tracker);
+  coreTracker = new BayesianTracker(1000);
+  REAL_BENCHMARK_HISTORY.forEach(d => coreTracker.observeRealData(d.year, d));
+  userObservations.forEach(d => coreTracker.observeRealData(d.year, d));
+  updateTrackerUI(coreTracker);
 }
 
-function v3ResetTracker() {
-  v3Tracker = null; v3Observations = [];
-  const obsEl = document.getElementById('v3Observations');
+function resetTracker() {
+  coreTracker = null; userObservations = [];
+  const obsEl = document.getElementById('userObservations');
   if (obsEl) obsEl.innerHTML = '';
   const parEl = document.getElementById('v3Params');
   if (parEl) parEl.textContent = '';
 }
 
-function v3UpdateUI(tracker) {
-  v3CheckWarning(tracker);
+function updateTrackerUI(tracker) {
+  checkObservationWarning(tracker);
   updateObsMetrics();
 }
 
-let v3HasUserInput = false;
+let hasUserInput = false;
 
-function v3CheckWarning(tracker) {
+function checkObservationWarning(tracker) {
   const warnEl = document.getElementById('v3Warning');
   if (!warnEl) return;
-  if (!v3HasUserInput) { warnEl.style.display = 'none'; return; }
+  if (!hasUserInput) { warnEl.style.display = 'none'; return; }
   const arcVal = +document.getElementById('v3ARC').value || 0;
   const horizonVal = +document.getElementById('v3Horizon').value || 0;
   const aa = benchmarksToAA(arcVal, horizonVal);
@@ -1528,7 +1528,7 @@ function v3CheckWarning(tracker) {
   let minDist = Infinity;
   for (let i = 0; i < tracker.n; i += 10) { 
     if (tracker.weights[i] < 1e-5) continue;
-    const pred = v3SimulateToYear(tracker.particles[i], tracker.cfg.CURRENT_YEAR, tracker.cfg);
+    const pred = simulateToYear(tracker.particles[i], tracker.cfg.CURRENT_YEAR, tracker.cfg);
     const m = getNumericObservables(pred.reasoning, pred.agency, pred.embodiment, tracker.cfg.EXPERT);
     
     // Считаем Евклидово расстояние в пространстве нормализованных бенчмарков
@@ -1563,16 +1563,16 @@ async function runSimulation() {
     const arcVal = +document.getElementById('v3ARC').value;
     const horizonVal = +document.getElementById('v3Horizon').value;
     const aa = benchmarksToAA(arcVal, horizonVal);
-    const currentY = v3Tracker ? v3Tracker.cfg.CURRENT_YEAR : (new Date().getFullYear() + new Date().getMonth() / 12);
+    const currentY = coreTracker ? coreTracker.cfg.CURRENT_YEAR : (new Date().getFullYear() + new Date().getMonth() / 12);
     const fakeMetrics = getNumericObservables(aa.r10, aa.a10, aa.e10, EXPERT_CONFIG);
-    v3Tracker = new BayesianTracker(1000);
-    REAL_BENCHMARK_HISTORY.forEach(d => v3Tracker.observeRealData(d.year, d));
+    coreTracker = new BayesianTracker(1000);
+    REAL_BENCHMARK_HISTORY.forEach(d => coreTracker.observeRealData(d.year, d));
     
     const newObs = { year: currentY, arcAgi: arcVal, sweBench: fakeMetrics.sweBench, arenaElo: fakeMetrics.arenaElo };
-    v3Observations = v3Observations.filter(o => o.year < currentY - 0.01);
-    v3Observations.push(newObs);
-    v3Observations.forEach(d => v3Tracker.observeRealData(d.year, d));
-    const tracker = v3Tracker;
+    userObservations = userObservations.filter(o => o.year < currentY - 0.01);
+    userObservations.push(newObs);
+    userObservations.forEach(d => coreTracker.observeRealData(d.year, d));
+    const tracker = coreTracker;
     const runData = tracker.runMonteCarloForecast(n);
     const t1List = runData.t1Years, t2List = runData.t2Years;
     const t3List = runData.t3Years, t4List = runData.t4Years;
@@ -1603,10 +1603,8 @@ async function runSimulation() {
         t2Median: percentile(finiteT2, 50),
         t3Median: percentile(finiteT3, 50),
         t4Median: percentile(finiteT4, 50),
-        agiMedian: percentile(finiteT2, 50),
-        asiMedian: percentile(finiteT4, 50),
-        pAgi2029: cdf(t2List, 3), pAgi2033: cdf(t2List, 7), pAgi2040: cdf(t2List, 14),
-        pAsi2035: cdf(t4List, 9), pAsi2045: cdf(t4List, 19), nRuns: n
+        pT2_2029: cdf(t2List, 3), pT2_2033: cdf(t2List, 7), pT2_2040: cdf(t2List, 14),
+        pT4_2035: cdf(t4List, 9), pT4_2045: cdf(t4List, 19), nRuns: n
       },
     };
     updateUI(currentResults);
@@ -1623,13 +1621,13 @@ function updateUI(r) {
   setVal('vT2', fmt(s.t2Median), 't2years');
   setVal('vT3', fmt(s.t3Median), 't3years');
   setVal('vT4', fmt(s.t4Median), 't4years');
-  // Скрыть/показать предупреждение "AGI не достигнут"
-  const noAgiEl = document.getElementById('v3NoAgi');
-  if (noAgiEl) noAgiEl.style.display = isFinite(s.agiMedian) ? 'none' : '';
+  // Скрыть/показать предупреждение "T2 не достигнут"
+  const noT2El = document.getElementById('v3NoAgi');
+  if (noT2El) noT2El.style.display = isFinite(s.t2Median) ? 'none' : '';
   plotHistogram(r.histogram); plotCumulative(r.cumulative);
   // Advanced charts (async-like, yield between heavy plots)
   requestAnimationFrame(async () => {
-    const tracker = v3GetTracker();
+    const tracker = getTracker();
     await plotSensitivityHeatmap(tracker);
     requestAnimationFrame(() => {
       plotScenarioFan(tracker);
@@ -1665,7 +1663,7 @@ function buildHistogramBins(l1, l2, l3, l4) {
   };
   fillHist(l1, h1); fillHist(l2, h2); fillHist(l3, h3); fillHist(l4, h4);
 
-  const tracker = v3GetTracker();
+  const tracker = getTracker();
   const CUR_Y = tracker ? tracker.cfg.CURRENT_YEAR : new Date().getFullYear();
   return { 
     labels: bins.slice(0, -1).map((_, i) => (CUR_Y + (bins[i] + bins[i + 1]) / 2).toFixed(1)), 
@@ -1910,7 +1908,7 @@ const LANG = {
     sb_hw:'Удвоение HW', sb_algo:'Удвоение Algo', sb_agency:'Потолок Agency', sb_ess:'ESS',
     // Controls
     ctrl_simulations:'Симуляции (N)', ctrl_obs_year:'Год наблюдения',
-    ctrl_intelligence:'Интеллект', ctrl_agentic:'Агентность',
+    ctrl_intelligence:'Reasoning (Логика)', ctrl_agentic:'Agency (Агентность)',
     ctrl_add:'Добавить', ctrl_reset:'Сбросить',
     ctrl_swe_bench:'SWE-bench (%)', ctrl_arc_agi:'ARC-AGI (%)',
     ctrl_horizon:'Автономность (часов)', ctrl_cost:'Стоимость 1M токенов ($)',
@@ -1920,14 +1918,14 @@ const LANG = {
     tag5:'Чувствительность', tag6:'Сценарии', tag7:'Декомпозиция', tag8:'Embodiment',
     chart1:'1. Распределение 4-х этапов Сингулярности (Monte Carlo)',
     chart3:'2. Накопленная вероятность (Cumulative PDF)',
-    chart5:'3. Карта чувствительности (Intel × Agentic)',
+    chart5:'3. Карта чувствительности (Reasoning × Agency)',
     chart6:'4. Веер сценариев (Multi-Run Overlay)',
     chart7:'5. Вклад компонент (Stacked Area)',
     chart_gap:'6. Каузальный разрыв (Hallucination Gap)',
     chart8:'7. Embodiment: распределение и реальная робототехника',
     tip1:'Показывает, где группируются 3000 прогонов Монте-Карло. Чем выше столбец — тем больше сценариев привели к T1/T2/T3/T4 в этом году.',
     tip3:'P(T2 ≤ X) — шанс, что T2 появится не позднее, чем через X лет. Если кривая круто поднимается — быстрый переход от «почти нет» к «почти точно».',
-    tip5:'Тепловая карта: оси — параметры Intelligence и Agentic последнего наблюдения. Цвет — медианный год T2. Показывает, какой параметр доминирует в прогнозе.',
+    tip5:'Тепловая карта: оси — параметры Reasoning и Agency последнего наблюдения. Цвет — медианный год T2. Показывает, какой параметр доминирует в прогнозе.',
     tip6:'30 случайных прогонов из апостериорного распределения, наложенных полупрозрачно. Показывает разброс возможных путей к сингулярности.',
     tip7:'Разбивка capability на составляющие: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Показывает, что двигает прогресс.',
     tip_gap:'Показывает разрыв между логикой (Reasoning) и пониманием мира (World Modeling). Красная зона — период опасных галлюцинаций, когда ИИ гениален, но оторван от реальности.',
@@ -1935,7 +1933,7 @@ const LANG = {
     ch_t1:'T1: Понимание', ch_t2:'T2: Предсказуемость', ch_t3:'T3: Контроль', ch_t4:'T4: Влияние',
     ch1_xlabel:'Год', ch1_ylabel:'Прогонов',
     ch3_xlabel:'Год', ch3_ylabel:'P(%)', ch3_pt2:'P(T2)', ch3_pt4:'P(T4)',
-    ch5_label:'Лет до T4', ch5_colorbar:'Лет до T4', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score', ch5_loading:'Вычисление матрицы (асинхронно)...',
+    ch5_label:'Лет до T4', ch5_colorbar:'Лет до T4', ch5_xaxis:'Agency score', ch5_yaxis:'Reasoning score', ch5_loading:'Вычисление матрицы (асинхронно)...',
     ch7_ylabel:'Суммарный вклад (log FLOPs)',
     ch8_median:'Медиана (MC)', ch8_p1090:'p10..p90', ch8_p2575:'p25..p75', ch8_real:'Реальные роботы', ch8_t4req:'T4 requirement', ch8_bypass:'HW bypass', ch8_y_main:'Embodiment (0..10)', ch8_x_hist:'embodiment_ceiling', ch8_y_hist:'# частиц',
     fY_suffix:' лет', fY_gt:'> 40 лет',
@@ -2148,8 +2146,8 @@ const LANG = {
 
     eh_play:'Запуск', eh_reset:'Сброс',
     eh_legend_t2:'достигнут', eh_legend_t4:'достигнут', eh_legend_flight:'в полёте',
-    v3_variations_label:'(v4: Дисперсия в облаке частиц)',
-    v3_no_agi:'Ни одна частица не достигла T2 к 2068 — модель считает AGI маловероятным при текущих параметрах.',
+    v3_variations_label:'(Дисперсия в облаке частиц)',
+    v3_no_agi:'Ни одна частица не достигла T2 к 2068 — модель считает T2 маловероятным при текущих параметрах.',
     // Canvas / overlay hardcoded strings (Swarm learn mode)
     swarm_canvas_median:'Медиана роя', canvas_hw_doubling:'Удвоение HW (мес)',
     canvas_agency_ceiling:'Потолок Agency', canvas_observation:'Наблюдение',
@@ -2168,7 +2166,7 @@ const LANG = {
     data_panel_year:'Год', data_panel_event:'Модель', data_panel_source:'Источники',
     data_panel_loading:'Данные загружаются...',
     // v3 params panel
-    v3_params_title:'Параметры v4', v3_no_t4:'T4 не достигнут ни одной частицей к 2068',
+    v3_params_title:'Параметры симуляции', v3_no_t4:'T4 не достигнут ни одной частицей к 2068',
   },
   en: {
     // Header
@@ -2181,7 +2179,7 @@ const LANG = {
     sb_hw:'HW Doubling', sb_algo:'Algo Doubling', sb_agency:'Agency Ceiling', sb_ess:'ESS',
     // Controls
     ctrl_simulations:'Simulations (N)', ctrl_obs_year:'Observation Year',
-    ctrl_intelligence:'Intelligence', ctrl_agentic:'Agentic',
+    ctrl_intelligence:'Reasoning', ctrl_agentic:'Agency',
     ctrl_add:'Add', ctrl_reset:'Reset',
     ctrl_swe_bench:'SWE-bench (%)', ctrl_arc_agi:'ARC-AGI (%)',
     ctrl_horizon:'Autonomy (hours)', ctrl_cost:'Cost per 1M tokens ($)',
@@ -2191,14 +2189,14 @@ const LANG = {
     tag5:'Sensitivity', tag6:'Scenarios', tag7:'Decomposition', tag8:'Embodiment',
     chart1:'1. Four Stages of Singularity Distribution (Monte Carlo)',
     chart3:'2. Cumulative Probability (CDF)',
-    chart5:'3. Sensitivity Heatmap (Intel × Agentic)',
+    chart5:'3. Sensitivity Heatmap (Reasoning × Agency)',
     chart6:'4. Scenario Fan (Multi-Run Overlay)',
     chart7:'5. Component Decomposition (Stacked Area)',
     chart_gap:'6. Causal Gap (Hallucination Gap)',
     chart8:'7. Embodiment: distribution and real-world robotics',
     tip1:'Shows where 3000 Monte Carlo runs cluster. Higher bar = more scenarios led to T1/T2/T3/T4 in that year.',
     tip3:'P(T2 ≤ X) — chance that T2 appears no later than X years. Steep rise = fast transition from "almost no" to "almost certain".',
-    tip5:'Heatmap: axes are Intelligence and Agentic scores of the last observation. Color = median T2 year. Shows which parameter dominates the forecast.',
+    tip5:'Heatmap: axes are Reasoning and Agency scores of the last observation. Color = median T2 year. Shows which parameter dominates the forecast.',
     tip6:'30 random runs from the posterior distribution, overlaid semi-transparently. Shows the spread of possible paths to singularity.',
     tip7:'Breakdown of capability into components: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Shows what drives progress.',
     tip_gap:'Shows the gap between pure logic (Reasoning) and reality grounding (World Modeling). The red zone is a period of dangerous hallucinations where AI is brilliant but disconnected from physics.',
@@ -2206,7 +2204,7 @@ const LANG = {
     ch_t1:'T1: Understanding', ch_t2:'T2: Predictability', ch_t3:'T3: Control', ch_t4:'T4: Influence',
     ch1_xlabel:'Year', ch1_ylabel:'Runs',
     ch3_xlabel:'Year', ch3_ylabel:'P(%)', ch3_pt2:'P(T2)', ch3_pt4:'P(T4)',
-    ch5_label:'Years to T4', ch5_colorbar:'Years to T4', ch5_xaxis:'Agentic score', ch5_yaxis:'Intelligence score', ch5_loading:'Computing matrix (async)...',
+    ch5_label:'Years to T4', ch5_colorbar:'Years to T4', ch5_xaxis:'Agency score', ch5_yaxis:'Reasoning score', ch5_loading:'Computing matrix (async)...',
     ch7_ylabel:'Cumulative contribution (log FLOPs)',
     ch8_median:'Median (MC)', ch8_p1090:'p10..p90', ch8_p2575:'p25..p75', ch8_real:'Real robots', ch8_t4req:'T4 requirement', ch8_bypass:'HW bypass', ch8_y_main:'Embodiment (0..10)', ch8_x_hist:'embodiment_ceiling', ch8_y_hist:'# particles',
     fY_suffix:' yrs', fY_gt:'> 40 yrs',
@@ -2468,8 +2466,8 @@ const LANG = {
 
     eh_play:'Play', eh_reset:'Reset',
     eh_legend_t2:'reached', eh_legend_t4:'reached', eh_legend_flight:'in flight',
-    v3_variations_label:'(v4: Variance in particle cloud)',
-    v3_no_agi:'No particle reached T2 by 2068 &mdash; the model considers AGI unlikely with the current parameters.',
+    v3_variations_label:'(Variance in particle cloud)',
+    v3_no_agi:'No particle reached T2 by 2068 — the model considers T2 unlikely with the current parameters.',
     // Canvas / overlay hardcoded strings (Swarm learn mode)
     swarm_canvas_median:'Swarm Median', canvas_hw_doubling:'HW Doubling (mo)',
     canvas_agency_ceiling:'Agency Ceiling', canvas_observation:'Observation',
@@ -2485,7 +2483,7 @@ const LANG = {
     // Observable metrics warning
     v3_warning_far:'Values far from particle range — model cannot reliably extrapolate. Forecast is closer to prior.',
     // v3 params panel
-    v3_params_title:'v4 Parameters', v3_no_t4:'No T4 by 2068 in any particle',
+    v3_params_title:'Simulation Parameters', v3_no_t4:'No T4 by 2068 in any particle',
     // Footer / misc
     footer_note_en:'Data is estimated',
   }
@@ -2548,11 +2546,11 @@ function swarmSetMode(m) {
   const slider = document.getElementById('swarmSlider');
   const labels = document.getElementById('swarmSliderLabels');
   if (m === 'forecast') {
-    // Use the same tracker as the main forecast (v3Tracker), fallback to full AA data
-    if (typeof v3Tracker !== 'undefined' && v3Tracker) {
-      swarm.tracker = v3Tracker;
+    // Use the same tracker as the main forecast (coreTracker), fallback to full AA data
+    if (typeof coreTracker !== 'undefined' && coreTracker) {
+      swarm.tracker = coreTracker;
     } else if (typeof v3GetTracker === 'function') {
-      swarm.tracker = v3GetTracker();
+      swarm.tracker = getTracker();
     } else {
       swarm.tracker = swarmBuildTracker(REAL_BENCHMARK_HISTORY.length);
     }
@@ -2910,10 +2908,10 @@ function liveSwarmInit() {
   });
 
   // Use same tracker as main forecast
-  if (typeof v3Tracker !== 'undefined' && v3Tracker) {
-    liveSwarm.tracker = v3Tracker;
+  if (typeof coreTracker !== 'undefined' && coreTracker) {
+    liveSwarm.tracker = coreTracker;
   } else if (typeof v3GetTracker === 'function') {
-    liveSwarm.tracker = v3GetTracker();
+    liveSwarm.tracker = getTracker();
   } else {
     liveSwarm.tracker = swarmBuildTracker(REAL_BENCHMARK_HISTORY.length);
   }
@@ -3236,7 +3234,7 @@ function eventHorizonPlay() {
   ehInitCanvas();
 
   // Get tracker from liveSwarm or global
-  const tracker = (liveSwarm && liveSwarm.tracker) || (typeof v3Tracker !== 'undefined' ? v3Tracker : null);
+  const tracker = (liveSwarm && liveSwarm.tracker) || (typeof coreTracker !== 'undefined' ? coreTracker : null);
   if (!tracker) {
     alert('Сначала запустите прогноз (кнопка «Запустить прогноз»)');
     return;
@@ -3307,13 +3305,13 @@ window.addEventListener('load', async () => {
   ehInitCanvas();
   ehDraw();
 
-  const tracker = v3GetTracker();
-  v3UpdateUI(tracker);
+  const tracker = getTracker();
+  updateTrackerUI(tracker);
   renderDataPanel();
 
   // Live Swarm
   if (typeof liveSwarm !== 'undefined') {
-    liveSwarm.tracker = v3Tracker;
+    liveSwarm.tracker = coreTracker;
     liveSwarmInit();
   }
 
@@ -3477,10 +3475,10 @@ function expertApplyAndRun() {
 }
 
 
-function v3QuickWarning() {
-  v3HasUserInput = true;
-  const tracker = v3Tracker || v3GetTracker();
-  v3CheckWarning(tracker);
+function quickWarning() {
+  hasUserInput = true;
+  const tracker = coreTracker || getTracker();
+  checkObservationWarning(tracker);
   updateObsMetrics();
 }
 
