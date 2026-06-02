@@ -704,6 +704,7 @@ class BayesianTracker {
       // 'cascade' — каскадные парадигмы, без модификаций
 
       let yT1 = null, yT2 = null, yT3 = null, yT4 = null;
+      let t2HitYear = null; // Перенесено сюда для сохранения состояния между итерациями
       let plotIdx = 0;
       let isWinter = false;
       let dataExhaustionHit = false;
@@ -867,7 +868,7 @@ class BayesianTracker {
         }
         
                 // Проверяем прохождение 4 этапов сингулярности
-                let t2HitYear = null;
+                // (let t2HitYear = null; удалено — переменная объявлена выше)
                 if (yT1 === null && cap >= this.cfg.THRESHOLDS.t1) yT1 = currentYear;
                 if (yT2 === null && cap >= this.cfg.THRESHOLDS.t2) { yT2 = currentYear; t2HitYear = currentYear; }
                 if (yT3 === null && cap >= this.cfg.THRESHOLDS.t3) yT3 = currentYear;
