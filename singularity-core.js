@@ -393,20 +393,23 @@ function simulateToYear(particle, targetYear, cfg) {
   let stateIntervention = false;
   let interventionCooldown = 0;
 
+  // PATCH 1 & 3: Independent states and robotics frontier limit
+  let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
+  let roboticsFrontier = ceilingE;
+
   for (let step = 0; step < steps; step++) {
     const currentYear = cfg.BASE_YEAR + step * dt;
-    const logDiff = flopsLog + algoLog - baseLog;
 
-    let rawR = computeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, ceilingR);
-    let rawA = computeDim(logDiff, cfg.DIMENSIONS.agency.slope, ceilingA);
-    // Embodiment: scale with agency/2 + reasoning/3 (нужен и software, и физика)
-    let rawE = computeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, ceilingE);
-    // World Modeling: каузальное понимание мира (медленнее логики)
-    let rawWM = computeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, ceilingR);
+    // PATCH 1, 2, 3: Capabilities from independent states
+    let rawR = computeDim(stateR, cfg.DIMENSIONS.reasoning.slope, ceilingR);
+    let rawA = computeDim(stateA, cfg.DIMENSIONS.agency.slope, ceilingA);
+    let rawE_ai = computeDim(stateE, cfg.EXPERT.embodimentScalingSlope, ceilingE);
+    let rawWM = computeDim(stateW, cfg.DIMENSIONS.worldModeling.slope, ceilingR);
 
     const R = applyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
     const A = applyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
-    const E = applyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
+    const aiEmbodiment = applyInference(rawE_ai, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
+    const E = Math.min(aiEmbodiment, roboticsFrontier); // Robotics Reality Layer
     const W = applyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap);
 
     // Слой 2. Производные цивилизационные способности
@@ -499,22 +502,30 @@ function simulateToYear(particle, targetYear, cfg) {
     // [NEW] Проклятие атомов: жёсткий потолок удвоений/год (лог-единицы)
     let hwDelta = hwK * damping * nashDamping * demandDamping * hwBonus;
     hwDelta = Math.min(hwDelta, cfg.EXPERT.barrierAtomsLimit * Math.LN2);
-    // [NEW] Термодинамика: hard wall на log FLOPs
     if (flopsLog >= cfg.EXPERT.barrierEnergyLog) hwDelta = 0;
+    let algoDelta = algoK * algoKMult * damping * nashDamping * demandDamping + rsi;
+
+    // PATCH 1, 2, 3: Differential state integration with cross-dependencies
+    const dCompute = (hwDelta + algoDelta) * dt;
+    stateR += dCompute;
+    stateW += 0.3 * dCompute + (0.4 * (W / ceilingR) + 0.3 * (R / ceilingR)) * Math.max(0, dCompute);
+    stateA += 0.4 * dCompute + (0.3 * (R / ceilingR) + 0.3 * (W / ceilingR)) * Math.max(0, dCompute);
+    stateE += 0.5 * dCompute + 0.2 * (A / ceilingA) * Math.max(0, dCompute);
+    roboticsFrontier += (0.15 + 0.1 * (R > 7.0 ? 1 : 0)) * dt; // Real robotics linear growth
+
     flopsLog += hwDelta * dt;
-    algoLog += (algoK * algoKMult * damping * nashDamping * demandDamping + rsi) * dt;
+    algoLog += algoDelta * dt;
   }
-  
-  const logDiff = flopsLog + algoLog - baseLog;
-  let rawR = computeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, ceilingR);
-  let rawA = computeDim(logDiff, cfg.DIMENSIONS.agency.slope, ceilingA);
-  let rawE = computeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, ceilingE);
-  let rawWM = computeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, ceilingR);
+
+  let rawR = computeDim(stateR, cfg.DIMENSIONS.reasoning.slope, ceilingR);
+  let rawA = computeDim(stateA, cfg.DIMENSIONS.agency.slope, ceilingA);
+  let rawE_ai = computeDim(stateE, cfg.EXPERT.embodimentScalingSlope, ceilingE);
+  let rawWM = computeDim(stateW, cfg.DIMENSIONS.worldModeling.slope, ceilingR);
 
   return {
     reasoning: applyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap),
     agency:    applyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap),
-    embodiment: applyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap),
+    embodiment: Math.min(applyInference(rawE_ai, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap), roboticsFrontier),
     worldModeling: applyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap),
   };
 }
@@ -714,23 +725,26 @@ class BayesianTracker {
       let interventionCooldown = 0;
 
       // --- Каскадные парадигмы ---
-      let paradigmGeneration = 0;    // 0 = Трансформеры, 1 = первая смена, 2 = вторая...
-      let lastShiftYear = 2023.0;     // Год последнего сдвига
+      let paradigmGeneration = 0;
+      let lastShiftYear = 2023.0;
       let hypeGracePeriod = 0.0;
       let algoKMultiplier = 1.0;
 
+      let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
+      let roboticsFrontier = ceilingEmbodiment;
+
       for (let step = 0; step < maxSteps; step++) {
         const currentYear = this.cfg.BASE_YEAR + step * dt;
-        
-        const logDiff = flopsLog + algoLog - baseLog;
-        const rawR = computeDim(logDiff, this.cfg.DIMENSIONS.reasoning.slope, ceilingReasoning);
-        const rawA = computeDim(logDiff, this.cfg.DIMENSIONS.agency.slope, ceilingAgency);
-        const rawE = computeDim(0.5 * logDiff, this.cfg.EXPERT.embodimentScalingSlope, ceilingEmbodiment);
-        const rawWM = computeDim(logDiff, this.cfg.DIMENSIONS.worldModeling.slope, ceilingReasoning);
+
+        const rawR = computeDim(stateR, this.cfg.DIMENSIONS.reasoning.slope, ceilingReasoning);
+        const rawA = computeDim(stateA, this.cfg.DIMENSIONS.agency.slope, ceilingAgency);
+        const rawE_ai = computeDim(stateE, this.cfg.EXPERT.embodimentScalingSlope, ceilingEmbodiment);
+        const rawWM = computeDim(stateW, this.cfg.DIMENSIONS.worldModeling.slope, ceilingReasoning);
 
         const R = applyInference(rawR, this.cfg.INFERENCE_SCALING.max_bonus_reasoning, this.cfg.INFERENCE_SCALING.saturation_cap);
         const A = applyInference(rawA, this.cfg.INFERENCE_SCALING.max_bonus_agency, this.cfg.INFERENCE_SCALING.saturation_cap);
-        const E = applyInference(rawE, this.cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, this.cfg.INFERENCE_SCALING.saturation_cap);
+        const aiEmbodiment = applyInference(rawE_ai, this.cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, this.cfg.INFERENCE_SCALING.saturation_cap);
+        const E = Math.min(aiEmbodiment, roboticsFrontier);
         const W = applyInference(rawWM, 1.2, this.cfg.INFERENCE_SCALING.saturation_cap);
 
         const C = Math.sqrt(A * W) * Math.max(0, 1.0 - this.cfg.EXPERT.coordinationFriction);
@@ -930,15 +944,21 @@ class BayesianTracker {
         // [NEW] Термодинамика: hard wall на log FLOPs
         if (flopsLog >= this.cfg.EXPERT.barrierEnergyLog) dynamicHwK = 0;
 
-        // Shock damping applied symmetrically to both hw and algo
-        flopsLog += dynamicHwK * shockDamping * dt;
-
-        // Algo progress: includes paradigm multiplier, data exhaustion, economic damping, nash, demand, and shock damping
-        // При пузыре GPU-капитала algoLog тоже страдает (симметрично с flopsLog)
+        let hwDelta = dynamicHwK * shockDamping;
         const algoShockDamping = gpuBubbleBurst ? shockDamping * 0.2 : shockDamping;
         let currentAlgoK = algoK * algoKMultiplier * damping * nashDamping * demandDamping;
         if (dataExhaustionHit) currentAlgoK *= this.cfg.EXPERT.dataWallPenalty;
-        algoLog += ((currentAlgoK + rsi) * algoShockDamping) * dt;
+        let algoDelta = (currentAlgoK + rsi) * algoShockDamping;
+
+        const dCompute = (hwDelta + algoDelta) * dt;
+        stateR += dCompute;
+        stateW += 0.3 * dCompute + (0.4 * (W / ceilingReasoning) + 0.3 * (R / ceilingReasoning)) * Math.max(0, dCompute);
+        stateA += 0.4 * dCompute + (0.3 * (R / ceilingReasoning) + 0.3 * (W / ceilingReasoning)) * Math.max(0, dCompute);
+        stateE += 0.5 * dCompute + 0.2 * (A / ceilingAgency) * Math.max(0, dCompute);
+        roboticsFrontier += (0.15 + 0.1 * (R > 7.0 ? 1 : 0)) * dt;
+
+        flopsLog += hwDelta * dt;
+        algoLog += algoDelta * dt;
       }
       
       t1Years.push(yT1 !== null ? yT1 - this.cfg.CURRENT_YEAR : Infinity);
@@ -1068,19 +1088,22 @@ class BayesianTracker {
       let govMoratorium = false;
       let govMoratoriumYears = 0;
 
+      let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
+      let roboticsFrontier = cE;
+
       const years = [], caps = [];
       for (let step = 0; step < steps; step++) {
         const y = cfg.BASE_YEAR + step * dt;
 
-        const logDiff = flopsLog + algoLog - baseLog;
-        const rawR = computeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
-        const rawA = computeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
-        const rawE = computeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, cE);
+        const rawR = computeDim(stateR, cfg.DIMENSIONS.reasoning.slope, cR);
+        const rawA = computeDim(stateA, cfg.DIMENSIONS.agency.slope, cA);
+        const rawE_ai = computeDim(stateE, cfg.EXPERT.embodimentScalingSlope, cE);
+        const rawWM = computeDim(stateW, cfg.DIMENSIONS.worldModeling.slope, cR);
 
-        const rawWM = computeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, cR);
         const R = applyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
         const A = applyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
-        const E = applyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
+        const aiEmbodiment = applyInference(rawE_ai, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
+        const E = Math.min(aiEmbodiment, roboticsFrontier);
         const W = applyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap);
 
         const C = Math.sqrt(A * W) * Math.max(0, 1.0 - cfg.EXPERT.coordinationFriction);
@@ -1225,14 +1248,21 @@ class BayesianTracker {
         currentHwK = Math.min(currentHwK, cfg.EXPERT.barrierAtomsLimit * Math.LN2);
         if (flopsLog >= cfg.EXPERT.barrierEnergyLog) currentHwK = 0;
 
-        flopsLog += currentHwK * hwBonus * shockDamping * dt;
-
-        // [PATCH Bug 2] Шоковое демпфирование + RSI при пузыре
+        let hwDelta = currentHwK * hwBonus * shockDamping;
         const algoShockDamping = gpuBubbleBurst ? shockDamping * 0.2 : shockDamping;
         let currentAlgoK = algoK * algoKMultiplier * damping * nashDamping * demandDamping;
         if (dataExhaustionHit) currentAlgoK *= cfg.EXPERT.dataWallPenalty;
+        let algoDelta = (currentAlgoK + rsi) * algoShockDamping;
 
-        algoLog += ((currentAlgoK + rsi) * algoShockDamping) * dt;
+        const dCompute = (hwDelta + algoDelta) * dt;
+        stateR += dCompute;
+        stateW += 0.3 * dCompute + (0.4 * (W / cR) + 0.3 * (R / cR)) * Math.max(0, dCompute);
+        stateA += 0.4 * dCompute + (0.3 * (R / cR) + 0.3 * (W / cR)) * Math.max(0, dCompute);
+        stateE += 0.5 * dCompute + 0.2 * (A / cA) * Math.max(0, dCompute);
+        roboticsFrontier += (0.15 + 0.1 * (R > 7.0 ? 1 : 0)) * dt;
+
+        flopsLog += hwDelta * dt;
+        algoLog += algoDelta * dt;
       }
       scenarios.push({ years, caps });
     }
@@ -1296,18 +1326,23 @@ class BayesianTracker {
     }
     const algoKMultiplier = dominantModel === 'slow_takeoff' ? 0.6 : 1.0;
     let paradigmGeneration = 0;
+
+    let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
+    let roboticsFrontier = cE;
+
     for (let step = 0; step < steps; step++) {
       const y = cfg.BASE_YEAR + step * dt;
       let paradigmBonus = 0;
 
-      const logDiff = flopsLog + algoLog - baseLog;
-      const rawR = computeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
-      const rawA = computeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
-      const rawE = computeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, cE);
-      const rawWM = computeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, cR);
+      const rawR = computeDim(stateR, cfg.DIMENSIONS.reasoning.slope, cR);
+      const rawA = computeDim(stateA, cfg.DIMENSIONS.agency.slope, cA);
+      const rawE_ai = computeDim(stateE, cfg.EXPERT.embodimentScalingSlope, cE);
+      const rawWM = computeDim(stateW, cfg.DIMENSIONS.worldModeling.slope, cR);
+      
       const R = applyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
       const A = applyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
-      const E = applyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
+      const aiEmbodiment = applyInference(rawE_ai, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
+      const E = Math.min(aiEmbodiment, roboticsFrontier);
       const W = applyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap);
 
       const C = Math.sqrt(A * W) * Math.max(0, 1.0 - cfg.EXPERT.coordinationFriction);
@@ -1345,8 +1380,17 @@ class BayesianTracker {
       let hwDelta = hwK * damping * hwBonus;
       hwDelta = Math.min(hwDelta, cfg.EXPERT.barrierAtomsLimit * Math.LN2);
       if (flopsLog >= cfg.EXPERT.barrierEnergyLog) hwDelta = 0;
+      let algoDelta = algoK * algoKMultiplier * damping + rsi;
+
+      const dCompute = (hwDelta + algoDelta) * dt;
+      stateR += dCompute;
+      stateW += 0.3 * dCompute + (0.4 * (W / cR) + 0.3 * (R / cR)) * Math.max(0, dCompute);
+      stateA += 0.4 * dCompute + (0.3 * (R / cR) + 0.3 * (W / cR)) * Math.max(0, dCompute);
+      stateE += 0.5 * dCompute + 0.2 * (A / cA) * Math.max(0, dCompute);
+      roboticsFrontier += (0.15 + 0.1 * (R > 7.0 ? 1 : 0)) * dt;
+
       flopsLog += hwDelta * dt;
-      algoLog += (algoK * algoKMultiplier * damping + rsi) * dt;
+      algoLog += algoDelta * dt;
       pureAlgoLog += (algoK * algoKMultiplier * damping) * dt;
     }
     return { years, hwComp, algoComp, paradigmComp, rsiComp };
