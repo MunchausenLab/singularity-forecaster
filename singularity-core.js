@@ -1593,7 +1593,7 @@ function updateTrackerUI(tracker) {
     const L = LANG[window._lang || 'ru'];
     parEl.innerHTML = `
       <div style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;border-top:1px dashed #1e1e2e;padding-top:8px;line-height:1.4">
-        <b style="color:#f0883e">${L.v3_params_title || 'Текущие апостериорные веса гипотез'}:</b><br>
+        <b style="color:#f0883e">${L.wm_posterior_title || 'Текущие апостериорные веса гипотез'}:</b><br>
         Cascade (Каскад): <span style="color:#58a6ff;font-family:monospace">${(sum.postCascade * 100).toFixed(1)}%</span><br>
         Hard Wall (Стена): <span style="color:#ef4444;font-family:monospace">${(sum.postHardWall * 100).toFixed(1)}%</span><br>
         Slow Takeoff (Взлет): <span style="color:#22c55e;font-family:monospace">${(sum.postSlowTakeoff * 100).toFixed(1)}%</span>
@@ -1961,18 +1961,8 @@ function plotEmbodimentDiagnostics(tracker, embodimentTrajectory) {
 
 function plotHallucinationGap(gt) {
   const t = LANG[window._lang || 'ru'];
-
-  // Создаем динамический контейнер, если его нет
-  let gapContainer = document.getElementById('c_gap');
-  if (!gapContainer) {
-      const c7Container = document.getElementById('c7');
-      if (c7Container) {
-          gapContainer = document.createElement('div');
-          gapContainer.id = 'c_gap';
-          gapContainer.className = c7Container.className;
-          c7Container.parentNode.insertBefore(gapContainer, c7Container.nextSibling);
-      }
-  }
+  const gapContainer = document.getElementById('c_gap');
+  if (!gapContainer) return;
 
   const traces = [
     { x: gt.years, y: gt.wm, type: 'scatter', mode: 'lines', name: 'World Modeling', line: { color: '#22c55e', width: 2 } },
@@ -1981,15 +1971,13 @@ function plotHallucinationGap(gt) {
 
   const layout = {
     ...LAYOUT_BASE,
-    title: { text: t.ch_gap_title || 'Каузальный разрыв (Hallucination Gap)', font: { size: 14, color: '#eab308' } },
+    title: { text: t.ch_gap_title || t.chart_gap || 'Каузальный разрыв (Hallucination Gap)', font: { size: 14, color: '#eab308' } },
     xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel || 'Год' }, range: [2026, 2045] },
     yaxis: { ...LAYOUT_BASE.yaxis, title: { text: 'Capability Scale (0..15)' }, range: [0, 16] },
     legend: { ...LAYOUT_BASE.legend, orientation: 'h', y: -0.15 },
   };
 
-  if (gapContainer) {
-      Plotly.newPlot('c_gap', traces, layout, PLOT_CFG);
-  }
+  Plotly.newPlot('c_gap', traces, layout, PLOT_CFG);
 }
 
 
@@ -2285,6 +2273,12 @@ const LANG = {
     decomp_p1: 'Аддитивная декомпозиция логарифмической производительности системы на фундаментальные драйверы.',
     decomp_p2: '<b>Компоненты $d\\log C(t)$:</b>',
     decomp_p3: '<b>Синтез:</b> Переход от доминирования "Hardware" (экзогенный рост) к "Algorithms" и, наконец, к экспоненциальному взрыву "RSI" визуализирует механизм эндогенного сингулярного взлета.',
+    // Hallucination Gap chart
+    tag_gap:'Казуальный разрыв',
+    chart_gap:'5b. Каузальный разрыв (Hallucination Gap)',
+    gap_p1:'Расхождение между способностью к формальному выводу (Reasoning) и пониманием причинно-следственных связей в физическом мире (World Modeling).',
+    gap_p2:'<b>Интерпретация:</b>',
+    gap_p3:'Вычисляется как интеграл разности R(t) - W(t) по всем частицам. Устойчиво расширяющийся разрыв — сигнал о неизбежном «моменте галлюцинаций».',
     emb_p1: '<b>Воплощенность (Embodiment, $E$)</b> — четвертый базис, квантифицирующий физическую способность системы изменять распределение атомов. T4 невозможен без $E \\ge E_{crit}$.',
     emb_p2: '<b>Верхняя панель:</b> Эволюция $E(t)$. Желтые маркеры — априорная калибровка на эмпирических данных (Boston Dynamics, Tesla Optimus, Figure). Зеленая линия (Bypass) — порог автопоэзиса, при котором ИИ начинает автономно расширять аппаратную базу, ускоряя HW рост в 3 раза.',
     emb_p3: '<b>Нижняя панель:</b> Маргинальное распределение параметра $E_{ceiling}$ (асимптотического предела воплощенности) в ансамбле частиц.',
@@ -2312,6 +2306,7 @@ const LANG = {
     data_panel_loading:'Данные загружаются...',
     // v3 params panel
     v3_params_title:'Параметры симуляции', v3_no_t4:'T4 не достигнут ни одной частицей к 2068',
+    wm_posterior_title:'Текущие апостериорные веса гипотез',
   },
   en: {
     // Header
@@ -2594,6 +2589,13 @@ const LANG = {
     decomp_p1:'Additive decomposition of logarithmic system performance into fundamental drivers.',
     decomp_p2:'<b>Components of $d\\log C(t)$:</b>',
     decomp_p3:'<b>Synthesis:</b> The transition from "Hardware" dominance (exogenous growth) to "Algorithms" and finally the exponential "RSI" explosion visualizes the mechanics of endogenous singular takeoff.',
+    // Hallucination Gap chart (en)
+    tag_gap:'Causal Gap',
+    chart_gap:'5b. Hallucination Gap',
+    gap_p1:'Divergence between formal reasoning capability (Reasoning) and causal understanding of the physical world (World Modeling).',
+    gap_p2:'<b>Interpretation:</b>',
+    gap_p3:'Computed as the integral of R(t) - W(t) across all particles. A persistently widening gap signals an inevitable "hallucination moment".',
+
     // Embodiment desc
     emb_p1:'<b>Embodiment ($E$)</b> — the fourth basis, quantifying physical capability to alter atomic distribution. T4 is impossible without $E \\ge E_{crit}$.',
     emb_p2:'<b>Top Panel:</b> $E(t)$ evolution. Yellow markers are prior calibration on empirical data (Boston Dynamics, Optimus, Figure). Green line (Bypass) is the autopoiesis threshold where AI autonomously expands hardware, accelerating HW growth $\\times 3$.',
@@ -2631,6 +2633,7 @@ const LANG = {
     preset_default:'Default (Bayesian)', preset_optimist:'Optimist (Scaling)', preset_skeptic:'Skeptic (Slow Takeoff)', preset_pessimist:'Pessimist (Hard Wall)',
     // v3 params panel
     v3_params_title:'Simulation Parameters', v3_no_t4:'No T4 by 2068 in any particle',
+    wm_posterior_title:'Current Posterior Hypothesis Weights',
     // Footer / misc
     footer_note_en:'Data is estimated',
   }
