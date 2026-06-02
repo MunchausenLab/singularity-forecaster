@@ -5,7 +5,7 @@
 function sigmoid(x) { return 1.0 / (1.0 + Math.exp(-Math.max(-30, Math.min(30, x)))); }
 function randnRange(mean, std) { const u1 = Math.random() || Number.EPSILON, u2 = Math.random(); return mean + std * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2); }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-function percentile(arr, p) { if (!arr || arr.length === 0) return undefined; const sorted = arr.slice().sort((a, b) => a - b); const idx = clamp(Math.floor(p / 100 * sorted.length), 0, sorted.length - 1); return sorted[idx]; }
+function percentile(arr, p) { if (!arr || arr.length === 0) return undefined; const sorted = arr.slice().sort((a, b) => a - b); const idx = clamp(Math.floor(p / 100 * (sorted.length - 1) + 0.5), 0, sorted.length - 1); return sorted[idx]; }
 function cdf(list, x) { const c = list.filter(v => isFinite(v) && v <= x).length; return list.length ? (c / list.length) * 100 : 0; }
 
 // Перевод латентных переменных (reasoning, agency) в наблюдаемые бенчмарки
@@ -221,7 +221,7 @@ function v3SimulateToYear(particle, targetYear, cfg) {
     let reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
     let agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
     let embodiment = v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
-    const cap = Math.min(reasoning, agency, embodiment);
+    const cap = Math.min(reasoning, agency);
 
     // Deterministic paradigm shift (same logic as MC, but no randomness — threshold-based)
     const canShift = (paradigmGeneration === 0 && currentYear > 2026.5)
@@ -412,8 +412,8 @@ class BayesianTracker {
       if (rrWeight > 0) {
         const realIdx = realEmbodimentIndexAt(year);
         const rrSigma = (1.5 / Math.max(0.01, rrWeight)); // weight=0.3 → sigma=5; weight=1 → sigma=1.5
-        // Сравниваем с particle.embodiment_ceiling (потолок), а не с embodiment (текущим уровнем)
-        logLik -= 0.5 * ((realIdx - p.embodiment_ceiling) / rrSigma) ** 2;
+        // Сравниваем с предсказанным embodiment (pred.embodiment), а не с потолком частицы
+        logLik -= 0.5 * ((realIdx - pred.embodiment) / rrSigma) ** 2;
         count++;
       }
 
@@ -529,7 +529,7 @@ class BayesianTracker {
         const agency = v3ApplyInference(rawA, this.cfg.INFERENCE_SCALING.max_bonus_agency, this.cfg.INFERENCE_SCALING.saturation_cap);
         const embodiment = v3ApplyInference(rawE, this.cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, this.cfg.INFERENCE_SCALING.saturation_cap);
 
-        const cap = Math.min(reasoning, agency, embodiment);
+        const cap = Math.min(reasoning, agency);
 
         // Архитектурный каскад (множественные смены парадигм)
         // Первая смена — не раньше 2026.5, последующие — не чаще раза в 4 года
@@ -720,9 +720,11 @@ class BayesianTracker {
         flopsLog += dynamicHwK * shockDamping * dt;
 
         // Algo progress: includes paradigm multiplier, data exhaustion, economic damping, nash, demand, and shock damping
+        // При пузыре GPU-капитала algoLog тоже страдает (симметрично с flopsLog)
+        const algoShockDamping = gpuBubbleBurst ? shockDamping * 0.2 : shockDamping;
         let currentAlgoK = algoK * algoKMultiplier * damping * nashDamping * demandDamping;
         if (dataExhaustionHit) currentAlgoK *= this.cfg.EXPERT.dataWallPenalty;
-        algoLog += ((currentAlgoK + rsi) * shockDamping) * dt;
+        algoLog += ((currentAlgoK + rsi) * algoShockDamping) * dt;
       }
       
       t1Years.push(yT1 !== null ? yT1 - this.cfg.CURRENT_YEAR : Infinity);
@@ -886,7 +888,7 @@ class BayesianTracker {
             damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
         }
 
-        const cap = Math.min(reasoning, agency, embodiment);
+        const cap = Math.min(reasoning, agency);
         const rsi = v3CalculateRSI(reasoning, agency, cap, cfg.EXPERT);
 
         // [PATCH] Embodiment bypass: при высоком embodiment ИИ строит свои дата-центры
@@ -895,6 +897,7 @@ class BayesianTracker {
 
         let currentAlgoK = algoK * damping;
         if (dataExhaustionHit) currentAlgoK *= cfg.EXPERT.dataWallPenalty;
+        if (gpuBubbleBurst) currentAlgoK *= 0.2;
         let currentHwK = hwK * damping;
         if (gpuBubbleBurst) currentHwK *= 0.2;
         // [NEW] Проклятие атомов: жёсткий потолок удвоений/год (лог-единицы)
@@ -974,7 +977,7 @@ class BayesianTracker {
       const reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
       const agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
       const embodiment = v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
-      const cap = Math.min(reasoning, agency, embodiment);
+      const cap = Math.min(reasoning, agency);
 
       // ИСПРАВЛЕНИЕ: Логика парадигм синхронизирована
       const saturation = Math.max(reasoning / cR, agency / cA);
