@@ -2300,7 +2300,7 @@ const LANG = {
     // Observable metrics warning
     v3_warning_far:'⚠️ Значения далеко от диапазона частиц — модель не может надёжно экстраполировать. Прогноз ближе к априорному.',
     // Expert presets
-    preset_default:'Базовый (Байес)', preset_optimist:'Оптимист (Скейлинг)', preset_skeptic:'Скептик (Медленный старт)', preset_pessimist:'Пессимист (Стена)',
+    preset_default:'Базовый', preset_optimist:'Технооптимизм', preset_skeptic:'Техноскептицизм', preset_pessimist:'Технопессимизм',
     // Data panel
     data_panel_year:'Год', data_panel_event:'Модель', data_panel_source:'Источники',
     data_panel_loading:'Данные загружаются...',
@@ -2630,7 +2630,7 @@ const LANG = {
     // Observable metrics warning
     v3_warning_far:'Values far from particle range — model cannot reliably extrapolate. Forecast is closer to prior.',
     // Expert presets
-    preset_default:'Default (Bayesian)', preset_optimist:'Optimist (Scaling)', preset_skeptic:'Skeptic (Slow Takeoff)', preset_pessimist:'Pessimist (Hard Wall)',
+    preset_default:'Default', preset_optimist:'Techno-Optimism', preset_skeptic:'Techno-Skepticism', preset_pessimist:'Techno-Pessimism',
     // v3 params panel
     v3_params_title:'Simulation Parameters', v3_no_t4:'No T4 by 2068 in any particle',
     wm_posterior_title:'Current Posterior Hypothesis Weights',
@@ -3679,43 +3679,44 @@ function injectExpertPresets() {
   const panel = document.getElementById('expertPanel');
   if (!panel) return;
   
-  // Создаем обертку для кнопок
+  // Создаём обертку для кнопок — по центру, компактно
   const wrapper = document.createElement('div');
   wrapper.style.display = 'flex';
-  wrapper.style.gap = '8px';
+  wrapper.style.gap = '6px';
   wrapper.style.flexWrap = 'wrap';
-  wrapper.style.marginBottom = '12px';
+  wrapper.style.justifyContent = 'center';
+  wrapper.style.marginBottom = '10px';
   
   const L = LANG[window._lang || 'ru'];
   
   const presets = [
-    { id: 'default', label: L.preset_default || 'Базовый', color: '#58a6ff' },
-    { id: 'optimist', label: L.preset_optimist || 'Оптимист', color: '#22c55e' },
-    { id: 'skeptic', label: L.preset_skeptic || 'Скептик', color: '#eab308' },
-    { id: 'pessimist', label: L.preset_pessimist || 'Пессимист', color: '#ef4444' }
+    { id: 'default',     label: L.preset_default     || 'Базовый',           borderColor: '#4a5568', hoverBg: 'rgba(74,85,104,0.15)' },
+    { id: 'optimist',    label: L.preset_optimist    || 'Технооптимизм',     borderColor: '#4a5568', hoverBg: 'rgba(74,85,104,0.15)' },
+    { id: 'skeptic',     label: L.preset_skeptic     || 'Техноскептицизм',   borderColor: '#4a5568', hoverBg: 'rgba(74,85,104,0.15)' },
+    { id: 'pessimist',   label: L.preset_pessimist   || 'Технопессимизм',    borderColor: '#4a5568', hoverBg: 'rgba(74,85,104,0.15)' }
   ];
   
   presets.forEach(p => {
     const btn = document.createElement('button');
     btn.textContent = p.label;
-    btn.style.padding = '6px 12px';
-    btn.style.background = 'rgba(22, 22, 32, 0.8)';
-    btn.style.border = `1px solid ${p.color}`;
-    btn.style.color = p.color;
+    btn.style.padding = '4px 10px';
+    btn.style.background = 'transparent';
+    btn.style.border = `1px solid ${p.borderColor}`;
+    btn.style.color = '#64748b';
     btn.style.borderRadius = '4px';
     btn.style.cursor = 'pointer';
-    btn.style.fontSize = '0.75rem';
+    btn.style.fontSize = '0.7rem';
     btn.style.fontFamily = 'var(--mono, monospace)';
-    btn.style.transition = 'background 0.2s';
+    btn.style.transition = 'all 0.2s';
+    btn.style.opacity = '0.8';
     
-    btn.onmouseover = () => btn.style.background = p.color + '33';
-    btn.onmouseout = () => btn.style.background = 'rgba(22, 22, 32, 0.8)';
+    btn.onmouseover = () => { btn.style.background = p.hoverBg; btn.style.color = '#94a3b8'; btn.style.opacity = '1'; };
+    btn.onmouseout  = () => { btn.style.background = 'transparent'; btn.style.color = '#64748b'; btn.style.opacity = '0.8'; };
     
     btn.onclick = () => applyExpertPreset(p.id);
     wrapper.appendChild(btn);
   });
   
-  // Вставляем обертку ПЕРЕД панелью
   panel.parentNode.insertBefore(wrapper, panel);
 }
 
