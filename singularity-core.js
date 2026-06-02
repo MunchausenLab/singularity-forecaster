@@ -611,6 +611,8 @@ class BayesianTracker {
           }
         }
 
+        let damping = 1.0; // [FIX] Инициализируем damping до начала проверок шоков и барьеров
+
         // --- ШОКИ: черные лебеди и предсказуемые кризисы ---
 
         // Шок 1: Исчерпание качественных данных (Data Wall)
@@ -681,7 +683,7 @@ class BayesianTracker {
                     break; // Останавливаем симуляцию на фазовом переходе
                 }
         
-        let damping = 1.0;
+        // [FIX] Строка `let damping = 1.0;` отсюда удалена, т.к. переменная объявлена выше
 
         // Проверка на лопнувший пузырь (AI Winter)
         if (!isWinter && currentYear > 2026.5) {
@@ -927,7 +929,7 @@ class BayesianTracker {
         }
 
         years.push(y);
-        caps.push(Math.min(reasoning, agency, embodiment));
+        caps.push(Math.min(reasoning, agency)); // [FIX] Базовый интеллект не ограничивается embodiment
 
         // --- ДИНАМИЧЕСКИЕ ШОКИ И БАРЬЕРЫ ---
         if (!dataExhaustionHit && y > 2026.5 && Math.random() < 0.15 * dt) dataExhaustionHit = true;
@@ -1082,12 +1084,16 @@ class BayesianTracker {
         else if (this.particles[i].world_model === 'slow_takeoff') slowTakeoffWeight += w;
       }
     }
-    // Blend: hard_wall caps agency at plateauHardWallCeiling and embodiment at 4.0, slow_takeoff reduces algoK
-    if (hardWallWeight > 0.5) {
+    // Blend: определяем доминирующую парадигму для отрисовки декомпозиции
+    const cascadeWeight = 1.0 - hardWallWeight - slowTakeoffWeight;
+    const dominantModel = (hardWallWeight > cascadeWeight && hardWallWeight > slowTakeoffWeight) ? 'hard_wall' :
+                          (slowTakeoffWeight > cascadeWeight && slowTakeoffWeight > hardWallWeight) ? 'slow_takeoff' : 'cascade';
+                          
+    if (dominantModel === 'hard_wall') {
       cA = Math.min(cA, cfg.EXPERT.plateauHardWallCeiling);
       cE = Math.min(cE, 4.0);
     }
-    const algoKMultiplier = slowTakeoffWeight > 0.5 ? 0.6 : 1.0;
+    const algoKMultiplier = dominantModel === 'slow_takeoff' ? 0.6 : 1.0;
     let paradigmGeneration = 0;
     for (let step = 0; step < steps; step++) {
       const y = cfg.BASE_YEAR + step * dt;
@@ -1407,8 +1413,10 @@ function runBacktest(trainEnd, kPred) {
       const p10 = vals.length > 0 ? vals[Math.floor(vals.length * 0.10)] : 0;
       const p90 = vals.length > 0 ? vals[Math.floor(vals.length * 0.90)] : 0;
       if (obs[dim] !== undefined) {
-        // autoAssembly в метрике — log10(часы), в obs — часы. Конвертируем в log-шкалу для сравнения.
-        const obsInModelScale = (dim === 'autoAssembly') ? Math.log10(Math.max(0.001, obs[dim])) : obs[dim];
+        // autoAssembly и horizon предсказываются в log10(часах), а в obs лежат реальные часы. Конвертируем.
+        const obsInModelScale = (dim === 'autoAssembly') ? Math.log10(Math.max(0.001, obs[dim])) :
+                                (dim === 'horizon') ? Math.log10(Math.max(0.01, obs[dim])) :
+                                obs[dim];
         const err = obsInModelScale - medianSample[dim];
         sqErr[dim] += err * err;
         cnt[dim]++;
@@ -3346,16 +3354,11 @@ function expertUpdate(key, value) {
   // String values (e.g. observationSigmaMode) skip numeric parsing
   if (typeof value === 'string' && isNaN(parseFloat(value))) {
     EXPERT_CONFIG[key] = value;
-    if (typeof v3Tracker !== 'undefined' && v3Tracker && v3Tracker.cfg) {
-      v3Tracker.cfg.EXPERT[key] = value;
-    }
-    return;
+    return; // [FIX] Убрана live-мутация трекера, ждем Apply & Restart
   }
   value = parseFloat(value);
-  EXPERT_CONFIG[key] = value;
-  if (typeof v3Tracker !== 'undefined' && v3Tracker && v3Tracker.cfg) {
-    v3Tracker.cfg.EXPERT[key] = value;
-  }
+  EXPERT_CONFIG[key] = value; // [FIX] Убрана live-мутация трекера, ждем Apply & Restart
+  
   const el = document.getElementById('ev-' + key);
   if (el) {
     el.textContent = (value % 1 === 0) ? value.toFixed(1) : value.toFixed(2);
