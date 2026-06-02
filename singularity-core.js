@@ -1849,6 +1849,7 @@ const LANG = {
     expert_blkD4:'World Models',
     expert_blkD5:'Симуляция',
     expert_blkE:'Барьеры реальности',
+    expert_blkF:'Воплощённость',
     // Deep params (kept for backward compat with expertResetDefaults)
     expert_cat7new:'Углубленные настройки (TTC, штрафы, шум)',
     expert_p_maxInferenceBonusReasoning:'Макс. TTC бонус (Reasoning)',
@@ -2115,6 +2116,7 @@ const LANG = {
     expert_blkD4:'World Models',
     expert_blkD5:'Simulation',
     expert_blkE:'Reality Barriers',
+    expert_blkF:'Embodiment',
     // Deep params (kept for backward compat)
     expert_cat7new:'Deep Settings (TTC, Penalties, Noise)',
     expert_p_maxInferenceBonusReasoning:'Max TTC Bonus (Reasoning)',

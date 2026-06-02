@@ -791,16 +791,8 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
       </div>
     </div>
 
-      <div class="expert-param">
-        <div class="expert-param-label">
-          <span class="expert-param-name" data-i18n="expert_p_observationSigmaMode">Режим шума наблюдений</span>
-        </div>
-        <select id="e-observationSigmaMode" style="width:100%;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:.78rem" onchange="expertUpdate('observationSigmaMode',this.value)">
-          <option value="global">Global (BENCHMARK_SIGMAS)</option>
-          <option value="perPoint">Per-point (локальные *_sigma)</option>
-        </select>
-        <div class="expert-param-desc" data-i18n="expert_d_observationSigmaMode">Режим вычисления σ в likelihood</div>
-      </div>
+    <div class="expert-group">
+      <div class="expert-group-title" data-i18n="expert_blkF">Воплощённость</div>
 
       <div class="expert-param">
         <div class="expert-param-label">
@@ -838,6 +830,17 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
         <div class="expert-param-desc" data-i18n="expert_d_realRoboticsWeight">Вес prior на embodiment_ceiling от реальных роботов (Spot/Optimus/Figure/1X)</div>
       </div>
     </div>
+
+      <div class="expert-param">
+        <div class="expert-param-label">
+          <span class="expert-param-name" data-i18n="expert_p_observationSigmaMode">Режим шума наблюдений</span>
+        </div>
+        <select id="e-observationSigmaMode" style="width:100%;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:.78rem" onchange="expertUpdate('observationSigmaMode',this.value)">
+          <option value="global">Global (BENCHMARK_SIGMAS)</option>
+          <option value="perPoint">Per-point (локальные *_sigma)</option>
+        </select>
+        <div class="expert-param-desc" data-i18n="expert_d_observationSigmaMode">Режим вычисления σ в likelihood</div>
+      </div>
 
   </div><!-- /expert-grid -->
   <div class="expert-actions">
