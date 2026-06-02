@@ -442,6 +442,7 @@ function simulateToYear(particle, targetYear, cfg) {
         }
         ceilingA *= shiftMult;
         ceilingR *= shiftMult;
+        ceilingE *= shiftMult; // PATCH 4: Physical limit also shifts with paradigm
         algoKMult = 2.0;
         // ДОБАВЛЕНО: откат логарифма при смене парадигмы, чтобы физика совпадала с Монте-Карло
         algoLog = Math.max(algoLog - (0.4 + paradigmGeneration * 0.1), -3.0);
@@ -802,6 +803,7 @@ class BayesianTracker {
 
                 ceilingAgency *= shiftMult;
                 ceilingReasoning *= shiftMult;
+                ceilingEmbodiment *= shiftMult; // PATCH 4: Physical limit also shifts with paradigm
 
                 algoLog = Math.max(algoLog - (0.4 + paradigmGeneration * 0.1), -3.0);
                 algoKMultiplier = 2.0;
@@ -881,13 +883,21 @@ class BayesianTracker {
             plotIdx++;
         }
         
-                // Проверяем прохождение 4 этапов сингулярности
-                // (let t2HitYear = null; удалено — переменная объявлена выше)
-                if (yT1 === null && cap >= this.cfg.THRESHOLDS.t1) yT1 = currentYear;
-                if (yT2 === null && cap >= this.cfg.THRESHOLDS.t2) { yT2 = currentYear; t2HitYear = currentYear; }
-                if (yT3 === null && cap >= this.cfg.THRESHOLDS.t3) yT3 = currentYear;
-                // T4 теперь оценивается по civCap, включающему C, M и E
-                if (yT4 === null && civCap >= this.cfg.THRESHOLDS.t4 && E >= this.cfg.EXPERT.embodimentT4Requirement) {
+                // ПАТЧ 5: Смысловые, наблюдаемые пороги Сингулярности
+                const t1Condition = R >= this.cfg.THRESHOLDS.t1 && W >= this.cfg.THRESHOLDS.t1 * 0.8; // AI R&D > лучшего человека
+                const t2Condition = A >= this.cfg.THRESHOLDS.t2 && R >= 8.0; // Автономные компании
+
+                // Пользовательские значения t3 и t4 могли остаться огромными (25 и 100), поэтому кэпируем их для новых реалистичных шкал
+                const t3Req = Math.min(this.cfg.THRESHOLDS.t3, 15.0);
+                const t3Condition = S >= t3Req && A >= 12.0; // Автономный научный цикл
+
+                const t4Req = Math.min(this.cfg.THRESHOLDS.t4, 18.0);
+                const t4Condition = E >= this.cfg.EXPERT.embodimentT4Requirement && A >= t4Req && W >= 14.0; // Автономная инфраструктура
+
+                if (yT1 === null && t1Condition) yT1 = currentYear;
+                if (yT2 === null && t2Condition) { yT2 = currentYear; t2HitYear = currentYear; }
+                if (yT3 === null && t3Condition) yT3 = currentYear;
+                if (yT4 === null && t4Condition) {
                     yT4 = currentYear;
                     break;
                 }
@@ -916,35 +926,41 @@ class BayesianTracker {
           }
         }
 
-        // Единый расчет RSI
-        const rsi = calculateRSI(S, C, this.cfg.EXPERT);
-        
-        // dataExhaustionHit обрабатывается ниже в currentAlgoK
-        // Экономика исследований: динамический hwK зависит от ROI
-        // capitalMultiplier уже вычислен выше для compute overhang — переиспользуем логику
+        // Единый расчет RSI (Парадокс улучшений — RSI отделен от чистой мощности)
+        const rsiEfficiency = isWinter ? 0.2 : 1.0;
+        const rsi = calculateRSI(S, C, this.cfg.EXPERT) * rsiEfficiency;
+
         const marketUtility = R * 0.3 + A * 0.7;
         const investorExpectations = (currentYear - 2023.0) * 1.5;
         let capitalMultiplier = Math.max(0.1, Math.min(this.cfg.EXPERT.maxCapitalMultiplier,
             marketUtility / Math.max(1.0, investorExpectations)));
-        // Инвесторы заливают деньги на этапе хайпа, несмотря на просадку метрик
         if (paradigmGeneration > 0 && hypeGracePeriod > 0) {
           capitalMultiplier = Math.max(capitalMultiplier, 2.0);
         }
-        // Hardware co-design: непрерывное внедрение ИИ в EDA (проектирование чипов).
-        // Центр сигмоиды настраиваем на reasoning=7.5 (модели уровня o1/GPT-5).
+
         const hwAct = sigmoid(1.0 * (R - 7.5)) * sigmoid(1.0 * (A - 5.0));
         let hardwareCoDesign = 1.0 + (this.cfg.EXPERT.hwCoDesignBonus - 1.0) * hwAct;
-        let dynamicHwK = hwK * capitalMultiplier * hardwareCoDesign * damping * nashDamping * demandDamping;
-        if (gpuBubbleBurst) dynamicHwK *= 0.2;
 
-        // Физический предел роста железа (Material Cycle)
-        dynamicHwK = Math.min(dynamicHwK, this.cfg.EXPERT.maxPhysicalHwGrowth);
-        // [NEW] Проклятие атомов: жёсткий потолок удвоений/год (лог-единицы)
-        dynamicHwK = Math.min(dynamicHwK, this.cfg.EXPERT.barrierAtomsLimit * Math.LN2);
-        // [NEW] Термодинамика: hard wall на log FLOPs
-        if (flopsLog >= this.cfg.EXPERT.barrierEnergyLog) dynamicHwK = 0;
+        // PATCH 6: Принцип Либиха для многосекторной экономики
+        const computeInvestment = hwK * capitalMultiplier * hardwareCoDesign;
+        const energyAvailability = Math.max(0, (this.cfg.EXPERT.barrierEnergyLog - flopsLog) * 0.8);
+        const bypassActivation = sigmoid(1.5 * (E - this.cfg.EXPERT.embodimentBypassThreshold));
+        const fabCapacity = hwK * 1.5 * (1.0 + bypassActivation * 2.0); // Роботы масштабируют фабы
+        const talentBottleneck = dataExhaustionHit ? 0.4 : 1.5;
 
-        let hwDelta = dynamicHwK * shockDamping;
+        let effectiveHwK = Math.min(
+            computeInvestment,
+            energyAvailability,
+            fabCapacity,
+            talentBottleneck,
+            this.cfg.EXPERT.maxPhysicalHwGrowth,
+            this.cfg.EXPERT.barrierAtomsLimit * Math.LN2
+        );
+
+        effectiveHwK *= damping * nashDamping * demandDamping;
+        if (gpuBubbleBurst) effectiveHwK *= 0.2;
+
+        let hwDelta = effectiveHwK * shockDamping;
         const algoShockDamping = gpuBubbleBurst ? shockDamping * 0.2 : shockDamping;
         let currentAlgoK = algoK * algoKMultiplier * damping * nashDamping * demandDamping;
         if (dataExhaustionHit) currentAlgoK *= this.cfg.EXPERT.dataWallPenalty;
@@ -1239,16 +1255,26 @@ class BayesianTracker {
         const hwAct = sigmoid(1.0 * (R - 7.5)) * sigmoid(1.0 * (A - 5.0));
         let hardwareCoDesign = 1.0 + (cfg.EXPERT.hwCoDesignBonus - 1.0) * hwAct;
 
+        // PATCH 6: Закон Либиха (для сценариев)
+        const computeInvestment = hwK * capitalMultiplier * hardwareCoDesign;
+        const energyAvailability = Math.max(0, (cfg.EXPERT.barrierEnergyLog - flopsLog) * 0.8);
         const bypassActivation = sigmoid(1.5 * (E - cfg.EXPERT.embodimentBypassThreshold));
-        const hwBonus = 1.0 + bypassActivation * (cfg.EXPERT.embodimentHWBonusMultiplier - 1.0);
+        const fabCapacity = hwK * 1.5 * (1.0 + bypassActivation * 2.0);
+        const talentBottleneck = dataExhaustionHit ? 0.4 : 1.5;
 
-        let currentHwK = hwK * capitalMultiplier * hardwareCoDesign * damping * nashDamping * demandDamping;
-        if (gpuBubbleBurst) currentHwK *= 0.2;
-        currentHwK = Math.min(currentHwK, cfg.EXPERT.maxPhysicalHwGrowth);
-        currentHwK = Math.min(currentHwK, cfg.EXPERT.barrierAtomsLimit * Math.LN2);
-        if (flopsLog >= cfg.EXPERT.barrierEnergyLog) currentHwK = 0;
+        let effectiveHwK = Math.min(
+            computeInvestment,
+            energyAvailability,
+            fabCapacity,
+            talentBottleneck,
+            cfg.EXPERT.maxPhysicalHwGrowth,
+            cfg.EXPERT.barrierAtomsLimit * Math.LN2
+        );
 
-        let hwDelta = currentHwK * hwBonus * shockDamping;
+        effectiveHwK *= damping * nashDamping * demandDamping;
+        if (gpuBubbleBurst) effectiveHwK *= 0.2;
+
+        let hwDelta = effectiveHwK * shockDamping;
         const algoShockDamping = gpuBubbleBurst ? shockDamping * 0.2 : shockDamping;
         let currentAlgoK = algoK * algoKMultiplier * damping * nashDamping * demandDamping;
         if (dataExhaustionHit) currentAlgoK *= cfg.EXPERT.dataWallPenalty;
@@ -1356,6 +1382,7 @@ class BayesianTracker {
       if (y > cfg.CURRENT_YEAR && saturation > cfg.EXPERT.saturationThreshold && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
         cA *= cfg.SCALING_LAW.shift_multiplier;
         cR *= cfg.SCALING_LAW.shift_multiplier;
+        cE *= cfg.SCALING_LAW.shift_multiplier; // PATCH 4: Physical limit
         algoLog = Math.max(algoLog - (0.4 + paradigmGeneration * 0.1), -3.0);
         paradigmGeneration++;
         paradigmBonus = cfg.SCALING_LAW.shift_multiplier;
