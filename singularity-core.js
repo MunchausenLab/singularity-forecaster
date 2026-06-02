@@ -290,6 +290,7 @@ function v3SimulateToYear(particle, targetYear, cfg) {
       interventionCooldown -= dt;
       if (interventionCooldown <= 0) stateIntervention = false;
     }
+    if (stateIntervention) damping *= 0.1; // [PATCH Bug 5] Государственная заморозка замедляет прогресс на 90%
 
     // --- БАРЬЕР 4: Конкуренция ИИ (Эффект Черной Королевы после T3) ---
     let nashDamping = 1.0;
@@ -643,12 +644,13 @@ class BayesianTracker {
           stateIntervention = true;
           interventionCooldown = 3.0; // 3 года жесточайшей регуляции / заморозки
         }
-        if (stateIntervention) {
-          interventionCooldown -= dt;
-          if (interventionCooldown <= 0) stateIntervention = false;
-        }
+    if (stateIntervention) {
+      interventionCooldown -= dt;
+      if (interventionCooldown <= 0) stateIntervention = false;
+    }
+    if (stateIntervention) damping *= 0.1; // [PATCH Bug 5] Государственная заморозка замедляет прогресс на 90%
 
-        // --- БАРЬЕР 4: Конкуренция ИИ (Эффект Черной Королевы после T3) ---
+    // --- БАРЬЕР 4: Конкуренция ИИ (Эффект Черной Королевы после T3) ---
         let nashDamping = 1.0;
         if (cap >= this.cfg.THRESHOLDS.t3) {
           nashDamping = 1.0 / (1.0 + this.cfg.EXPERT.barrierNashFriction * (cap - this.cfg.THRESHOLDS.t3));
@@ -848,19 +850,27 @@ class BayesianTracker {
       let cR = cfg.DIMENSIONS.reasoning.ceiling;
       let cA = p.agency_ceiling;
       let cE = p.embodiment_ceiling || cfg.EXPERT.embodimentPriorMean;
-      // Apply World Model constraints
+
       if (p.world_model === 'hard_wall') {
         cA = Math.min(cA, cfg.EXPERT.plateauHardWallCeiling);
         cE = Math.min(cE, 4.0);
       } else if (p.world_model === 'slow_takeoff') {
         algoK *= 0.6;
       }
+
       let paradigmGeneration = 0;
+      let lastShiftYear = cfg.BASE_YEAR;
+      let hypeGracePeriod = 0.0;
+      let algoKMultiplier = 1.0;
       let dataExhaustionHit = false;
       let isWinter = false;
       let gpuBubbleBurst = false;
+      let alignmentIncidentCooldown = 0;
+      let stateIntervention = false;
+      let interventionCooldown = 0;
       let govMoratorium = false;
       let govMoratoriumYears = 0;
+
       const years = [], caps = [];
       for (let step = 0; step < steps; step++) {
         const y = cfg.BASE_YEAR + step * dt;
@@ -869,25 +879,88 @@ class BayesianTracker {
         const rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, cR);
         const rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, cA);
         const rawE = v3ComputeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, cE);
+
         const reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
         const agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
         const embodiment = v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
 
-        // ИСПРАВЛЕНИЕ: Сдвиг только при насыщении, и делаем временный откат алгоритмов (как в MC)
-        const saturation = Math.max(reasoning / cR, agency / cA);
-        if (y > cfg.CURRENT_YEAR && saturation > cfg.EXPERT.saturationThreshold && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
-          cA *= cfg.SCALING_LAW.shift_multiplier;
-          cR *= cfg.SCALING_LAW.shift_multiplier;
-          cE *= cfg.SCALING_LAW.shift_multiplier;
-          algoLog = Math.max(algoLog - (0.4 + paradigmGeneration * 0.1), -3.0);
-          paradigmGeneration++;
+        const cap = Math.min(reasoning, agency);
+
+        // [PATCH Bug 4] Парадигмальные сдвиги + Hype Overhang
+        const canShift = (paradigmGeneration === 0 && y > 2026.5)
+                       || (paradigmGeneration > 0 && y > lastShiftYear + 4.0);
+        if (canShift) {
+            const saturation = Math.max(reasoning / cR, agency / cA);
+            if (saturation > cfg.EXPERT.saturationThreshold) {
+              const _marketUtility = reasoning * 0.3 + agency * 0.7;
+              const _investorExpectations = (y - 2023.0) * 1.5;
+              const _capMult = Math.max(0.1, Math.min(cfg.EXPERT.maxCapitalMultiplier, _marketUtility / Math.max(1.0, _investorExpectations)));
+              const _hypeMult = (paradigmGeneration > 0 && hypeGracePeriod > 0) ? Math.max(_capMult, 2.0) : _capMult;
+              const computeOverhang = Math.max(1.0, _hypeMult);
+
+              let shiftProb = 0.02 + (0.15 * saturation) + (cfg.EXPERT.overhangShiftMultiplier * computeOverhang);
+              if (p.world_model === 'hard_wall') shiftProb = 0.001;
+
+              if (Math.random() < shiftProb * dt) {
+                paradigmGeneration++;
+                lastShiftYear = y;
+                hypeGracePeriod = cfg.EXPERT.hypeGracePeriod;
+                let shiftMult = Math.max(cfg.EXPERT.minShiftMultiplier, cfg.EXPERT.baseShiftMultiplier - ((paradigmGeneration - 1) * cfg.EXPERT.paradigmDecayRate));
+                if (p.world_model === 'slow_takeoff' && paradigmGeneration === 1) shiftMult = Math.max(shiftMult, 5.0);
+
+                cA *= shiftMult;
+                cR *= shiftMult;
+                cE *= shiftMult;
+                algoLog = Math.max(algoLog - (0.4 + paradigmGeneration * 0.1), -3.0);
+                algoKMultiplier = 2.0;
+                dataExhaustionHit = false;
+              }
+            }
         }
+
+        if (paradigmGeneration > 0) {
+          if (hypeGracePeriod > 0) hypeGracePeriod -= dt;
+          if (algoKMultiplier > 1.0) {
+            algoKMultiplier -= (1.0 / 4.0) * dt;
+            if (algoKMultiplier < 1.0) algoKMultiplier = 1.0;
+          }
+        }
+
         years.push(y);
         caps.push(Math.min(reasoning, agency, embodiment));
 
-        let damping = 1.0;
+        // --- ДИНАМИЧЕСКИЕ ШОКИ И БАРЬЕРЫ ---
+        if (!dataExhaustionHit && y > 2026.5 && Math.random() < 0.15 * dt) dataExhaustionHit = true;
 
-        // [PATCH] Compute governance shock: пред-T2 мораторий/регулирование, периодический шок на 1 год
+        if (alignmentIncidentCooldown <= 0 && agency > 6.0 && Math.random() < (agency * 0.01) * dt) {
+          alignmentIncidentCooldown = cfg.EXPERT.alignmentCooldown;
+        }
+
+        if (!gpuBubbleBurst && y > 2027.0 && agency < 4.0 && Math.random() < cfg.EXPERT.bubbleBurstRisk * dt) {
+            gpuBubbleBurst = true;
+            flopsLog -= 0.5;
+        }
+
+        let shockDamping = 1.0;
+        if (alignmentIncidentCooldown > 0) {
+          alignmentIncidentCooldown -= dt;
+          shockDamping = 0.0;
+        }
+        if (gpuBubbleBurst) {
+          shockDamping *= 0.2;
+        }
+
+        // [PATCH Bug 5] Геополитический шок
+        if (cap >= cfg.THRESHOLDS.t2 && !stateIntervention && Math.random() < cfg.EXPERT.barrierGeopoliticsRisk * dt) {
+          stateIntervention = true;
+          interventionCooldown = 3.0;
+        }
+        if (stateIntervention) {
+          interventionCooldown -= dt;
+          if (interventionCooldown <= 0) stateIntervention = false;
+        }
+
+        // Governance мораторий
         if (y > cfg.CURRENT_YEAR && !govMoratorium && Math.random() < cfg.EXPERT.governanceMoratoriumProb) {
           govMoratorium = true;
           govMoratoriumYears = 1.0;
@@ -895,44 +968,68 @@ class BayesianTracker {
         if (govMoratorium) {
           govMoratoriumYears -= dt;
           if (govMoratoriumYears <= 0) govMoratorium = false;
-          damping *= cfg.EXPERT.governanceShockDamping;
         }
 
-        // [PATCH] Shocks for scenario fan consistency with MC
-        if (!dataExhaustionHit && y > 2026.5 && Math.random() < 0.15 * dt) dataExhaustionHit = true;
-        if (!gpuBubbleBurst && y > 2027.0 && agency < 4.0 && Math.random() < cfg.EXPERT.bubbleBurstRisk * dt) {
-            gpuBubbleBurst = true;
-            flopsLog -= 0.5;
+        let damping = 1.0;
+        if (stateIntervention) damping *= 0.1;
+        if (govMoratorium) damping *= cfg.EXPERT.governanceShockDamping;
+
+        let nashDamping = 1.0;
+        if (cap >= cfg.THRESHOLDS.t3) {
+          nashDamping = 1.0 / (1.0 + cfg.EXPERT.barrierNashFriction * (cap - cfg.THRESHOLDS.t3));
         }
-        if (!isWinter && y > 2026.5 && (reasoning - agency) > cfg.EXPERT.hypeGapThreshold && Math.random() < 0.10 * dt) {
+
+        let demandDamping = 1.0;
+        if (cap >= cfg.THRESHOLDS.t2 && (y - 2026.0) < cfg.EXPERT.barrierDemandGrace) {
+          demandDamping = 0.6;
+        }
+
+        if (!isWinter && y > 2026.5) {
+          const hypeGap = reasoning - agency;
+          if (hypeGap > cfg.EXPERT.hypeGapThreshold && Math.random() < 0.10 * dt) {
             isWinter = true;
-        }
-        if (isWinter) {
-            damping = cfg.EXPERT.winterDamping;
-            if (agency >= reasoning - 1.0) isWinter = false;
-        } else if (y > cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
-            damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
+          }
         }
 
-        const cap = Math.min(reasoning, agency);
+        if (isWinter) {
+          damping *= cfg.EXPERT.winterDamping;
+          if (agency >= reasoning - 1.0) isWinter = false;
+        } else {
+          if (y > cfg.BOTTLENECKS.econ_wall_start && (reasoning - agency) > 2.0) {
+            damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (reasoning - agency - 2.0));
+          }
+        }
+
         const rsi = v3CalculateRSI(reasoning, agency, cap, cfg.EXPERT);
 
-        // [PATCH] Embodiment bypass: при высоком embodiment ИИ строит свои дата-центры
+        // HW с притоком капитала (синхронизация с MC)
+        const marketUtility = reasoning * 0.3 + agency * 0.7;
+        const investorExpectations = (y - 2023.0) * 1.5;
+        let capitalMultiplier = Math.max(0.1, Math.min(cfg.EXPERT.maxCapitalMultiplier, marketUtility / Math.max(1.0, investorExpectations)));
+        if (paradigmGeneration > 0 && hypeGracePeriod > 0) {
+          capitalMultiplier = Math.max(capitalMultiplier, 2.0);
+        }
+
+        const hwAct = sigmoid(1.0 * (reasoning - 7.5)) * sigmoid(1.0 * (agency - 5.0));
+        let hardwareCoDesign = 1.0 + (cfg.EXPERT.hwCoDesignBonus - 1.0) * hwAct;
+
         const bypassActivation = sigmoid(1.5 * (embodiment - cfg.EXPERT.embodimentBypassThreshold));
         const hwBonus = 1.0 + bypassActivation * (cfg.EXPERT.embodimentHWBonusMultiplier - 1.0);
 
-        let currentAlgoK = algoK * damping;
-        if (dataExhaustionHit) currentAlgoK *= cfg.EXPERT.dataWallPenalty;
-        if (gpuBubbleBurst) currentAlgoK *= 0.2;
-        let currentHwK = hwK * damping;
+        let currentHwK = hwK * capitalMultiplier * hardwareCoDesign * damping * nashDamping * demandDamping;
         if (gpuBubbleBurst) currentHwK *= 0.2;
-        // [NEW] Проклятие атомов: жёсткий потолок удвоений/год (лог-единицы)
+        currentHwK = Math.min(currentHwK, cfg.EXPERT.maxPhysicalHwGrowth);
         currentHwK = Math.min(currentHwK, cfg.EXPERT.barrierAtomsLimit * Math.LN2);
-        // [NEW] Термодинамика: hard wall на log FLOPs
         if (flopsLog >= cfg.EXPERT.barrierEnergyLog) currentHwK = 0;
 
-        flopsLog += currentHwK * hwBonus * dt;
-        algoLog += (currentAlgoK + rsi) * dt;
+        flopsLog += currentHwK * hwBonus * shockDamping * dt;
+
+        // [PATCH Bug 2] Шоковое демпфирование + RSI при пузыре
+        const algoShockDamping = gpuBubbleBurst ? shockDamping * 0.2 : shockDamping;
+        let currentAlgoK = algoK * algoKMultiplier * damping * nashDamping * demandDamping;
+        if (dataExhaustionHit) currentAlgoK *= cfg.EXPERT.dataWallPenalty;
+
+        algoLog += ((currentAlgoK + rsi) * algoShockDamping) * dt;
       }
       scenarios.push({ years, caps });
     }
