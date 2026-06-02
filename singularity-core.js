@@ -2097,6 +2097,10 @@ const LANG = {
     eh_legend_t2:'достигнут', eh_legend_t4:'достигнут', eh_legend_flight:'в полёте',
     v3_variations_label:'(Дисперсия в облаке частиц)',
     v3_no_agi:'Ни одна частица не достигла T2 к 2068 — модель считает T2 маловероятным при текущих параметрах.',
+
+    // Swarm Learning desc card
+    swarm_learn_p1:'Интерактивная визуализация 2D-проекции латентного пространства. Каждая точка — гипотеза: по оси X — удвоение HW, по оси Y — потолок Agency.',
+    swarm_learn_p5:'<b>Визуальный язык:</b> Синий = Каскад парадигм, Красный = Стена (Hard Wall), Зеленый = Медленный взлет. Размер точки = вес гипотезы. В покое рой «дышит» — перестраивается из нового прогона каждую секунду.',
     // Canvas / overlay hardcoded strings (Swarm learn mode)
     swarm_canvas_median:'Медиана роя', canvas_hw_doubling:'Удвоение HW (мес)',
     canvas_agency_ceiling:'Потолок Agency', canvas_observation:'Наблюдение',
@@ -2358,11 +2362,11 @@ const LANG = {
     eh_desc:'Each particle is one Monte Carlo run. Flies from center (2026) and freezes at its T1/T2/T3/T4 year orbit. Dense rings = high probability. Yellow orbits = T1, orange = T2, red = T3, purple = T4.',
 
     // Swarm Learning desc card
-    swarm_learn_p1:'Interactive visualization of real-time Bayesian learning. Each point is a world hypothesis (particle): hardware growth rate <em>hw_months</em> and agency ceiling <em>agency_ceiling</em>.',
+    swarm_learn_p1:'Interactive 2D projection of the latent space. Each point is a hypothesis: X-axis = HW doubling, Y-axis = Agency ceiling.',
     swarm_learn_p2:'<b>"Learning" mode:</b> the slider applies AA observations one by one. At each observation, weights are recalculated:',
     swarm_learn_p3:'where R<sub>i</sub> and Ag<sub>i</sub> are particle i predictions for the observation year, &sigma; is the noise-free likelihood. Particles whose predictions are far from the observation lose weight exponentially.',
     swarm_learn_p4:'<b>"Forecast" mode:</b> all observations applied. The slider filters hypotheses by T2 year &mdash; showing which particles predict T2 by the selected year.',
-    swarm_learn_p5:'<b>Visual language:</b> bright areas = high weight density; orange circle = swarm median; red = current observation. At rest the swarm &quot;breathes&quot; &mdash; rebuilds from a new MC run every 0.25s.',
+    swarm_learn_p5:'<b>Visual language:</b> Blue = Paradigm Cascade, Red = Hard Wall, Green = Slow Takeoff. Point size = hypothesis weight. At rest, the swarm "breathes", rebuilding every second.',
     swarm_learn_p6:'<b>What affects it:</b> number and accuracy of AA observations, philosophical priors (priorAgencyMean/Std in Expert Sandbox), the particle composition itself.',
     // Live Swarm desc card
     live_swarm_p1:'Four parallel simulations &mdash; T1, T2, T3, T4 &mdash; updating every 0.25s from a new Monte Carlo run. Shows the &quot;live&quot; posterior without needing to press Play.',
@@ -2482,7 +2486,7 @@ function swarmInit() {
   c.width = c.offsetWidth * dpr; c.height = c.offsetHeight * dpr;
   ctx.scale(dpr, dpr);
   swarm.tracker = swarmBuildTracker(swarm.obsIdx);
-  swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
+  swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months, wm: p.world_model }));
   swarm.weights = Array.from(swarm.tracker.weights);
   swarmDraw();
   swarmStartLive();
@@ -2503,7 +2507,7 @@ function swarmSetMode(m) {
     } else {
       swarm.tracker = swarmBuildTracker(REAL_BENCHMARK_HISTORY.length);
     }
-    swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
+    swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months, wm: p.world_model }));
     swarm.weights = Array.from(swarm.tracker.weights);
     swarm.agiYears = null;
     const mcData = swarmComputeAGIYears(swarm.tracker);
@@ -2516,7 +2520,7 @@ function swarmSetMode(m) {
     if (playBtn) playBtn.style.display = 'none';
   } else {
     swarm.tracker = swarmBuildTracker(swarm.obsIdx);
-    swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
+    swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months, wm: p.world_model }));
     swarm.weights = Array.from(swarm.tracker.weights);
     if (slider) { slider.min = 0; slider.max = REAL_BENCHMARK_HISTORY.length; slider.step = 1; slider.value = swarm.obsIdx; }
     if (labels) labels.innerHTML = '<span>2020</span><span></span><span>2024</span><span></span><span>2025</span><span></span><span>2026</span><span>2026.5</span>';
@@ -2533,7 +2537,7 @@ function swarmOnSlider(v) {
     swarm.obsIdx = v;
     swarm.tracker = swarmBuildTracker(v);
     swarm.weights = Array.from(swarm.tracker.weights);
-    swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
+    swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months, wm: p.world_model }));
     swarm.agiYears = null; // invalidate cache when tracker changes
   } else {
     // forecast mode: slider = AGI year cutoff
@@ -2562,39 +2566,61 @@ function swarmDraw() {
 
 function swarmDrawLearn(ctx, w, h, pad, pw, ph) {
   const maxW = Math.max(...swarm.weights, 1e-10);
-  const bins = 40;
-  const binW = 20 / bins, binH = 24 / bins;
-  const grid = new Float64Array(bins * bins);
+
+  // Границы латентного пространства для отрисовки
+  const xMin = 2, xMax = 14;   // Удвоение HW (месяцы)
+  const yMin = 1, yMax = 17;   // Потолок Agency
+
+  function getX(val) { return pad + Math.max(0, Math.min(1, (val - xMin) / (xMax - xMin))) * pw; }
+  function getY(val) { return h - pad - Math.max(0, Math.min(1, (val - yMin) / (yMax - yMin))) * ph; }
+
+  // Отрисовка частиц
   for (let i = 0; i < swarm.particles.length; i++) {
-    const px = Math.min(bins - 1, Math.max(0, Math.floor((swarm.particles[i].x - 2) / binW)));
-    const py = Math.min(bins - 1, Math.max(0, Math.floor((swarm.particles[i].y - 1) / binH)));
-    grid[py * bins + px] += swarm.weights[i];
+    const p = swarm.particles[i];
+    const wNorm = swarm.weights[i] / maxW;
+    if (wNorm < 0.01) continue; // Скрываем мертвые гипотезы
+
+    // Цвета World Models: Cascade (Синий), Hard Wall (Красный), Slow Takeoff (Зеленый)
+    let r = 88, g = 166, b = 255; 
+    if (p.wm === 'hard_wall') { r = 239; g = 68; b = 68; } 
+    else if (p.wm === 'slow_takeoff') { r = 34; g = 197; b = 94; }
+
+    const alpha = Math.min(1, wNorm * 1.5 + 0.1);
+    const radius = 1.5 + wNorm * 4;
+
+    ctx.beginPath();
+    ctx.arc(getX(p.x), getY(p.y), radius, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+    ctx.fill();
   }
-  const maxBin = Math.max(...grid, 1e-10);
-  for (let by = 0; by < bins; by++) {
-    for (let bx = 0; bx < bins; bx++) {
-      const d = grid[by * bins + bx] / maxBin;
-      if (d < 0.01) continue;
-      const alpha = Math.min(1, d * 1.5);
-      const r = Math.floor(88 + d * 100), g = Math.floor(100 + d * 66), b = Math.floor(180 + d * 75);
-      ctx.fillStyle = `rgba(${r},${g},${b},${alpha * 0.6})`;
-      ctx.fillRect(pad + (bx / bins) * pw, h - pad - ((by + 1) / bins) * ph, pw / bins + 0.5, ph / bins + 0.5);
-    }
-  }
-  const cx = pad + ((5 - 2) / 18) * pw, cy = h - pad - ((8 - 1) / 24) * ph;
-  ctx.strokeStyle = '#f0883e'; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.stroke();
-  // Мы больше не рисуем "наблюдение" в виде точки, так как оси графика (HW и Agency Ceiling)
-  // лежат в совершенно другом пространстве по сравнению с бенчмарками.
-  ctx.fillStyle = '#58a6ff'; ctx.font = '9px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+
+  // Расчет и отрисовка медианы роя
+  const sortedX = [...swarm.particles].map((p, i) => ({ v: p.x, w: swarm.weights[i] })).sort((a, b) => a.v - b.v);
+  const sortedY = [...swarm.particles].map((p, i) => ({ v: p.y, w: swarm.weights[i] })).sort((a, b) => a.v - b.v);
+  const getMed = (arr) => { let cum = 0; for(let o of arr){ cum+=o.w; if(cum>=0.5) return o.v; } return arr[arr.length-1].v; };
+  const medX = getMed(sortedX), medY = getMed(sortedY);
+
+  ctx.strokeStyle = '#f0883e'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(getX(medX), getY(medY), 5, 0, Math.PI * 2); ctx.stroke();
+
+  // Оформление осей и сетки
   const t = LANG[window._lang || 'ru'];
-  ctx.fillText(t.swarm_canvas_median, pad + 4, pad + 12);
+  ctx.fillStyle = '#f0883e'; ctx.font = '9px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+  ctx.fillText(t.swarm_canvas_median || 'Median', getX(medX) + 8, getY(medY) + 3);
+
   ctx.fillStyle = '#666680'; ctx.font = '11px Inter, sans-serif';
   ctx.textAlign = 'center'; ctx.fillText(t.canvas_hw_doubling, w / 2, h - 8);
   ctx.save(); ctx.translate(12, h / 2); ctx.rotate(-Math.PI / 2);
   ctx.fillText(t.canvas_agency_ceiling, 0, 0); ctx.restore();
-  ctx.fillStyle = '#ef4444'; ctx.font = '9px JetBrains Mono, monospace'; ctx.textAlign = 'right';
-  ctx.fillText(t.canvas_observation, w - pad - 4, pad + 12);
+
+  ctx.font = '9px JetBrains Mono, monospace'; ctx.fillStyle = '#444460';
+  for (let i = 0; i <= 5; i++) {
+     const valX = xMin + (xMax - xMin) * i / 5;
+     ctx.fillText(valX.toFixed(1), pad + (pw * i / 5), h - pad + 12);
+     const valY = yMin + (yMax - yMin) * i / 5;
+     ctx.textAlign = 'right';
+     ctx.fillText(valY.toFixed(1), pad - 4, h - pad - (ph * i / 5) + 3);
+  }
 }
 
 function swarmDrawForecast(ctx, w, h, pad, pw, ph) {
@@ -2766,7 +2792,7 @@ function swarmDrawOverlay(ctx, w, h, pad) {
     }
   } else { if (ov) ov.style.opacity = '0'; }
     if (leg) {
-      leg.innerHTML = `<span style="color:#58a6ff">●</span> ${L.swarm_canvas_legend_density} &nbsp; <span style="color:#ef4444">●</span> ${L.swarm_canvas_legend_obs} &nbsp; <span style="color:#f0883e">●</span> ${L.swarm_canvas_legend_median}`;
+      leg.innerHTML = `<span style="color:#58a6ff">●</span> Cascade &nbsp; <span style="color:#ef4444">●</span> Hard Wall &nbsp; <span style="color:#22c55e">●</span> Slow Takeoff &nbsp; <span style="color:#f0883e">○</span> ${L.swarm_canvas_legend_median}`;
     }
   }
 }
@@ -2798,7 +2824,7 @@ function swarmPlay() {
       swarm.obsIdx++;
       swarm.tracker = swarmBuildTracker(swarm.obsIdx);
       swarm.weights = Array.from(swarm.tracker.weights);
-      swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
+      swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months, wm: p.world_model }));
       swarmDraw();
       swarm.rafId = setTimeout(step, 250);
     }
@@ -2832,7 +2858,7 @@ function swarmStartLive() {
       // Rebuild tracker with fresh MC particles at current obsIdx (no learning progress)
       swarm.tracker = swarmBuildTracker(swarm.obsIdx);
       swarm.weights = Array.from(swarm.tracker.weights);
-      swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months }));
+      swarm.particles = swarm.tracker.particles.map(p => ({ x: p.hw_months, y: p.agency_ceiling, algo: p.algo_months, wm: p.world_model }));
     }
     swarmDraw();
   }, 250);
