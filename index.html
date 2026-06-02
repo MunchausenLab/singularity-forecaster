@@ -1071,18 +1071,9 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
       <p data-i18n="decomp_p3">Вычисляется через <code>runDecomposition()</code> &mdash; усреднение по всем частицам с весами. Переход от «железа» к «алгоритмам» к «RSI» = путь к сингулярности.</p></div>
   </div>
 
-  <!-- ROW 7b: Казуальный разрыв (график | описание) -->
-  <div class="card">
-    <span class="card-tag" style="background:rgba(234,179,8,.15);color:var(--yellow)" data-i18n="tag_gap">Казуальный разрыв</span>
-    <div class="card-header">
-      <h3 data-i18n="chart_gap">5b. Каузальный разрыв (Hallucination Gap)</h3>
-      <span class="tip">?<span class="tip-text" data-i18n="tip_gap">Эпистемическая дивергенция между когнитивной мощностью (Reasoning) и каузальным согласованием (World Modeling). Зона высокого риска, где R(t) >> W(t), характеризующаяся структурными галлюцинациями.</span></span>
-    </div>
-    <div class="chart-container" id="c_gap"></div>
-  </div>
-
+  <!-- ROW 7b: Казуальный разрыв (описание | график) -->
   <div class="desc-card">
-    <span class="card-tag" style="background:rgba(234,179,8,.15);color:var(--yellow)">Causal Grounding</span>
+    <span class="card-tag" style="background:rgba(234,179,8,.15);color:var(--yellow)" data-i18n="tag_gap">Казуальный разрыв</span>
     <div class="desc-body">
       <p data-i18n="gap_p1">Расхождение между способностью к формальному выводу (Reasoning) и пониманием причинно-следственных связей в физическом мире (World Modeling).</p>
       <p data-i18n="gap_p2"><b>Интерпретация:</b></p>
@@ -1093,6 +1084,15 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
       </ul>
       <p data-i18n="gap_p3">Вычисляется как интеграл разности R(t) - W(t) по всем частицам. Устойчиво расширяющийся разрыв — сигнал о неизбежном «моменте галлюцинаций».</p>
     </div>
+  </div>
+
+  <div class="card">
+    <span class="card-tag" style="background:rgba(234,179,8,.15);color:var(--yellow)" data-i18n="tag_gap">Казуальный разрыв</span>
+    <div class="card-header">
+      <h3 data-i18n="chart_gap">5b. Каузальный разрыв (Hallucination Gap)</h3>
+      <span class="tip">?<span class="tip-text" data-i18n="tip_gap">Эпистемическая дивергенция между когнитивной мощностью (Reasoning) и каузальным согласованием (World Modeling). Зона высокого риска, где R(t) >> W(t), характеризующаяся структурными галлюцинациями.</span></span>
+    </div>
+    <div class="chart-container" id="c_gap"></div>
   </div>
 
   <!-- ROW 8: Embodiment diagnostics (график | описание) -->
