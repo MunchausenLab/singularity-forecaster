@@ -1514,18 +1514,24 @@ function checkObservationWarning(tracker) {
 async function runSimulation() {
   if (simulationRunning) return;
   simulationRunning = true;
+
   const btn = document.getElementById('runBtn');
-  btn.disabled = true;
+  if (btn) btn.disabled = true; // Безопасная блокировка кнопки
+
   const overlay = document.getElementById('overlay');
-  overlay.classList.add('show');
-  document.getElementById('overlayText').textContent = 'Байесовское прогнозирование v3...';
-  const n = +document.getElementById('rN').value;
+  if (overlay) overlay.classList.add('show');
+
+  const textEl = document.getElementById('overlayText');
+  if (textEl) textEl.textContent = 'Байесовское прогнозирование v4...';
+
+  const rnEl = document.getElementById('rN');
+  const n = rnEl ? +rnEl.value : 3000; // Фолбэк на 3000, если инпута нет
 
   await new Promise(r => setTimeout(r, 50));
   try {
     // Сохраняем текущий ввод пользователя перед симуляцией
     addObservation();
-    
+
     const tracker = coreTracker || getTracker();
     const runData = tracker.runMonteCarloForecast(n);
     const t1List = runData.t1Years, t2List = runData.t2Years;
@@ -1534,8 +1540,7 @@ async function runSimulation() {
     const finiteT2 = t2List.filter(isFinite);
     const finiteT3 = t3List.filter(isFinite);
     const finiteT4 = t4List.filter(isFinite);
-    const finite = finiteT2;
-    
+
     const CUR_Y = tracker.cfg.CURRENT_YEAR;
     const yq = [];
     for (let y = 0.25; y <= 10; y += 0.25) yq.push(+y.toFixed(4));
@@ -1564,8 +1569,12 @@ async function runSimulation() {
     updateUI(currentResults);
     if (typeof liveSwarm !== 'undefined') liveSwarm.tracker = tracker;
     if (typeof swarm !== 'undefined' && swarm) swarm.tracker = tracker;
+  } catch (err) {
+    console.error("Simulation error:", err);
   } finally {
-    simulationRunning = false; btn.disabled = false; overlay.classList.remove('show');
+    simulationRunning = false;
+    if (btn) btn.disabled = false;
+    if (overlay) overlay.classList.remove('show');
   }
 }
 
@@ -3319,40 +3328,48 @@ function eventHorizonReset() {
 
 // ===== SINGLE LOAD HANDLER (ordered initialization) =====
 window.addEventListener('load', async () => {
-  setLang('ru');
-  injectExpertPresets();
+  try {
+    setLang('ru');
+    injectExpertPresets();
 
-  // Показываем оверлей загрузки
-  const overlay = document.getElementById('overlay');
-  if (overlay) {
-    overlay.classList.add('show');
-    const textEl = document.getElementById('overlayText');
-    if (textEl) textEl.textContent = 'Загрузка исторических бенчмарков...';
+    // Показываем оверлей загрузки
+    const overlay = document.getElementById('overlay');
+    if (overlay) {
+      overlay.classList.add('show');
+      const textEl = document.getElementById('overlayText');
+      if (textEl) textEl.textContent = 'Загрузка исторических бенчмарков...';
+    }
+
+    // [FIX] Даём браузеру 50мс на отрисовку оверлея перед блокировкой потока
+    await new Promise(r => setTimeout(r, 50));
+
+    // [FIX] Обязательно ДОЖИДАЕМСЯ загрузки данных ПЕРЕД запуском симуляции!
+    await loadHistoricalBenchmarks();
+
+    // Инициализируем UI и канвасы (теперь REAL_BENCHMARK_HISTORY гарантированно заполнен)
+    swarmInit();
+    ehInitCanvas();
+    ehDraw();
+
+    const tracker = getTracker();
+    updateTrackerUI(tracker);
+    renderDataPanel();
+
+    // Live Swarm
+    if (typeof liveSwarm !== 'undefined') {
+      liveSwarm.tracker = coreTracker;
+      liveSwarmInit();
+    }
+
+    // Запускаем симуляцию (она скроет оверлей по завершении)
+    await runSimulation();
+  } catch (err) {
+    console.error("Initialization failed:", err);
+  } finally {
+    // ЖЕЛЕЗНАЯ ГАРАНТИЯ: если что-то пошло не так, мы всё равно снимаем экран загрузки
+    const overlay = document.getElementById('overlay');
+    if (overlay) overlay.classList.remove('show');
   }
-
-  // [FIX] Даём браузеру 50мс на отрисовку оверлея перед блокировкой потока
-  await new Promise(r => setTimeout(r, 50));
-
-  // [FIX] Обязательно ДОЖИДАЕМСЯ загрузки данных ПЕРЕД запуском симуляции!
-  await loadHistoricalBenchmarks();
-
-  // Инициализируем UI и канвасы (теперь REAL_BENCHMARK_HISTORY гарантированно заполнен)
-  swarmInit();
-  ehInitCanvas();
-  ehDraw();
-
-  const tracker = getTracker();
-  updateTrackerUI(tracker);
-  renderDataPanel();
-
-  // Live Swarm
-  if (typeof liveSwarm !== 'undefined') {
-    liveSwarm.tracker = coreTracker;
-    liveSwarmInit();
-  }
-
-  // Запускаем симуляцию (она скроет оверлей по завершении)
-  await runSimulation();
 });
 
 function setLang(lang) {
