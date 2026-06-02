@@ -154,16 +154,34 @@ body{font-family:var(--font);background:var(--bg-primary);color:var(--text-prima
 }
 #expertPanel.collapsed .expert-grid { display:none; }
 #expertPanel.collapsed { padding: 6px 32px; }
-#expertPanel.collapsed .expert-toggle { padding: 4px 0; margin-bottom: 2px; }
-#expertPanel.collapsed .expert-actions { padding-top: 4px; margin-top: 4px; }
+#expertPanel.collapsed .expert-grid { display:none; }
+#expertPanel.collapsed { padding: 4px 32px; }
+#expertPanel.collapsed .expert-toggle { padding: 4px 0; margin-bottom: 0; }
+#expertPanel.collapsed .expert-actions { display:none; }
+#expertPanel.collapsed .expert-toggle-btns { display:flex; }
 .expert-toggle {
-  display:flex; align-items:center; justify-content:space-between;
+  display:flex; align-items:center;
   width:100%; background:none; border:none; cursor:pointer;
   color:var(--text-primary); font-size:.9rem; font-weight:600;
   padding:10px 0; margin-bottom:8px;
   font-family:inherit; text-transform:uppercase; letter-spacing:.04em;
+  gap:12px;
 }
 .expert-toggle:hover { color:var(--purple); }
+.expert-toggle-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: .6rem;
+  cursor: pointer;
+  font-family: var(--mono);
+  transition: all .15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.expert-toggle-btn:hover { border-color: var(--accent); color: var(--text-primary); }
 .expert-arrow { font-size:1rem; transition:transform .2s; display:inline-block; }
 .expert-arrow.open { transform:rotate(180deg); }
 .expert-grid {
@@ -326,10 +344,11 @@ footer{text-align:center;padding:20px;font-size:.64rem;color:var(--text-muted);b
 
 <!-- ===== EXPERT SANDBOX ===== -->
 <div class="expert-panel" id="expertPanel">
-  <button class="expert-toggle" onclick="toggleExpertPanel()" data-i18n="[title]expert_toggle_title" title="Свернуть/развернуть панель">
+  <div class="expert-toggle" onclick="toggleExpertPanel()" data-i18n="[title]expert_toggle_title" title="Свернуть/развернуть панель">
     <span class="expert-toggle-label" data-i18n="expert_toggle_label">Expert Sandbox</span>
+    <span class="expert-toggle-btns" id="expertToggleBtns" style="display:none;gap:4px;flex-wrap:wrap"></span>
     <span class="expert-arrow" id="expertArrow">▾</span>
-  </button>
+  </div>
   <div class="expert-grid">
 
     <!-- ═══════════════════════════════════════════════ -->

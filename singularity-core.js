@@ -3677,18 +3677,19 @@ function applyExpertPreset(type) {
 
 function injectExpertPresets() {
   const actions = document.querySelector('#expertPanel .expert-actions');
+  const toggleBtns = document.getElementById('expertToggleBtns');
   if (!actions) return;
   
   const L = LANG[window._lang || 'ru'];
   
   const presets = [
-    { id: 'default',   label: L.preset_default   || 'Базовый',         color: '#58a6ff' },
+    { id: 'default',   label: L.preset_default   || 'Базовий',         color: '#58a6ff' },
     { id: 'optimist',  label: L.preset_optimist  || 'Технооптимизм',   color: '#22c55e' },
     { id: 'skeptic',   label: L.preset_skeptic   || 'Техноскептицизм', color: '#eab308' },
     { id: 'pessimist', label: L.preset_pessimist || 'Технопессимизм',  color: '#ef4444' }
   ];
   
-  // Insert preset buttons as first children (left side)
+  // Insert preset buttons into expert-actions (expanded view)
   [...presets].reverse().forEach(p => {
     const btn = document.createElement('button');
     btn.textContent = p.label;
@@ -3708,6 +3709,45 @@ function injectExpertPresets() {
     btn.onclick = () => applyExpertPreset(p.id);
     actions.insertBefore(btn, actions.firstChild);
   });
+
+  // Clone compact preset buttons into collapsed header
+  if (toggleBtns) {
+    toggleBtns.innerHTML = '';
+    presets.forEach(p => {
+      const b = document.createElement('button');
+      b.textContent = p.label;
+      b.type = 'button';
+      b.className = 'expert-toggle-btn';
+      b.style.borderColor = p.color;
+      b.style.color = p.color;
+      b.onclick = (e) => { e.stopPropagation(); applyExpertPreset(p.id); };
+      b.onmouseover = () => { b.style.background = p.color + '22'; };
+      b.onmouseout  = () => { b.style.background = ''; };
+      toggleBtns.appendChild(b);
+    });
+    // Compact Apply + Reset buttons
+    const applyBtn = document.createElement('button');
+    applyBtn.textContent = L.expert_apply || 'Применить';
+    applyBtn.type = 'button';
+    applyBtn.className = 'expert-toggle-btn';
+    applyBtn.style.color = '#58a6ff';
+    applyBtn.style.borderColor = '#58a6ff';
+    applyBtn.onclick = (e) => { e.stopPropagation(); expertApplyAndRun(); };
+    applyBtn.onmouseover = () => { applyBtn.style.background = '#58a6ff22'; };
+    applyBtn.onmouseout  = () => { applyBtn.style.background = ''; };
+    toggleBtns.appendChild(applyBtn);
+    
+    const resetBtn = document.createElement('button');
+    resetBtn.textContent = L.expert_reset || 'Сбросить';
+    resetBtn.type = 'button';
+    resetBtn.className = 'expert-toggle-btn';
+    resetBtn.style.color = '#ef4444';
+    resetBtn.style.borderColor = '#ef4444';
+    resetBtn.onclick = (e) => { e.stopPropagation(); expertResetDefaults(); };
+    resetBtn.onmouseover = () => { resetBtn.style.background = '#ef444422'; };
+    resetBtn.onmouseout  = () => { resetBtn.style.background = ''; };
+    toggleBtns.appendChild(resetBtn);
+  }
 }
 
 function expertResetDefaults() {
