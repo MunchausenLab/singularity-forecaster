@@ -102,6 +102,7 @@ const EXPERT_CONFIG = {
   // Категория 6: Бенчмарки
   toolUseVsAutonomyWeight: 0.6,    // Вес agency в SWE-bench (0=только reasoning, 1=только agency)
   // Категория 7: Углубленные настройки (Test-Time Compute, Штрафы, Шум)
+  wmScalingSlope: 0.30,            // Наклон кривой FLOPs -> World Modeling (медленнее логики)
   maxInferenceBonusReasoning: 2.0, // Макс. бонус Test-Time Compute для логики
   maxInferenceBonusAgency: 1.5,    // Макс. бонус Test-Time Compute для автономности
   inferenceSaturationCap: 5.0,     // Порог базового интеллекта, где CoT перестает давать бонус
@@ -130,6 +131,7 @@ function createV3Config() {
     DIMENSIONS: {
       reasoning: { slope: EXPERT_CONFIG.reasoningScalingSlope, ceiling: EXPERT_CONFIG.ceilingReasoningBase },
       agency:    { slope: EXPERT_CONFIG.agencyScalingSlope }, // Потолок определяет частица
+      worldModeling: { slope: EXPERT_CONFIG.wmScalingSlope },
     },
     // Глубокое копирование защищает текущую симуляцию от live-мутаций ползунков
     EXPERT: JSON.parse(JSON.stringify(EXPERT_CONFIG)),
@@ -217,10 +219,15 @@ function v3SimulateToYear(particle, targetYear, cfg) {
     let rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, ceilingA);
     // Embodiment: scale with agency/2 + reasoning/3 (нужен и software, и физика)
     let rawE = v3ComputeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, ceilingE);
+    // World Modeling: каузальное понимание мира (медленнее логики)
+    let rawWM = v3ComputeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, ceilingR);
 
     let reasoning = v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
     let agency = v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
     let embodiment = v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap);
+    let worldModeling = v3ApplyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap);
+    // Базовый софтверный capability зависит только от логики и автономности.
+    // Embodiment потребуется только для T4.
     const cap = Math.min(reasoning, agency);
 
     // Deterministic paradigm shift (same logic as MC, but no randomness — threshold-based)
@@ -312,11 +319,13 @@ function v3SimulateToYear(particle, targetYear, cfg) {
   let rawR = v3ComputeDim(logDiff, cfg.DIMENSIONS.reasoning.slope, ceilingR);
   let rawA = v3ComputeDim(logDiff, cfg.DIMENSIONS.agency.slope, ceilingA);
   let rawE = v3ComputeDim(0.5 * logDiff, cfg.EXPERT.embodimentScalingSlope, ceilingE);
+  let rawWM = v3ComputeDim(logDiff, cfg.DIMENSIONS.worldModeling.slope, ceilingR);
 
   return {
     reasoning: v3ApplyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap),
     agency:    v3ApplyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap),
     embodiment: v3ApplyInference(rawE, cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, cfg.INFERENCE_SCALING.saturation_cap),
+    worldModeling: v3ApplyInference(rawWM, 1.2, cfg.INFERENCE_SCALING.saturation_cap),
   };
 }
 
@@ -470,6 +479,8 @@ class BayesianTracker {
     const trajYears = new Float64Array(plotSteps);
     const trajCaps = Array.from({length: plotSteps}, () => []);
     const trajEmbodiment = Array.from({length: plotSteps}, () => []);
+    const trajReasoning = Array.from({length: plotSteps}, () => []);
+    const trajWM = Array.from({length: plotSteps}, () => []);
 
     const cumw = new Float64Array(this.n);
     cumw[0] = this.weights[0];
@@ -524,10 +535,12 @@ class BayesianTracker {
         const rawR = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.reasoning.slope, ceilingReasoning);
         const rawA = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.agency.slope, ceilingAgency);
         const rawE = v3ComputeDim(0.5 * logDiff, this.cfg.EXPERT.embodimentScalingSlope, ceilingEmbodiment);
+        const rawWM = v3ComputeDim(logDiff, this.cfg.DIMENSIONS.worldModeling.slope, ceilingReasoning);
 
         const reasoning = v3ApplyInference(rawR, this.cfg.INFERENCE_SCALING.max_bonus_reasoning, this.cfg.INFERENCE_SCALING.saturation_cap);
         const agency = v3ApplyInference(rawA, this.cfg.INFERENCE_SCALING.max_bonus_agency, this.cfg.INFERENCE_SCALING.saturation_cap);
         const embodiment = v3ApplyInference(rawE, this.cfg.INFERENCE_SCALING.max_bonus_agency * 0.5, this.cfg.INFERENCE_SCALING.saturation_cap);
+        const worldModeling = v3ApplyInference(rawWM, 1.2, this.cfg.INFERENCE_SCALING.saturation_cap);
 
         const cap = Math.min(reasoning, agency);
 
@@ -651,6 +664,8 @@ class BayesianTracker {
             trajYears[plotIdx] = currentYear;
             trajCaps[plotIdx].push(cap);
             trajEmbodiment[plotIdx].push(embodiment);
+            trajReasoning[plotIdx].push(reasoning);
+            trajWM[plotIdx].push(worldModeling);
             plotIdx++;
         }
         
@@ -735,6 +750,7 @@ class BayesianTracker {
     
     const yrs = [], med = [], p10a = [], p25a = [], p75a = [], p90a = [];
     const embYrs = [], embMed = [], embP10 = [], embP25 = [], embP75 = [], embP90 = [];
+    const wmYrs = [], rMed = [], wmMed = [];
     for (let step = 0; step < plotSteps; step++) {
         const vals = trajCaps[step];
         if (vals.length > 0) {
@@ -750,11 +766,21 @@ class BayesianTracker {
             embP10.push(percentile(ev, 10)); embP25.push(percentile(ev, 25));
             embMed.push(percentile(ev, 50));  embP75.push(percentile(ev, 75)); embP90.push(percentile(ev, 90));
         }
+        const rv = trajReasoning[step];
+        const wmv = trajWM[step];
+        if (rv.length > 0 && wmv.length > 0) {
+            rv.sort((a,b) => a - b);
+            wmv.sort((a,b) => a - b);
+            wmYrs.push(trajYears[step]);
+            rMed.push(percentile(rv, 50));
+            wmMed.push(percentile(wmv, 50));
+        }
     }
     return {
         t1Years, t2Years, t3Years, t4Years,
         trajectory: { years: yrs, median: med, p10: p10a, p25: p25a, p75: p75a, p90: p90a },
-        embodimentTrajectory: { years: embYrs, median: embMed, p10: embP10, p25: embP25, p75: embP75, p90: embP90 }
+        embodimentTrajectory: { years: embYrs, median: embMed, p10: embP10, p25: embP25, p75: embP75, p90: embP90 },
+        gapTrajectory: { years: wmYrs, reasoning: rMed, wm: wmMed }
     };
   }
 
@@ -1428,6 +1454,7 @@ async function runSimulation() {
       histogram: buildHistogramBins(t1List, t2List, t3List, t4List),
       trajectory: runData.trajectory,
       embodimentTrajectory: runData.embodimentTrajectory,
+      gapTrajectory: runData.gapTrajectory,
       cumulative: {
         x: yqAbs,
         t1: yq.map(y => cdf(t1List, y)), t2: yq.map(y => cdf(t2List, y)),
@@ -1469,6 +1496,7 @@ function updateUI(r) {
     requestAnimationFrame(() => {
       plotScenarioFan(tracker);
       plotDecomposition(tracker);
+      plotHallucinationGap(r.gapTrajectory);
       plotEmbodimentDiagnostics(tracker, r.embodimentTrajectory);
     });
   });
@@ -1697,12 +1725,45 @@ function plotEmbodimentDiagnostics(tracker, embodimentTrajectory) {
   Plotly.newPlot('c8', traces, layout, PLOT_CFG);
 }
 
+function plotHallucinationGap(gt) {
+  const t = LANG[window._lang || 'ru'];
+
+  // Создаем динамический контейнер, если его нет
+  let gapContainer = document.getElementById('c_gap');
+  if (!gapContainer) {
+      const c7Container = document.getElementById('c7');
+      if (c7Container) {
+          gapContainer = document.createElement('div');
+          gapContainer.id = 'c_gap';
+          gapContainer.className = c7Container.className;
+          c7Container.parentNode.insertBefore(gapContainer, c7Container.nextSibling);
+      }
+  }
+
+  const traces = [
+    { x: gt.years, y: gt.wm, type: 'scatter', mode: 'lines', name: 'World Modeling', line: { color: '#22c55e', width: 2 } },
+    { x: gt.years, y: gt.reasoning, type: 'scatter', mode: 'lines', name: 'Reasoning', fill: 'tonexty', fillcolor: 'rgba(239,68,68,0.25)', line: { color: '#a78bfa', width: 2 } }
+  ];
+
+  const layout = {
+    ...LAYOUT_BASE,
+    title: { text: t.ch_gap_title || 'Каузальный разрыв (Hallucination Gap)', font: { size: 14, color: '#eab308' } },
+    xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel || 'Год' }, range: [2026, 2045] },
+    yaxis: { ...LAYOUT_BASE.yaxis, title: { text: 'Capability Scale (0..15)' }, range: [0, 16] },
+    legend: { ...LAYOUT_BASE.legend, orientation: 'h', y: -0.15 },
+  };
+
+  if (gapContainer) {
+      Plotly.newPlot('c_gap', traces, layout, PLOT_CFG);
+  }
+}
+
 
 window._lang = 'ru';
 const LANG = {
   ru: {
     // Header
-    hdr_title:'Singularity Forecaster', hdr_sub:'v4 — Четыре стадии отлучения',
+    hdr_title:'Singularity Forecaster', hdr_sub:'v4.4 — Четыре стадии отлучения',
     // Status bar
     sb_t1:'Медиана T1 (Понимание)', sb_t2:'Медиана T2 (Предсказуемость)',
     sb_t3:'Медиана T3 (Контроль)', sb_t4:'Медиана T4 (Влияние)',
@@ -1724,12 +1785,14 @@ const LANG = {
     chart5:'3. Карта чувствительности (Intel × Agentic)',
     chart6:'4. Веер сценариев (Multi-Run Overlay)',
     chart7:'5. Вклад компонент (Stacked Area)',
-    chart8:'6. Embodiment: распределение и реальная робототехника',
+    chart_gap:'6. Каузальный разрыв (Hallucination Gap)',
+    chart8:'7. Embodiment: распределение и реальная робототехника',
     tip1:'Показывает, где группируются 3000 прогонов Монте-Карло. Чем выше столбец — тем больше сценариев привели к T1/T2/T3/T4 в этом году.',
     tip3:'P(T2 ≤ X) — шанс, что T2 появится не позднее, чем через X лет. Если кривая круто поднимается — быстрый переход от «почти нет» к «почти точно».',
     tip5:'Тепловая карта: оси — параметры Intelligence и Agentic последнего наблюдения. Цвет — медианный год T2. Показывает, какой параметр доминирует в прогнозе.',
     tip6:'30 случайных прогонов из апостериорного распределения, наложенных полупрозрачно. Показывает разброс возможных путей к сингулярности.',
     tip7:'Разбивка capability на составляющие: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Показывает, что двигает прогресс.',
+    tip_gap:'Показывает разрыв между логикой (Reasoning) и пониманием мира (World Modeling). Красная зона — период опасных галлюцинаций, когда ИИ гениален, но оторван от реальности.',
     tip8:'Нижний график — гистограмма embodiment_ceiling по 1000 частицам. Верхний — медиана (p10..p90) прогноза embodiment с наложением реальных роботов (жёлтые точки: Spot, Optimus, Figure, 1X Neo, ...). Красная черта = порог T4, зелёная = bypass.',
     ch_t1:'T1: Понимание', ch_t2:'T2: Предсказуемость', ch_t3:'T3: Контроль', ch_t4:'T4: Влияние',
     ch1_xlabel:'Год', ch1_ylabel:'Прогонов',
@@ -1739,15 +1802,17 @@ const LANG = {
     ch8_median:'Медиана (MC)', ch8_p1090:'p10..p90', ch8_p2575:'p25..p75', ch8_real:'Реальные роботы', ch8_t4req:'T4 requirement', ch8_bypass:'HW bypass', ch8_y_main:'Embodiment (0..10)', ch8_x_hist:'embodiment_ceiling', ch8_y_hist:'# частиц',
     fY_suffix:' лет', fY_gt:'> 40 лет',
     // About
-    about_title:'О модели v4',
-    about_intro:'Модель v4 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных бенчмарков (ARC-AGI, SWE-bench, Arena Elo). Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге. Панель Expert Sandbox позволяет настраивать 30+ параметров модели и проверять гипотезы о будущем в реальном времени.',
+    // About
+    about_title:'О модели v4.4',
+    about_intro:'Модель v4.4 использует байесовский частичный фильтр (Bayesian Particle Filter) для калибровки прогноза на реальных данных бенчмарков (ARC-AGI, SWE-bench, Arena Elo). Каждая частица — это гипотеза о будущем: скорость роста hardware, алгоритмов и потолок агентности. Наблюдения обновляют веса частиц через правдоподобие, а маловероятные гипотезы отмирают при ресэмплинге. Панель Expert Sandbox позволяет настраивать 30+ параметров модели и проверять гипотезы о будущем в реальном времени.',
     defs_label:'Архитектура и контуры',
-    defs_label_arch:'Архитектура модели',
+    defs_label_arch:'Архитектура: 4 вектора латентного пространства',
     defs_label_contours:'Концептуальные контуры модели',
     arch_tracker_title:'Байесовский трекер',
-    arch_tracker_desc:'1000 частиц с настраиваемыми априорными распределениями: hw_months, algo_months, agency_ceiling (mean/std через Expert Sandbox). Каждое наблюдение AA (Intelligence + Agentic) обновляет веса через гауссово правдоподобие. ESS-ресэмплинг предотвращает вырождение. Поддержка трёх World Models: Cascade, Hard Wall, Slow Takeoff.',
-    arch_dims_title:'Два измерения интеллекта',
-    arch_dims_desc:'Reasoning (slope 0.35, ceiling настраивается) и Agency (slope 0.25, ceiling — параметр частицы). Capability = min(Reasoning, Agency). Оба растут логистически от log(FLOPs), но упираются в потолки. Эпистемическая неопределённость: каждая частица верит в свою «физику мира».',
+    arch_tracker_desc:'1000 частиц с настраиваемыми априорными распределениями: hw_months, algo_months, agency_ceiling (mean/std через Expert Sandbox). Каждое наблюдение (Intelligence + Agentic) обновляет веса через гауссово правдоподобие. ESS-ресэмплинг предотвращает вырождение. Поддержка трёх World Models: Cascade, Hard Wall, Slow Takeoff.',
+    arch_dims_title:'Четыре оси интеллекта',
+    arch_dims_desc:'1. Reasoning (Логика и планирование), 2. Agency (Автономность и инструменты), 3. World Modeling (Понимание каузальности и физики), 4. Embodiment (Физическая воплощенность). Базовый интеллект (Capability) определяется логикой и агентностью. Разрыв между логикой и WM ведёт к опасным галлюцинациям. А T4 невозможен без прорыва в Embodiment.',
+    ch_gap_title: '6. Каузальный разрыв (Hallucination Gap)',
     arch_paradigm_title:'Смена парадигмы',
     arch_paradigm_desc:'Переход происходит при saturation > threshold (настраивается) + compute overhang bonus. Убывающая отдача: 1-й сдвиг ×3.0, 2-й ×2.5... World Models модифицируют вероятность: Hard Wall подавляет сдвиги, Slow Takeoff даёт огромный первый скачок.',
     arch_rsi_title:'RSI — рекурсивное самоулучшение',
@@ -1969,7 +2034,7 @@ const LANG = {
   },
   en: {
     // Header
-    hdr_title:'Singularity Forecaster', hdr_sub:'v4 — Four Stages of Dissolution',
+    hdr_title:'Singularity Forecaster', hdr_sub:'v4.4 — Four Stages of Dissolution',
     // Status bar
     sb_t1:'Median T1 (Understanding)', sb_t2:'Median T2 (Predictability)',
     sb_t3:'Median T3 (Control)', sb_t4:'Median T4 (Influence)',
@@ -1991,13 +2056,15 @@ const LANG = {
     chart5:'3. Sensitivity Heatmap (Intel × Agentic)',
     chart6:'4. Scenario Fan (Multi-Run Overlay)',
     chart7:'5. Component Decomposition (Stacked Area)',
-    chart8:'6. Embodiment: distribution and real-world robotics',
+    chart_gap:'6. Causal Gap (Hallucination Gap)',
+    chart8:'7. Embodiment: distribution and real-world robotics',
     tip1:'Shows where 3000 Monte Carlo runs cluster. Higher bar = more scenarios led to T1/T2/T3/T4 in that year.',
     tip3:'P(T2 ≤ X) — chance that T2 appears no later than X years. Steep rise = fast transition from "almost no" to "almost certain".',
     tip5:'Heatmap: axes are Intelligence and Agentic scores of the last observation. Color = median T2 year. Shows which parameter dominates the forecast.',
     tip6:'30 random runs from the posterior distribution, overlaid semi-transparently. Shows the spread of possible paths to singularity.',
     tip7:'Breakdown of capability into components: Hardware scaling, Algorithmic progress, Paradigm shift bonus, RSI feedback. Shows what drives progress.',
-    tip8:'Bottom panel: histogram of embodiment_ceiling across 1000 particles. Top panel: median (p10..p90) of the embodiment forecast overlaid with real-world robots (yellow markers: Spot, Optimus, Figure, 1X Neo, ...). Red line = T4 threshold, green = HW bypass.',
+    tip_gap:'Shows the gap between pure logic (Reasoning) and reality grounding (World Modeling). The red zone is a period of dangerous hallucinations where AI is brilliant but disconnected from physics.',
+    tip8:'Bottom — histogram of embodiment_ceiling across 1000 particles. Top — median (p10..p90) of embodiment forecast with real robots overlaid (yellow dots: Spot, Optimus, Figure, 1X Neo, ...). Red line = T4 threshold, green = bypass.',
     ch_t1:'T1: Understanding', ch_t2:'T2: Predictability', ch_t3:'T3: Control', ch_t4:'T4: Influence',
     ch1_xlabel:'Year', ch1_ylabel:'Runs',
     ch3_xlabel:'Year', ch3_ylabel:'P(%)', ch3_pt2:'P(T2)', ch3_pt4:'P(T4)',
@@ -2006,15 +2073,16 @@ const LANG = {
     ch8_median:'Median (MC)', ch8_p1090:'p10..p90', ch8_p2575:'p25..p75', ch8_real:'Real robots', ch8_t4req:'T4 requirement', ch8_bypass:'HW bypass', ch8_y_main:'Embodiment (0..10)', ch8_x_hist:'embodiment_ceiling', ch8_y_hist:'# particles',
     fY_suffix:' yrs', fY_gt:'> 40 yrs',
     // About
-    about_title:'About v4 Model',
-    about_intro:'The v4 model uses a Bayesian Particle Filter to calibrate predictions on real benchmark data (ARC-AGI, SWE-bench, Arena Elo). Each particle is a hypothesis about the future: hardware growth rate, algorithm progress, and agency ceiling. Observations update particle weights via likelihood, and unlikely hypotheses die during resampling. Expert Sandbox panel provides 30+ tunable parameters for real-time hypothesis testing.',
+    about_title:'About v4.4 Model',
+    about_intro:'The v4.4 model uses a Bayesian Particle Filter to calibrate predictions on real benchmark data (ARC-AGI, SWE-bench, Arena Elo). Each particle is a hypothesis about the future: hardware growth rate, algorithm progress, and agency ceiling. Observations update particle weights via likelihood, and unlikely hypotheses die during resampling. Expert Sandbox panel provides 30+ tunable parameters for real-time hypothesis testing.',
     defs_label:'Architecture and Contours',
-    defs_label_arch:'Model Architecture',
+    defs_label_arch:'Architecture: 4 Latent Vectors',
     defs_label_contours:'Conceptual Contours of the Model',
     arch_tracker_title:'Bayesian Tracker',
-    arch_tracker_desc:'1000 particles with tunable priors: hw_months, algo_months, agency_ceiling (mean/std via Expert Sandbox). Each AA observation updates weights via Gaussian likelihood. ESS resampling prevents degeneracy. Three World Models supported: Cascade, Hard Wall, Slow Takeoff.',
-    arch_dims_title:'Two Dimensions of Intelligence',
-    arch_dims_desc:'Reasoning (slope 0.35, ceiling configurable) and Agency (slope 0.25, ceiling — particle parameter). Capability = min(Reasoning, Agency). Both grow logistic from log(FLOPs) but hit ceilings. Epistemic uncertainty: each particle believes in its own "physics of the world".',
+    arch_tracker_desc:'1000 particles with tunable priors: hw_months, algo_months, agency_ceiling (mean/std via Expert Sandbox). Each observation updates weights via Gaussian likelihood. ESS resampling prevents degeneracy. Three World Models supported: Cascade, Hard Wall, Slow Takeoff.',
+    arch_dims_title:'Four Axes of Intelligence',
+    arch_dims_desc:'1. Reasoning (Logic & planning), 2. Agency (Autonomy & tools), 3. World Modeling (Causal understanding), 4. Embodiment (Physical interaction). Capability is driven by Reasoning and Agency. The gap between Logic and WM leads to dangerous hallucinations. T4 is impossible without an Embodiment breakthrough.',
+    ch_gap_title: '6. Causal Gap (Hallucination Gap)',
     arch_paradigm_title:'Paradigm Shift',
     arch_paradigm_desc:'Transition triggers when saturation > threshold (configurable) + compute overhang bonus. Diminishing returns: 1st shift ×3.0, 2nd ×2.5... World Models modify probability: Hard Wall suppresses shifts, Slow Takeoff gives massive first jump.',
     arch_rsi_title:'RSI — Recursive Self-Improvement',
