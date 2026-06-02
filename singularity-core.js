@@ -1265,17 +1265,34 @@ const FALLBACK_BENCHMARK_HISTORY = [
 ];
 
 async function loadHistoricalBenchmarks() {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
-    const response = await fetch(BENCHMARKS_API_URL, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    if (!response.ok) throw new Error('Network response was not ok');
-    REAL_BENCHMARK_HISTORY = await response.json();
-    console.log("Historical benchmarks loaded from API.");
-  } catch (error) {
-    console.warn("Failed to fetch benchmarks from API, using fallback data. Error:", error);
-    REAL_BENCHMARK_HISTORY = JSON.parse(JSON.stringify(FALLBACK_BENCHMARK_HISTORY));
+  const FALLBACK = JSON.parse(JSON.stringify(FALLBACK_BENCHMARK_HISTORY));
+
+  // Race: fetch vs timeout — гарантируем возврат даже при зависании
+  let didResolve = false;
+  const fetchPromise = (async () => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const response = await fetch(BENCHMARKS_API_URL, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const data = await response.json();
+      if (data && data.length > 0) {
+        REAL_BENCHMARK_HISTORY = data;
+        didResolve = true;
+        console.log('Historical benchmarks loaded from API (' + data.length + ' points).');
+      }
+    } catch (e) {
+      // silent — fallback below
+    }
+  })();
+
+  const timeoutPromise = new Promise(r => setTimeout(r, 3000));
+  await Promise.race([fetchPromise, timeoutPromise]);
+
+  if (!didResolve) {
+    REAL_BENCHMARK_HISTORY = FALLBACK;
+    if (typeof console !== 'undefined') console.warn('Benchmarks: used fallback data.');
   }
 }
 
@@ -3254,10 +3271,11 @@ window.addEventListener('load', async () => {
     document.getElementById('overlayText').textContent = 'Загрузка исторических бенчмарков...';
   }
 
-  // БЛОКИРУЮЩИЙ ВЫЗОВ: загружаем реальные данные
-  await loadHistoricalBenchmarks();
+  // Загружаем данные параллельно (не блокирует init)
+  // Fallback сработает внутри loadHistoricalBenchmarks если API недоступен
+  const dataLoadPromise = loadHistoricalBenchmarks();
 
-  // Инициализируем UI и канвасы
+  // Инициализируем UI и канвасы сразу (с fallback данными)
   swarmInit();
   ehInitCanvas();
   ehDraw();
@@ -3267,7 +3285,7 @@ window.addEventListener('load', async () => {
   v3UpdateUI(tracker);
   renderDataPanel();
 
-  // Live Swarm — используем тот же трекер
+  // Live Swarm
   if (typeof liveSwarm !== 'undefined') {
     liveSwarm.tracker = v3Tracker;
     liveSwarmInit();
@@ -3275,6 +3293,11 @@ window.addEventListener('load', async () => {
 
   if (overlay) overlay.classList.remove('show');
   runSimulation();
+
+  // После загрузки данных — пересчитываем с реальными данными
+  await dataLoadPromise;
+  const tracker2 = v3GetTracker();
+  v3UpdateUI(tracker2);
 });
 
 function setLang(lang) {
