@@ -8,40 +8,6 @@ function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function percentile(arr, p) { if (!arr || arr.length === 0) return undefined; const sorted = arr.slice().sort((a, b) => a - b); const idx = clamp(Math.floor(p / 100 * (sorted.length - 1) + 0.5), 0, sorted.length - 1); return sorted[idx]; }
 function cdf(list, x) { const c = list.filter(v => isFinite(v) && v <= x).length; return list.length ? (c / list.length) * 100 : 0; }
 
-// Перевод латентных переменных (reasoning, agency) в наблюдаемые бенчмарки
-// reasoning и agency в масштабе модели (0..~15 для reasoning, 0..~agency_ceiling для agency)
-// Нормализуем к шкале 0..10 для маппинга
-function mapToObservables(r10, a10, expertCfg) {
-
-    // toolUseVsAutonomyWeight: насколько бенчмарк реально отражает Agency
-    // 0 = только reasoning, 1 = только agency, 0.6 = смесь (дефолт)
-    const autonomyWeight = expertCfg ? expertCfg.toolUseVsAutonomyWeight : 0.6;
-    const reasoningWeight = 1.0 - autonomyWeight;
-    const blendedReasoning = r10 * reasoningWeight + a10 * autonomyWeight;
-
-    // Откалибровано под SWE-bench Verified:
-    const sweBench = 100 * sigmoid(0.55 * blendedReasoning - 2.5);
-
-    // ARC-AGI: чистое reasoning
-    const arcAgi = 100 * sigmoid(0.6 * r10 - 4.0);
-
-    // Автономный горизонт (часы), экспоненциально от agency
-    const autonomousHorizonHours = Math.min(365 * 24, 0.5 * Math.exp(0.5 * a10)); // cap at 1 year
-
-    // Стоимость 1M токенов ($), падает с ростом reasoning
-    // Калибровка: r10=0 → $19.6, r10=7 → $0.30, r10=10 → $0.05
-    const costPerM = Math.max(0.005, 19.625 * Math.exp(-0.5973 * r10));
-
-    return {
-        sweBench: sweBench.toFixed(1) + '%',
-        arcAgi: arcAgi.toFixed(1) + '%',
-        horizon: autonomousHorizonHours > 24
-            ? (autonomousHorizonHours / 24).toFixed(1) + (expertCfg && expertCfg._lang === 'en' ? ' days' : ' дней')
-            : autonomousHorizonHours.toFixed(1) + (expertCfg && expertCfg._lang === 'en' ? ' hours' : ' часов'),
-        cost: '$' + costPerM.toFixed(3)
-    };
-}
-
 // ============================================================================
 // EXPERT SANDBOX — Параметры по умолчанию (соответствуют текущему поведению)
 // ============================================================================
@@ -1456,48 +1422,35 @@ function runBacktest(trainEnd, kPred) {
   };
 }
 
-// Обратная конвертация: бенчмарки → AA Intelligence/Agentic
-// ARC-AGI → reasoning, Автономность → agency
-function benchmarksToAA(arcAgiPct, horizonHours) {
-  // ARC-AGI = 100 * sigmoid(0.6 * r10 - 4.0)
-  // Обратная: r10 = (ln(p/(100-p)) + 4.0) / 0.6
-  const arc = Math.max(0.1, Math.min(99.9, arcAgiPct));
-  const r10 = (Math.log(arc / (100 - arc)) + 4.0) / 0.6;
-
-  // Автономность = 0.5 * exp(0.5 * a10) часов
-  // Обратная: a10 = 2 * ln(horizon / 0.5)
-  const h = Math.max(0.1, horizonHours);
-  const a10 = 2.0 * Math.log(h / 0.5);
-
-  // r10 (0..10) → intel (0..100), a10 (0..10) → agency (0..100)
-  const intel = Math.max(0, Math.min(100, r10 * 10));
-  const agency = Math.max(0, Math.min(100, a10 * 10));
-
-  // e10 (embodiment) — аппроксимация: a10 с лёгким смещением (Embodiment идёт позади agency)
-  // типично: при a10=5 → e10≈3.5, при a10=10 → e10≈8.0
-  const e10 = Math.max(0, a10 * 0.8);
-
-  return { intel, agency, r10, a10, e10 };
-}
-
 function addObservation() {
-  const arcVal = +document.getElementById('v3ARC').value;
-  const horizonVal = +document.getElementById('v3Horizon').value;
+  // Считываем значения с полей. Если поля нет или оно пустое - undefined
+  const arcEl = document.getElementById('v3ARC');
+  const horizonEl = document.getElementById('v3Horizon');
+  const sweEl = document.getElementById('v3SWE'); // задел на будущее
+  const eloEl = document.getElementById('v3Elo'); // задел на будущее
   
-  // Конвертируем horizonVal обратно в r10/a10, чтобы аппроксимировать SWE-bench
-  const aa = benchmarksToAA(arcVal, horizonVal);
-  const fakeMetrics = getNumericObservables(aa.r10, aa.a10, aa.e10, EXPERT_CONFIG);
-  const sweVal = fakeMetrics.sweBench;
-  const eloVal = fakeMetrics.arenaElo;
+  const arcVal = arcEl && arcEl.value ? +arcEl.value : undefined;
+  const horizonVal = horizonEl && horizonEl.value ? +horizonEl.value : undefined;
+  const sweVal = sweEl && sweEl.value ? +sweEl.value : undefined;
+  const eloVal = eloEl && eloEl.value ? +eloEl.value : undefined;
 
   const y = coreTracker ? coreTracker.cfg.CURRENT_YEAR : (new Date().getFullYear() + new Date().getMonth() / 12);
   
+  const newObs = { year: y };
+  if (arcVal !== undefined) newObs.arcAgi = arcVal;
+  if (horizonVal !== undefined) newObs.horizon = horizonVal;
+  if (sweVal !== undefined) newObs.sweBench = sweVal;
+  if (eloVal !== undefined) newObs.arenaElo = eloVal;
+
   userObservations = userObservations.filter(o => o.year < y - 0.01);
-  userObservations.push({ year: y, arcAgi: arcVal, sweBench: sweVal, arenaElo: eloVal });
+  if (Object.keys(newObs).length > 1) { // Добавляем, только если есть хотя бы 1 метрика кроме year
+    userObservations.push(newObs);
+  }
   
-  coreTracker = new BayesianTracker(1000);
+  coreTracker = new BayesianTracker(DEFAULT_PARTICLES);
   REAL_BENCHMARK_HISTORY.forEach(d => coreTracker.observeRealData(d.year, d));
   userObservations.forEach(d => coreTracker.observeRealData(d.year, d));
+  
   updateTrackerUI(coreTracker);
 }
 
@@ -1520,10 +1473,15 @@ function checkObservationWarning(tracker) {
   const warnEl = document.getElementById('v3Warning');
   if (!warnEl) return;
   if (!hasUserInput) { warnEl.style.display = 'none'; return; }
-  const arcVal = +document.getElementById('v3ARC').value || 0;
-  const horizonVal = +document.getElementById('v3Horizon').value || 0;
-  const aa = benchmarksToAA(arcVal, horizonVal);
-  const testMetrics = getNumericObservables(aa.r10, aa.a10, aa.e10, tracker.cfg.EXPERT);
+  
+  const arcEl = document.getElementById('v3ARC');
+  const sweEl = document.getElementById('v3SWE');
+  const userArc = arcEl && arcEl.value ? +arcEl.value : undefined;
+  const userSwe = sweEl && sweEl.value ? +sweEl.value : undefined;
+  
+  if (userArc === undefined && userSwe === undefined) {
+      warnEl.style.display = 'none'; return; 
+  }
 
   let minDist = Infinity;
   for (let i = 0; i < tracker.n; i += 10) { 
@@ -1531,17 +1489,18 @@ function checkObservationWarning(tracker) {
     const pred = simulateToYear(tracker.particles[i], tracker.cfg.CURRENT_YEAR, tracker.cfg);
     const m = getNumericObservables(pred.reasoning, pred.agency, pred.embodiment, tracker.cfg.EXPERT);
     
-    // Считаем Евклидово расстояние в пространстве нормализованных бенчмарков
-    const dist = Math.sqrt(
-        ((testMetrics.arcAgi - m.arcAgi)/BENCHMARK_SIGMAS.arcAgi)**2 + 
-        ((testMetrics.sweBench - m.sweBench)/BENCHMARK_SIGMAS.sweBench)**2
-    );
+    let distSq = 0;
+    if (userArc !== undefined) distSq += ((userArc - m.arcAgi)/BENCHMARK_SIGMAS.arcAgi)**2;
+    if (userSwe !== undefined) distSq += ((userSwe - m.sweBench)/BENCHMARK_SIGMAS.sweBench)**2;
+    
+    const dist = Math.sqrt(distSq);
     if (dist < minDist) minDist = dist;
   }
+  
   if (minDist > 3.0) { // 3 сигмы
     warnEl.style.display = '';
     const L = LANG[window._lang || 'ru'];
-    warnEl.textContent = L.v3_warning_far || '⚠️ Значения далеко от диапазона частиц — модель не может надёжно экстраполировать. Прогноз ближе к априорному.';
+    warnEl.textContent = L.v3_warning_far || '⚠️ Значения далеко от диапазона частиц — экстраполяция ненадёжна.';
   } else {
     warnEl.style.display = 'none';
   }
@@ -1559,20 +1518,10 @@ async function runSimulation() {
 
   await new Promise(r => setTimeout(r, 50));
   try {
-    // Конвертируем бенчмарки в AA
-    const arcVal = +document.getElementById('v3ARC').value;
-    const horizonVal = +document.getElementById('v3Horizon').value;
-    const aa = benchmarksToAA(arcVal, horizonVal);
-    const currentY = coreTracker ? coreTracker.cfg.CURRENT_YEAR : (new Date().getFullYear() + new Date().getMonth() / 12);
-    const fakeMetrics = getNumericObservables(aa.r10, aa.a10, aa.e10, EXPERT_CONFIG);
-    coreTracker = new BayesianTracker(1000);
-    REAL_BENCHMARK_HISTORY.forEach(d => coreTracker.observeRealData(d.year, d));
+    // Сохраняем текущий ввод пользователя перед симуляцией
+    addObservation();
     
-    const newObs = { year: currentY, arcAgi: arcVal, sweBench: fakeMetrics.sweBench, arenaElo: fakeMetrics.arenaElo };
-    userObservations = userObservations.filter(o => o.year < currentY - 0.01);
-    userObservations.push(newObs);
-    userObservations.forEach(d => coreTracker.observeRealData(d.year, d));
-    const tracker = coreTracker;
+    const tracker = coreTracker || getTracker();
     const runData = tracker.runMonteCarloForecast(n);
     const t1List = runData.t1Years, t2List = runData.t2Years;
     const t3List = runData.t3Years, t4List = runData.t4Years;
@@ -3525,26 +3474,59 @@ function renderDataPanel() {
 }
 
 function updateObsMetrics() {
-  const arcVal = +document.getElementById('v3ARC').value || 0;
-  const horizonVal = +document.getElementById('v3Horizon').value || 0;
-
-  // Конвертируем бенчмарки → AA → model scale
-  const aa = benchmarksToAA(arcVal, horizonVal);
-
-  const _cfg = Object.assign({}, EXPERT_CONFIG, { _lang: window._lang || 'ru' });
-  const m = mapToObservables(aa.r10, aa.a10, _cfg);
-  const n = getNumericObservables(aa.r10, aa.a10, aa.e10, _cfg);
-
   const el = document.getElementById('obsMetrics');
-  if (el) el.style.display = 'block';
+  if (!el) return;
+  el.style.display = 'block';
+
+  const tracker = coreTracker || getTracker();
+  const y = tracker.cfg.CURRENT_YEAR;
+  
+  const samples = [];
+  for (let i = 0; i < tracker.n; i++) {
+    const pred = simulateToYear(tracker.particles[i], y, tracker.cfg);
+    const m = getNumericObservables(pred.reasoning, pred.agency, pred.embodiment, tracker.cfg.EXPERT);
+    samples.push({ m, r: pred.reasoning, w: tracker.weights[i] });
+  }
+  
+  function getMedian(key) {
+    samples.sort((a, b) => a.m[key] - b.m[key]);
+    let cum = 0;
+    for (let i = 0; i < samples.length; i++) {
+      cum += samples[i].w;
+      if (cum >= 0.5) return samples[i].m[key];
+    }
+    return samples[samples.length - 1].m[key];
+  }
+
+  const medSwe = getMedian('sweBench');
+  const medArc = getMedian('arcAgi');
+  const medHorizonLog = getMedian('horizon'); // Это значение в log10(часов)
+  
+  // Возвращаем в нормальные часы для отображения
+  const horizonHours = Math.pow(10, medHorizonLog);
+  const horizonStr = horizonHours > 24 
+    ? (horizonHours / 24).toFixed(1) + (window._lang === 'en' ? ' days' : ' дней') 
+    : horizonHours.toFixed(1) + (window._lang === 'en' ? ' hours' : ' часов');
+
+  // Расчет стоимости токенов на основе медианы Reasoning
+  samples.sort((a, b) => a.r - b.r);
+  let medR10 = 0, cum = 0;
+  for (let i = 0; i < samples.length; i++) {
+    cum += samples[i].w;
+    if (cum >= 0.5) { medR10 = samples[i].r; break; }
+  }
+  const costPerM = Math.max(0.005, 19.625 * Math.exp(-0.5973 * medR10));
+
   const e1 = document.getElementById('omSWE');
   const e2 = document.getElementById('omARC');
   const e3 = document.getElementById('omHorizon');
   const e4 = document.getElementById('omCost');
-  if (e1) e1.textContent = n.sweBench.toFixed(1) + '%';
-  if (e2) e2.textContent = n.arcAgi.toFixed(1) + '%';
-  if (e3) e3.textContent = m.horizon;
-  if (e4) e4.textContent = m.cost;
+  
+  if (e1) e1.textContent = medSwe.toFixed(1) + '%';
+  if (e2) e2.textContent = medArc.toFixed(1) + '%';
+  if (e3) e3.textContent = horizonStr;
+  if (e4) e4.textContent = '$' + costPerM.toFixed(3);
+
   renderDataPanel();
 }
 // DEPLOY: scroll-to-panel fix
