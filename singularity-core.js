@@ -2792,8 +2792,9 @@ function swarmDrawLearn(ctx, w, h, pad, pw, ph) {
 
     ctx.beginPath();
     ctx.arc(getX(p.x), getY(p.y), radius, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
-    ctx.fill();
+    ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
+    ctx.lineWidth = 1 + wNorm * 1.5;
+    ctx.stroke();
   }
 
   // Расчет и отрисовка медианы роя
