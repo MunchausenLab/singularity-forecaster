@@ -2321,6 +2321,7 @@ function swarmInit() {
   const c = document.getElementById('swarmCanvas');
   if (!c) return;
   const ctx = c.getContext('2d');
+  if (!ctx) return;
   const dpr = window.devicePixelRatio || 1;
   c.width = c.offsetWidth * dpr; c.height = c.offsetHeight * dpr;
   ctx.scale(dpr, dpr);
@@ -2693,6 +2694,7 @@ function liveSwarmInit() {
     const c = document.getElementById(id);
     if (!c) return;
     const ctx = c.getContext('2d');
+    if (!ctx) return;
     const dpr = window.devicePixelRatio || 1;
     c.width = c.offsetWidth * dpr; c.height = c.offsetHeight * dpr;
     ctx.scale(dpr, dpr);
@@ -2713,6 +2715,7 @@ function drawLiveSwarm(canvasId, statsId, yearsKey, colorKey, mc) {
   const c = document.getElementById(canvasId);
   if (!c || !liveSwarm.tracker) return;
   const ctx = c.getContext('2d');
+  if (!ctx) return;
   const w = c.offsetWidth, h = c.offsetHeight;
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = '#0a0a0f'; ctx.fillRect(0, 0, w, h);
@@ -2876,6 +2879,7 @@ function ehInitCanvas() {
   c.width = c.offsetWidth * dpr;
   c.height = c.offsetHeight * dpr;
   const ctx = c.getContext('2d');
+  if (!ctx) return;
   ctx.scale(dpr, dpr);
 }
 
@@ -2883,6 +2887,7 @@ function ehDraw() {
   const c = document.getElementById('eventHorizonCanvas');
   if (!c) return;
   const ctx = c.getContext('2d');
+  if (!ctx) return;
   const w = c.offsetWidth, h = c.offsetHeight;
   const cx = w / 2, cy = h / 2;
   const maxR = Math.min(w, h) / 2 - 20;
