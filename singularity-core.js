@@ -497,8 +497,8 @@ function simulateToYear(particle, targetYear, cfg) {
       demandDamping = 0.6;
     }
 
-    // RSI (deterministic)
-    const rsi = calculateRSI(S, C, cfg.EXPERT);
+    // PATCH 8: RSI efficiency as independent internal parameter
+    const rsi = calculateRSI(S, C, cfg.EXPERT) * (particle.rsi_efficiency || 1.0);
 
     // [NEW] Проклятие атомов: жёсткий потолок удвоений/год (лог-единицы)
     let hwDelta = hwK * damping * nashDamping * demandDamping * hwBonus;
@@ -555,6 +555,7 @@ class BayesianTracker {
         agency_ceiling: Math.max(2.0, randnRange(EXPERT_CONFIG.priorAgencyMean, EXPERT_CONFIG.priorAgencyStd)),
         embodiment_ceiling: Math.max(1.5, randnRange(EXPERT_CONFIG.embodimentPriorMean, EXPERT_CONFIG.embodimentPriorStd)),
         world_model: worldModel,
+        rsi_efficiency: Math.max(0.1, randnRange(1.0, 0.25)), // PATCH 8: Independent auto-R&D capability axis
       });
     }
   }
@@ -655,7 +656,22 @@ class BayesianTracker {
           algo_months: Math.max(2.0, p.algo_months + randnRange(0, 0.6)),
           agency_ceiling: Math.max(1.5, p.agency_ceiling + randnRange(0, 0.4)),
           embodiment_ceiling: Math.max(1.5, (p.embodiment_ceiling || EXPERT_CONFIG.embodimentPriorMean) + randnRange(0, 0.3)),
-          world_model: p.world_model || 'cascade',
+          rsi_efficiency: Math.max(0.1, (p.rsi_efficiency || 1.0) + randnRange(0, 0.1)), // PATCH 8: Inheritance and mutation of RSI axis
+          
+          // PATCH 7: Prevent early loss of world model diversity via 3% rejuvenation (mutation)
+          world_model: (() => {
+            if (Math.random() < 0.03) {
+              const r = Math.random();
+              const w = EXPERT_CONFIG.worldModels;
+              const totalWM = (w.cascade || 0) + (w.hardWall || 0) + (w.slowTakeoff || 0);
+              const normC = totalWM > 0 ? (w.cascade || 0) / totalWM : 0.6;
+              const normH = totalWM > 0 ? (w.hardWall || 0) / totalWM : 0.25;
+              if (r < normC) return 'cascade';
+              if (r < normC + normH) return 'hard_wall';
+              return 'slow_takeoff';
+            }
+            return p.world_model || 'cascade';
+          })(),
         });
       }
       this.particles = newP;
@@ -666,12 +682,27 @@ class BayesianTracker {
 
   getSummary() {
     let hw = 0, agn = 0, algo = 0;
+    let wCascade = 0, wHardWall = 0, wSlowTakeoff = 0;
+    const totalW = this.weights.reduce((a, b) => a + b, 0);
     for (let i = 0; i < this.n; i++) {
-      hw += this.particles[i].hw_months * this.weights[i];
-      agn += this.particles[i].agency_ceiling * this.weights[i];
-      algo += this.particles[i].algo_months * this.weights[i];
+      const nw = totalW > 0 ? this.weights[i] / totalW : 1.0 / this.n;
+      hw += this.particles[i].hw_months * nw;
+      agn += this.particles[i].agency_ceiling * nw;
+      algo += this.particles[i].algo_months * nw;
+      
+      // Count weighted fraction of each world model hypothesis
+      if (this.particles[i].world_model === 'cascade') wCascade += nw;
+      else if (this.particles[i].world_model === 'hard_wall') wHardWall += nw;
+      else if (this.particles[i].world_model === 'slow_takeoff') wSlowTakeoff += nw;
     }
-    return { hwMonths: hw, agencyCeiling: agn, algoMonths: algo };
+    return { 
+      hwMonths: hw, 
+      agencyCeiling: agn, 
+      algoMonths: algo,
+      postCascade: wCascade,
+      postHardWall: wHardWall,
+      postSlowTakeoff: wSlowTakeoff
+    };
   }
 
   runMonteCarloForecast(nRuns) {
@@ -1242,7 +1273,8 @@ class BayesianTracker {
           }
         }
 
-        const rsi = calculateRSI(S, C, cfg.EXPERT);
+        // PATCH 8: RSI efficiency for scenarios
+        const rsi = calculateRSI(S, C, cfg.EXPERT) * (p.rsi_efficiency || 1.0);
 
         // HW с притоком капитала (синхронизация с MC)
         const marketUtility = R * 0.3 + A * 0.7;
@@ -1355,6 +1387,16 @@ class BayesianTracker {
 
     let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
     let roboticsFrontier = cE;
+    
+    // PATCH 8: Weighted average RSI efficiency for decomposition
+    let avgRsiEff = 0;
+    if (totalW > 0) {
+      for (let i = 0; i < this.n; i++) {
+        avgRsiEff += (this.particles[i].rsi_efficiency || 1.0) * (this.weights[i] / totalW);
+      }
+    } else {
+      avgRsiEff = 1.0;
+    }
 
     for (let step = 0; step < steps; step++) {
       const y = cfg.BASE_YEAR + step * dt;
@@ -1398,7 +1440,8 @@ class BayesianTracker {
       if (y > cfg.BOTTLENECKS.econ_wall_start && (R - A) > 2.0) {
         damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (R - A - 2.0));
       }
-      const rsi = calculateRSI(S, C, cfg.EXPERT);
+      // PATCH 8: Apply weighted average RSI efficiency
+      const rsi = calculateRSI(S, C, cfg.EXPERT) * avgRsiEff;
       accumulatedRsi += rsi * dt;
       rsiComp.push(accumulatedRsi);
       const bypassActivation = sigmoid(1.5 * (E - cfg.EXPERT.embodimentBypassThreshold));
@@ -1542,6 +1585,21 @@ function resetTracker() {
 function updateTrackerUI(tracker) {
   checkObservationWarning(tracker);
   updateObsMetrics();
+  
+  // PATCH 9: Update posterior world model probabilities in real-time
+  const sum = tracker.getSummary();
+  const parEl = document.getElementById('v3Params');
+  if (parEl) {
+    const L = LANG[window._lang || 'ru'];
+    parEl.innerHTML = `
+      <div style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;border-top:1px dashed #1e1e2e;padding-top:8px;line-height:1.4">
+        <b style="color:#f0883e">${L.v3_params_title || 'Текущие апостериорные веса гипотез'}:</b><br>
+        Cascade (Каскад): <span style="color:#58a6ff;font-family:monospace">${(sum.postCascade * 100).toFixed(1)}%</span><br>
+        Hard Wall (Стена): <span style="color:#ef4444;font-family:monospace">${(sum.postHardWall * 100).toFixed(1)}%</span><br>
+        Slow Takeoff (Взлет): <span style="color:#22c55e;font-family:monospace">${(sum.postSlowTakeoff * 100).toFixed(1)}%</span>
+      </div>
+    `;
+  }
 }
 
 let hasUserInput = false;
