@@ -1964,17 +1964,108 @@ function plotHallucinationGap(gt) {
   const gapContainer = document.getElementById('c_gap');
   if (!gapContainer) return;
 
+  const years = gt.years;
+  const n = years.length;
+
+  // Build filled area: for each point, gap = R - W
+  const gapValues = years.map((yr, i) => gt.reasoning[i] - gt.wm[i]);
+  // Trace 1: red fill where R > W (hallucination zone, above zero-gap line)
+  // Trace 2: green fill where W >= R (healthy zone)
+  // Trace 3+4: R and W lines on top
+
+  // Create filled traces: red zone = max(R-W, 0), green zone = max(W-R, 0)
+  // Red zone: max(gap, 0) — hallucination region
+  // Green zone: max(-gap, 0) = max(W-R, 0) — healthy region (shown below axis as magnitude)
+  const redZone = gapValues.map(g => g > 0 ? g : 0);
+  const greenZone = gapValues.map(g => g < 0 ? -g : 0);
+
   const traces = [
-    { x: gt.years, y: gt.wm, type: 'scatter', mode: 'lines', name: 'World Modeling', line: { color: '#22c55e', width: 2 } },
-    { x: gt.years, y: gt.reasoning, type: 'scatter', mode: 'lines', name: 'Reasoning', fill: 'tonexty', fillcolor: 'rgba(239,68,68,0.25)', line: { color: '#a78bfa', width: 2 } }
+    // Red zone (R > W) — hallucination danger
+    {
+      x: years, y: redZone,
+      type: 'scatter', mode: 'none',
+      fill: 'tozeroy',
+      fillcolor: 'rgba(239,68,68,0.35)',
+      name: t.gap_red_zone || 'Зона галлюцинаций (R > W)',
+      showlegend: true,
+      hoverinfo: 'x+y',
+      line: { width: 0 }
+    },
+    // Green zone (W >= R) — healthy alignment
+    {
+      x: years, y: greenZone,
+      type: 'scatter', mode: 'none',
+      fill: 'tozeroy',
+      fillcolor: 'rgba(34,197,94,0.25)',
+      name: t.gap_green_zone || 'Зона согласования (W ≥ R)',
+      showlegend: true,
+      hoverinfo: 'x+y',
+      line: { width: 0 }
+    },
+    // Reasoning line
+    {
+      x: years, y: gt.reasoning,
+      type: 'scatter', mode: 'lines',
+      name: 'Reasoning (R)',
+      line: { color: '#a78bfa', width: 2.5 },
+    },
+    // World Modeling line
+    {
+      x: years, y: gt.wm,
+      type: 'scatter', mode: 'lines',
+      name: 'World Modeling (W)',
+      line: { color: '#22c55e', width: 2.5 },
+    },
+    // Zero reference line (gap = 0, i.e. R = W)
+    {
+      x: [years[0], years[n-1]], y: [0, 0],
+      type: 'scatter', mode: 'lines',
+      name: t.gap_zero_line || 'R = W (равновесие)',
+      line: { color: '#f0883e', width: 1.5, dash: 'dot' },
+    }
   ];
 
   const layout = {
     ...LAYOUT_BASE,
     title: { text: t.ch_gap_title || t.chart_gap || 'Каузальный разрыв (Hallucination Gap)', font: { size: 14, color: '#eab308' } },
     xaxis: { ...LAYOUT_BASE.xaxis, title: { text: t.ch2_xlabel || 'Год' }, range: [2026, 2045] },
-    yaxis: { ...LAYOUT_BASE.yaxis, title: { text: 'Capability Scale (0..15)' }, range: [0, 16] },
-    legend: { ...LAYOUT_BASE.legend, orientation: 'h', y: -0.15 },
+    yaxis: {
+      ...LAYOUT_BASE.yaxis,
+      title: { text: t.gap_y_axis || 'Capability (0..15)' },
+      range: [0, Math.max(16, ...gt.reasoning) * 1.1],
+      zeroline: true,
+      zerolinecolor: '#f0883e',
+      zerolinewidth: 1.5,
+    },
+    legend: { ...LAYOUT_BASE.legend, orientation: 'h', y: -0.25 },
+    annotations: [
+      // Label for red zone
+      {
+        x: years[Math.floor(n * 0.7)],
+        y: Math.max(...redZone) > 0.5 ? Math.max(...redZone) * 0.5 : 1,
+        text: t.gap_red_label || '← Галлюцинации',
+        showarrow: false,
+        font: { color: '#ef4444', size: 10 }
+      },
+      // Label for green zone
+      {
+        x: years[Math.floor(n * 0.7)],
+        y: -0.5,
+        text: t.gap_green_label || '← Согласование',
+        showarrow: false,
+        font: { color: '#22c55e', size: 10 },
+        yshift: -20
+      }
+    ],
+    shapes: [
+      // Horizontal zero line reference
+      {
+        type: 'line',
+        x0: years[0], x1: years[n-1],
+        y0: 0, y1: 0,
+        line: { color: '#f0883e', width: 1, dash: 'dot' }
+      }
+    ]
   };
 
   Plotly.newPlot('c_gap', traces, layout, PLOT_CFG);
@@ -2278,7 +2369,13 @@ const LANG = {
     chart_gap:'5b. Каузальный разрыв (Hallucination Gap)',
     gap_p1:'Расхождение между способностью к формальному выводу (Reasoning) и пониманием причинно-следственных связей в физическом мире (World Modeling).',
     gap_p2:'<b>Интерпретация:</b>',
-    gap_p3:'Вычисляется как интеграл разности R(t) - W(t) по всем частицам. Устойчиво расширяющийся разрыв — сигнал о неизбежном «моменте галлюцинаций».',
+    gap_p3:'Красная зона: R > W — модель «галлюцинирует», понимает язык, но не понимает причинность. Зелёная зона: W ≥ R — каузальное согласование.',
+    gap_red_zone:'Зона галлюцинаций (R > W)',
+    gap_green_zone:'Зона согласования (W ≥ R)',
+    gap_zero_line:'R = W (равновесие)',
+    gap_y_axis:'Capability (0..15)',
+    gap_red_label:'← Галлюцинации',
+    gap_green_label:'← Согласование',
     emb_p1: '<b>Воплощенность (Embodiment, $E$)</b> — четвертый базис, квантифицирующий физическую способность системы изменять распределение атомов. T4 невозможен без $E \\ge E_{crit}$.',
     emb_p2: '<b>Верхняя панель:</b> Эволюция $E(t)$. Желтые маркеры — априорная калибровка на эмпирических данных (Boston Dynamics, Tesla Optimus, Figure). Зеленая линия (Bypass) — порог автопоэзиса, при котором ИИ начинает автономно расширять аппаратную базу, ускоряя HW рост в 3 раза.',
     emb_p3: '<b>Нижняя панель:</b> Маргинальное распределение параметра $E_{ceiling}$ (асимптотического предела воплощенности) в ансамбле частиц.',
@@ -2594,7 +2691,13 @@ const LANG = {
     chart_gap:'5b. Hallucination Gap',
     gap_p1:'Divergence between formal reasoning capability (Reasoning) and causal understanding of the physical world (World Modeling).',
     gap_p2:'<b>Interpretation:</b>',
-    gap_p3:'Computed as the integral of R(t) - W(t) across all particles. A persistently widening gap signals an inevitable "hallucination moment".',
+    gap_p3:'Red zone: R > W — model "hallucinates", understands language but not causality. Green zone: W ≥ R — causal alignment.',
+    gap_red_zone:'Hallucination Zone (R > W)',
+    gap_green_zone:'Alignment Zone (W ≥ R)',
+    gap_zero_line:'R = W (equilibrium)',
+    gap_y_axis:'Capability (0..15)',
+    gap_red_label:'← Hallucinations',
+    gap_green_label:'← Alignment',
 
     // Embodiment desc
     emb_p1:'<b>Embodiment ($E$)</b> — the fourth basis, quantifying physical capability to alter atomic distribution. T4 is impossible without $E \\ge E_{crit}$.',
