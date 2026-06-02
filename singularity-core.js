@@ -205,34 +205,25 @@ const FALLBACK_BENCHMARK_HISTORY = [
 
 async function loadHistoricalBenchmarks() {
   const FALLBACK = JSON.parse(JSON.stringify(FALLBACK_BENCHMARK_HISTORY));
+  const TIMEOUT_MS = 3000;
 
-  // Race: fetch vs timeout — гарантируем возврат даже при зависании
-  let didResolve = false;
-  const fetchPromise = (async () => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
-      const response = await fetch(BENCHMARKS_API_URL, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (!response.ok) throw new Error('HTTP ' + response.status);
-      const data = await response.json();
-      if (data && data.length > 0) {
-        REAL_BENCHMARK_HISTORY = data;
-        didResolve = true;
-        console.log('Historical benchmarks loaded from API (' + data.length + ' points).');
-      }
-    } catch (e) {
-      // silent — fallback below
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const response = await fetch(BENCHMARKS_API_URL, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const data = await response.json();
+    if (data && data.length > 0) {
+      REAL_BENCHMARK_HISTORY = data;
+      console.log('Benchmarks loaded from API (' + data.length + ' points).');
+      return;
     }
-  })();
-
-  const timeoutPromise = new Promise(r => setTimeout(r, 3000));
-  await Promise.race([fetchPromise, timeoutPromise]);
-
-  if (!didResolve) {
-    REAL_BENCHMARK_HISTORY = FALLBACK;
-    if (typeof console !== 'undefined') console.warn('Benchmarks: used fallback data.');
+  } catch (e) {
+    // timeout или сетевая ошибка — silent
   }
+  REAL_BENCHMARK_HISTORY = FALLBACK;
+  console.warn('Benchmarks: used fallback data.');
 }
 
 // ============================================================================
@@ -317,7 +308,7 @@ function createConfig() {
   return {
     BASE_YEAR: 2023.0,          // Якорь (уровень GPT-4)
     BASE_LOG_FLOPS: 24.5,       // Начальные FLOPs в 2023
-    CURRENT_YEAR: new Date().getFullYear() + (new Date().getMonth() / 12), // Динамический текущий год
+    CURRENT_YEAR: (() => { const d = new Date(); return d.getFullYear() + (d.getMonth() + (d.getDate() - 1) / 31) / 12; })(), // Динамический текущий год
     THRESHOLDS: { t1: EXPERT_CONFIG.t1Threshold, t2: EXPERT_CONFIG.t2Threshold, t3: EXPERT_CONFIG.t3Threshold, t4: EXPERT_CONFIG.t4Threshold },
     DIMENSIONS: {
       reasoning: { slope: EXPERT_CONFIG.reasoningScalingSlope, ceiling: EXPERT_CONFIG.ceilingReasoningBase },
@@ -490,7 +481,7 @@ function simulateToYear(particle, targetYear, cfg) {
 
     // --- БАРЬЕР 5: Смысловой предел (Шок спроса) ---
     let demandDamping = 1.0;
-    if (cap >= cfg.THRESHOLDS.t2 && (currentYear - 2026.0) < cfg.EXPERT.barrierDemandGrace) {
+    if (cap >= cfg.THRESHOLDS.t2 && (currentYear - cfg.BASE_YEAR) < cfg.EXPERT.barrierDemandGrace) {
       demandDamping = 0.6;
     }
 
@@ -854,7 +845,7 @@ class BayesianTracker {
 
         // --- БАРЬЕР 5: Смысловой предел (Шок спроса) ---
         let demandDamping = 1.0;
-        if (cap >= this.cfg.THRESHOLDS.t2 && (currentYear - 2026.0) < this.cfg.EXPERT.barrierDemandGrace) {
+        if (cap >= this.cfg.THRESHOLDS.t2 && t2HitYear !== null && (currentYear - t2HitYear) < this.cfg.EXPERT.barrierDemandGrace) {
           demandDamping = 0.6;
         }
         
@@ -868,11 +859,12 @@ class BayesianTracker {
         }
         
                 // Проверяем прохождение 4 этапов сингулярности
+                let t2HitYear = null;
                 if (yT1 === null && cap >= this.cfg.THRESHOLDS.t1) yT1 = currentYear;
-                if (yT2 === null && cap >= this.cfg.THRESHOLDS.t2) yT2 = currentYear;
+                if (yT2 === null && cap >= this.cfg.THRESHOLDS.t2) { yT2 = currentYear; t2HitYear = currentYear; }
                 if (yT3 === null && cap >= this.cfg.THRESHOLDS.t3) yT3 = currentYear;
                 // T4 теперь оценивается по civCap, включающему C, M и E
-                if (yT4 === null && civCap >= this.cfg.THRESHOLDS.t4) {
+                if (yT4 === null && civCap >= this.cfg.THRESHOLDS.t4 && E >= this.cfg.EXPERT.embodimentT4Requirement) {
                     yT4 = currentYear;
                     break;
                 }
@@ -1182,7 +1174,7 @@ class BayesianTracker {
         }
 
         let demandDamping = 1.0;
-        if (cap >= cfg.THRESHOLDS.t2 && (y - 2026.0) < cfg.EXPERT.barrierDemandGrace) {
+        if (cap >= cfg.THRESHOLDS.t2 && (y - cfg.BASE_YEAR) < cfg.EXPERT.barrierDemandGrace) {
           demandDamping = 0.6;
         }
 
@@ -1388,7 +1380,7 @@ function runBacktest(trainEnd, kPred) {
   for (let t = 0; t < testData.length; t++) {
     const obs = testData[t];
     const samples = [];
-    for (let i = 0; i < btTracker.n; i += 10) {
+    for (let i = 0; i < btTracker.n; i += 5) {
       const pred = simulateToYear(btTracker.particles[i], obs.year, btTracker.cfg);
       const m = getNumericObservables(pred.reasoning, pred.agency, pred.embodiment, btTracker.cfg.EXPERT);
       samples.push(m);
@@ -1396,7 +1388,7 @@ function runBacktest(trainEnd, kPred) {
     const medianSample = {};
     for (const dim of dims) {
       const vals = samples.map(s => s[dim]).filter(v => isFinite(v)).sort((a,b)=>a-b);
-      medianSample[dim] = vals.length > 0 ? vals[Math.floor(vals.length / 2)] : 0;
+      const _m = Math.floor(vals.length / 2); medianSample[dim] = vals.length > 0 ? (vals.length % 2 === 0 ? (vals[_m - 1] + vals[_m]) / 2 : vals[_m]) : 0;
       const p10 = vals.length > 0 ? vals[Math.floor(vals.length * 0.10)] : 0;
       const p90 = vals.length > 0 ? vals[Math.floor(vals.length * 0.90)] : 0;
       if (obs[dim] !== undefined) {
@@ -3621,6 +3613,7 @@ function quickWarning() {
 function renderDataPanel() {
   const panel = document.getElementById('dataPanelContent');
   if (!panel) return;
+  const safe = (v, dec, suffix = '') => (v !== undefined && v !== null && isFinite(v)) ? (+v).toFixed(dec) + suffix : '—';
   const L = LANG[window._lang || 'ru'];
   const history = REAL_BENCHMARK_HISTORY;
   if (!history || history.length === 0) {
@@ -3632,9 +3625,9 @@ function renderDataPanel() {
     return `<tr>
       <td style="color:#f0883e">${d.year.toFixed(2)}</td>
       <td>${d.event}</td>
-      <td style="text-align:right">${d.arenaElo.toFixed(0)}</td>
-      <td style="text-align:right">${d.arcAgi.toFixed(1)}%</td>
-      <td style="text-align:right">${d.sweBench.toFixed(1)}%</td>
+      <td style="text-align:right">${safe(d.arenaElo, 0)}</td>
+      <td style="text-align:right">${safe(d.arcAgi, 1, '%')}</td>
+      <td style="text-align:right">${safe(d.sweBench, 1, '%')}</td>
       <td style="text-align:right;color:#a78bfa">${flops}</td>
     </tr>`;
   }).join('');
@@ -3676,13 +3669,14 @@ function updateObsMetrics() {
   }
   
   function getMedian(key) {
-    samples.sort((a, b) => a.m[key] - b.m[key]);
+    // Сортируем КОПИЮ, не мутируем оригинал
+    const sorted = samples.slice().sort((a, b) => a.m[key] - b.m[key]);
     let cum = 0;
-    for (let i = 0; i < samples.length; i++) {
-      cum += samples[i].w;
-      if (cum >= 0.5) return samples[i].m[key];
+    for (let i = 0; i < sorted.length; i++) {
+      cum += sorted[i].w;
+      if (cum >= 0.5) return sorted[i].m[key];
     }
-    return samples[samples.length - 1].m[key];
+    return sorted[sorted.length - 1].m[key];
   }
 
   const medSwe = getMedian('sweBench');
