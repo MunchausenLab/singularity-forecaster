@@ -2300,7 +2300,7 @@ const LANG = {
     // Observable metrics warning
     v3_warning_far:'⚠️ Значения далеко от диапазона частиц — модель не может надёжно экстраполировать. Прогноз ближе к априорному.',
     // Expert presets
-    preset_default:'Базовый', preset_optimist:'Технооптимизм', preset_skeptic:'Техноскептицизм', preset_pessimist:'Технопессимизм',
+    preset_default:'Базовый', preset_optimist:'Оптимизм', preset_skeptic:'Скептицизм', preset_pessimist:'Пессимизм',
     // Data panel
     data_panel_year:'Год', data_panel_event:'Модель', data_panel_source:'Источники',
     data_panel_loading:'Данные загружаются...',
@@ -2630,7 +2630,7 @@ const LANG = {
     // Observable metrics warning
     v3_warning_far:'Values far from particle range — model cannot reliably extrapolate. Forecast is closer to prior.',
     // Expert presets
-    preset_default:'Default', preset_optimist:'Techno-Optimism', preset_skeptic:'Techno-Skepticism', preset_pessimist:'Techno-Pessimism',
+    preset_default:'Default', preset_optimist:'Optimism', preset_skeptic:'Skepticism', preset_pessimist:'Pessimism',
     // v3 params panel
     v3_params_title:'Simulation Parameters', v3_no_t4:'No T4 by 2068 in any particle',
     wm_posterior_title:'Current Posterior Hypothesis Weights',
@@ -3685,9 +3685,9 @@ function injectExpertPresets() {
   
   const presets = [
     { id: 'default',   label: L.preset_default   || 'Базовий',         color: '#58a6ff' },
-    { id: 'optimist',  label: L.preset_optimist  || 'Технооптимизм',   color: '#22c55e' },
-    { id: 'skeptic',   label: L.preset_skeptic   || 'Техноскептицизм', color: '#eab308' },
-    { id: 'pessimist', label: L.preset_pessimist || 'Технопессимизм',  color: '#ef4444' }
+    { id: 'optimist',  label: L.preset_optimist  || 'Оптимизм',   color: '#22c55e' },
+    { id: 'skeptic',   label: L.preset_skeptic   || 'Скептицизм', color: '#eab308' },
+    { id: 'pessimist', label: L.preset_pessimist || 'Пессимизм',  color: '#ef4444' }
   ];
   
   // Insert preset buttons into expert-actions (expanded view)
