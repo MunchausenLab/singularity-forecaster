@@ -14,6 +14,7 @@ function cdf(list, x) { const c = list.filter(v => isFinite(v) && v <= x).length
 const EXPERT_CONFIG = {
   // Категория 1: Архитектура и Парадигмы
   ceilingReasoningBase: 15.0,       // Базовый потолок Трансформеров
+  ceilingWorldModelingBase: 18.0,   // Потолок World Modeling (выше чем у Reasoning)
   hypeGracePeriod: 2.5,             // Толерантность инвесторов (лет)
   saturationThreshold: 0.7,         // Порог насыщения для прорыва (0-1)
   overhangShiftMultiplier: 0.2,     // Compute Overhang влияет на вероятность прорыва
@@ -321,7 +322,7 @@ function createConfig() {
     DIMENSIONS: {
       reasoning: { slope: EXPERT_CONFIG.reasoningScalingSlope, ceiling: EXPERT_CONFIG.ceilingReasoningBase },
       agency:    { slope: EXPERT_CONFIG.agencyScalingSlope }, // Потолок определяет частица
-      worldModeling: { slope: EXPERT_CONFIG.wmScalingSlope },
+      worldModeling: { slope: EXPERT_CONFIG.wmScalingSlope, ceiling: EXPERT_CONFIG.ceilingWorldModelingBase },
     },
     // Глубокое копирование защищает текущую симуляцию от live-мутаций ползунков
     EXPERT: JSON.parse(JSON.stringify(EXPERT_CONFIG)),
@@ -374,6 +375,7 @@ function simulateToYear(particle, targetYear, cfg) {
 
   let ceilingR = cfg.DIMENSIONS.reasoning.ceiling;
   let ceilingA = particle.agency_ceiling;
+  let ceilingWM = cfg.DIMENSIONS.worldModeling.ceiling;
   let ceilingE = particle.embodiment_ceiling || cfg.EXPERT.embodimentPriorMean;
 
   // ИСПРАВЛЕНО: Применяем априорные World Models до симуляции
@@ -404,7 +406,7 @@ function simulateToYear(particle, targetYear, cfg) {
     let rawR = computeDim(stateR, cfg.DIMENSIONS.reasoning.slope, ceilingR);
     let rawA = computeDim(stateA, cfg.DIMENSIONS.agency.slope, ceilingA);
     let rawE_ai = computeDim(stateE, cfg.EXPERT.embodimentScalingSlope, ceilingE);
-    let rawWM = computeDim(stateW, cfg.DIMENSIONS.worldModeling.slope, ceilingR);
+    let rawWM = computeDim(stateW, cfg.DIMENSIONS.worldModeling.slope, ceilingWM);
 
     const R = applyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
     const A = applyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
@@ -442,6 +444,7 @@ function simulateToYear(particle, targetYear, cfg) {
         }
         ceilingA *= shiftMult;
         ceilingR *= shiftMult;
+        ceilingWM *= shiftMult;
         ceilingE *= shiftMult; // PATCH 4: Physical limit also shifts with paradigm
         algoKMult = 2.0;
         // ДОБАВЛЕНО: откат логарифма при смене парадигмы, чтобы физика совпадала с Монте-Карло
@@ -509,8 +512,8 @@ function simulateToYear(particle, targetYear, cfg) {
     // PATCH 1, 2, 3: Differential state integration with cross-dependencies
     const dCompute = (hwDelta + algoDelta) * dt;
     stateR += dCompute;
-    stateW += 0.3 * dCompute + (0.4 * (W / ceilingR) + 0.3 * (R / ceilingR)) * Math.max(0, dCompute);
-    stateA += 0.4 * dCompute + (0.3 * (R / ceilingR) + 0.3 * (W / ceilingR)) * Math.max(0, dCompute);
+    stateW += 0.7 * dCompute + (0.2 * (R / ceilingR)) * Math.max(0, dCompute);
+    stateA += 0.4 * dCompute + (0.3 * (R / ceilingR) + 0.3 * (W / ceilingWM)) * Math.max(0, dCompute);
     stateE += 0.5 * dCompute + 0.2 * (A / ceilingA) * Math.max(0, dCompute);
     roboticsFrontier += (0.15 + 0.1 * (R > 7.0 ? 1 : 0)) * dt; // Real robotics linear growth
 
@@ -732,6 +735,7 @@ class BayesianTracker {
       // ИСПРАВЛЕНИЕ 1: Оба потолка теперь локальные переменные
       let ceilingReasoning = this.cfg.DIMENSIONS.reasoning.ceiling;
       let ceilingAgency = p.agency_ceiling;
+      let ceilingWM = this.cfg.DIMENSIONS.worldModeling.ceiling;
       let ceilingEmbodiment = p.embodiment_ceiling || this.cfg.EXPERT.embodimentPriorMean;
 
       // --- World Models: эпистемическая неопределённость ---
@@ -771,7 +775,7 @@ class BayesianTracker {
         const rawR = computeDim(stateR, this.cfg.DIMENSIONS.reasoning.slope, ceilingReasoning);
         const rawA = computeDim(stateA, this.cfg.DIMENSIONS.agency.slope, ceilingAgency);
         const rawE_ai = computeDim(stateE, this.cfg.EXPERT.embodimentScalingSlope, ceilingEmbodiment);
-        const rawWM = computeDim(stateW, this.cfg.DIMENSIONS.worldModeling.slope, ceilingReasoning);
+        const rawWM = computeDim(stateW, this.cfg.DIMENSIONS.worldModeling.slope, ceilingWM);
 
         const R = applyInference(rawR, this.cfg.INFERENCE_SCALING.max_bonus_reasoning, this.cfg.INFERENCE_SCALING.saturation_cap);
         const A = applyInference(rawA, this.cfg.INFERENCE_SCALING.max_bonus_agency, this.cfg.INFERENCE_SCALING.saturation_cap);
@@ -834,6 +838,7 @@ class BayesianTracker {
 
                 ceilingAgency *= shiftMult;
                 ceilingReasoning *= shiftMult;
+                ceilingWM *= shiftMult;
                 ceilingEmbodiment *= shiftMult; // PATCH 4: Physical limit also shifts with paradigm
 
                 algoLog = Math.max(algoLog - (0.4 + paradigmGeneration * 0.1), -3.0);
@@ -999,8 +1004,8 @@ class BayesianTracker {
 
         const dCompute = (hwDelta + algoDelta) * dt;
         stateR += dCompute;
-        stateW += 0.3 * dCompute + (0.4 * (W / ceilingReasoning) + 0.3 * (R / ceilingReasoning)) * Math.max(0, dCompute);
-        stateA += 0.4 * dCompute + (0.3 * (R / ceilingReasoning) + 0.3 * (W / ceilingReasoning)) * Math.max(0, dCompute);
+        stateW += 0.7 * dCompute + (0.2 * (R / ceilingReasoning)) * Math.max(0, dCompute);
+        stateA += 0.4 * dCompute + (0.3 * (R / ceilingReasoning) + 0.3 * (W / ceilingWM)) * Math.max(0, dCompute);
         stateE += 0.5 * dCompute + 0.2 * (A / ceilingAgency) * Math.max(0, dCompute);
         roboticsFrontier += (0.15 + 0.1 * (R > 7.0 ? 1 : 0)) * dt;
 
@@ -1113,6 +1118,7 @@ class BayesianTracker {
       let algoK = Math.log(2) / Math.max(1.0, p.algo_months / 12.0);
       let cR = cfg.DIMENSIONS.reasoning.ceiling;
       let cA = p.agency_ceiling;
+      let cWM = cfg.DIMENSIONS.worldModeling.ceiling;
       let cE = p.embodiment_ceiling || cfg.EXPERT.embodimentPriorMean;
 
       if (p.world_model === 'hard_wall') {
@@ -1145,7 +1151,7 @@ class BayesianTracker {
         const rawR = computeDim(stateR, cfg.DIMENSIONS.reasoning.slope, cR);
         const rawA = computeDim(stateA, cfg.DIMENSIONS.agency.slope, cA);
         const rawE_ai = computeDim(stateE, cfg.EXPERT.embodimentScalingSlope, cE);
-        const rawWM = computeDim(stateW, cfg.DIMENSIONS.worldModeling.slope, cR);
+        const rawWM = computeDim(stateW, cfg.DIMENSIONS.worldModeling.slope, cWM);
 
         const R = applyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
         const A = applyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
@@ -1183,6 +1189,7 @@ class BayesianTracker {
 
                 cA *= shiftMult;
                 cR *= shiftMult;
+                cWM *= shiftMult;
                 cE *= shiftMult;
                 algoLog = Math.max(algoLog - (0.4 + paradigmGeneration * 0.1), -3.0);
                 algoKMultiplier = 2.0;
@@ -1314,8 +1321,8 @@ class BayesianTracker {
 
         const dCompute = (hwDelta + algoDelta) * dt;
         stateR += dCompute;
-        stateW += 0.3 * dCompute + (0.4 * (W / cR) + 0.3 * (R / cR)) * Math.max(0, dCompute);
-        stateA += 0.4 * dCompute + (0.3 * (R / cR) + 0.3 * (W / cR)) * Math.max(0, dCompute);
+        stateW += 0.7 * dCompute + (0.2 * (R / cR)) * Math.max(0, dCompute);
+        stateA += 0.4 * dCompute + (0.3 * (R / cR) + 0.3 * (W / cWM)) * Math.max(0, dCompute);
         stateE += 0.5 * dCompute + 0.2 * (A / cA) * Math.max(0, dCompute);
         roboticsFrontier += (0.15 + 0.1 * (R > 7.0 ? 1 : 0)) * dt;
 
@@ -1361,6 +1368,7 @@ class BayesianTracker {
     
     let cR = cfg.DIMENSIONS.reasoning.ceiling;
     let cA = avgCeiling;
+    let cWM = cfg.DIMENSIONS.worldModeling.ceiling;
     let cE = avgEmbodimentCeiling || cfg.EXPERT.embodimentPriorMean;
 
     let hardWallWeight = 0, slowTakeoffWeight = 0;
@@ -1403,7 +1411,7 @@ class BayesianTracker {
       const rawR = computeDim(stateR, cfg.DIMENSIONS.reasoning.slope, cR);
       const rawA = computeDim(stateA, cfg.DIMENSIONS.agency.slope, cA);
       const rawE_ai = computeDim(stateE, cfg.EXPERT.embodimentScalingSlope, cE);
-      const rawWM = computeDim(stateW, cfg.DIMENSIONS.worldModeling.slope, cR);
+      const rawWM = computeDim(stateW, cfg.DIMENSIONS.worldModeling.slope, cWM);
       
       const R = applyInference(rawR, cfg.INFERENCE_SCALING.max_bonus_reasoning, cfg.INFERENCE_SCALING.saturation_cap);
       const A = applyInference(rawA, cfg.INFERENCE_SCALING.max_bonus_agency, cfg.INFERENCE_SCALING.saturation_cap);
@@ -1437,6 +1445,7 @@ class BayesianTracker {
 
         cA *= shiftMult;
         cR *= shiftMult;
+        cWM *= shiftMult;
         cE *= shiftMult;
         
         algoLog = Math.max(algoLog - (0.4 + paradigmGeneration * 0.1), -3.0);
@@ -1490,8 +1499,8 @@ class BayesianTracker {
 
       const dCompute = (hwDelta + algoDelta) * dt;
       stateR += dCompute;
-      stateW += 0.3 * dCompute + (0.4 * (W / cR) + 0.3 * (R / cR)) * Math.max(0, dCompute);
-      stateA += 0.4 * dCompute + (0.3 * (R / cR) + 0.3 * (W / cR)) * Math.max(0, dCompute);
+      stateW += 0.7 * dCompute + (0.2 * (R / cR)) * Math.max(0, dCompute);
+      stateA += 0.4 * dCompute + (0.3 * (R / cR) + 0.3 * (W / cWM)) * Math.max(0, dCompute);
       stateE += 0.5 * dCompute + 0.2 * (A / cA) * Math.max(0, dCompute);
       roboticsFrontier += (0.15 + 0.1 * (R > 7.0 ? 1 : 0)) * dt;
 
@@ -3836,6 +3845,7 @@ function applyExpertPreset(type) {
     // OpenAI scale: быстрый RSI, долгий хайп, каскады сменяются легко
     EXPERT_CONFIG.worldModels = { cascade: 0.80, hardWall: 0.10, slowTakeoff: 0.10 };
     EXPERT_CONFIG.ceilingReasoningBase = 20.0;
+    EXPERT_CONFIG.ceilingWorldModelingBase = 24.0;
     EXPERT_CONFIG.rsiMultiplier = 1.5;
     EXPERT_CONFIG.paradigmDecayRate = 0.2;
     EXPERT_CONFIG.barrierAtomsLimit = 2.0;
@@ -3845,6 +3855,7 @@ function applyExpertPreset(type) {
     // Зима ИИ: упираемся в стену, робототехника буксует, жесткое регулирование
     EXPERT_CONFIG.worldModels = { cascade: 0.10, hardWall: 0.80, slowTakeoff: 0.10 };
     EXPERT_CONFIG.ceilingReasoningBase = 10.0;
+    EXPERT_CONFIG.ceilingWorldModelingBase = 12.0;
     EXPERT_CONFIG.plateauHardWallCeiling = 4.0;
     EXPERT_CONFIG.rsiMultiplier = 0.2;
     EXPERT_CONFIG.barrierAtomsLimit = 0.5;
@@ -3854,6 +3865,7 @@ function applyExpertPreset(type) {
     // Нейросимволика: старт долгий, но первый сдвиг парадигмы дает огромный скачок
     EXPERT_CONFIG.worldModels = { cascade: 0.10, hardWall: 0.10, slowTakeoff: 0.80 };
     EXPERT_CONFIG.ceilingReasoningBase = 12.0;
+    EXPERT_CONFIG.ceilingWorldModelingBase = 15.0;
     EXPERT_CONFIG.baseShiftMultiplier = 5.0;
     EXPERT_CONFIG.rsiMultiplier = 1.0;
     EXPERT_CONFIG.barrierAtomsLimit = 0.8;
