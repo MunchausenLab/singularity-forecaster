@@ -2405,6 +2405,12 @@ const LANG = {
     // Наблюдательный шум (per-observation sigma)
     expert_p_observationSigmaMode:'Режим шума наблюдений',
     expert_d_observationSigmaMode:'Global: BENCHMARK_SIGMAS. PerPoint: локальные *_sigma (если заданы).',
+    expert_p_embodimentRealityAnchor:'Embodiment reality anchor',
+    expert_d_embodimentRealityAnchor:'Жёсткий стартовый уровень roboticsFrontier (3.0 = Figure 01 / Optimus Gen 1, 2023)',
+    expert_p_embodimentBuildBaseSpeed:'Embodiment build base speed',
+    expert_d_embodimentBuildBaseSpeed:'Скорость строительства заводов людьми (базовый прирост roboticsFrontier/год до помощи роботов)',
+    expert_p_maxPhysicalExperimentRate:'Max physical experiment rate',
+    expert_d_maxPhysicalExperimentRate:'Макс. скорость прироста W (world model) в год — лимит wet-lab экспериментов между T2 и T3',
     // Embodiment (4-е латентное измерение: физическая воплощённость)
     expert_p_embodimentPriorMean:'Embodiment: prior mean',
     expert_d_embodimentPriorMean:'Априорное среднее embodiment_ceiling (робототехника сложна)',
@@ -2730,6 +2736,12 @@ const LANG = {
     // Observation noise mode
     expert_p_observationSigmaMode:'Observation noise mode',
     expert_d_observationSigmaMode:'Global: BENCHMARK_SIGMAS. PerPoint: local *_sigma (when present).',
+    expert_p_embodimentRealityAnchor:'Embodiment reality anchor',
+    expert_d_embodimentRealityAnchor:'Hard-start roboticsFrontier level (3.0 = Figure 01 / Optimus Gen 1, 2023)',
+    expert_p_embodimentBuildBaseSpeed:'Embodiment build base speed',
+    expert_d_embodimentBuildBaseSpeed:'Factory construction speed by humans (base roboticsFrontier growth/yr before robot help)',
+    expert_p_maxPhysicalExperimentRate:'Max physical experiment rate',
+    expert_d_maxPhysicalExperimentRate:'Max W (world model) growth rate per year — wet-lab constraint between T2 and T3',
     // Embodiment (4th latent dim: physical embodiment)
     expert_p_embodimentPriorMean:'Embodiment: prior mean',
     expert_d_embodimentPriorMean:'Prior mean of embodiment_ceiling (robotics is hard)',
