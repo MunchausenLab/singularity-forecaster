@@ -1811,15 +1811,16 @@ async function plotSensitivityHeatmap(tracker) {
     c5.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666680;font-family:monospace;">' + (LANG[window._lang || 'ru'].ch5_loading || 'Вычисление матрицы (асинхронно)...') + '</div>';
   }
 
-  const arcRange = [60, 65, 70, 75, 80, 85, 90, 95, 99];     // Oсь Y
-  const sweRange = [20, 30, 40, 50, 60, 70, 80, 90, 99];     // Oсь X
+  const arcRange = [60, 65, 70, 75, 80, 85, 90, 95, 99];
+  const sweRange = [20, 30, 40, 50, 60, 70, 80, 90, 99];
 
   const matrix = await tracker.runSensitivityMatrixAsync(arcRange, sweRange);
 
   if (!document.getElementById('c5')) return;
 
+  const labelText = t.ch5_label || 'Лет до T2';
   const textMatrix = matrix.map((row, i) =>
-    row.map((v, j) => `ARC=${arcRange[i]}%, SWE=${sweRange[j]}%<br>${t.ch5_label}: ${v.toFixed(1)} лет`)
+    row.map((v, j) => `ARC=${arcRange[i]}%, SWE=${sweRange[j]}%<br>${labelText}: ${v.toFixed(1)} лет`)
   );
 
   Plotly.newPlot('c5', [{
@@ -1827,10 +1828,11 @@ async function plotSensitivityHeatmap(tracker) {
     x: sweRange.map(String),
     y: arcRange.map(String),
     type: 'heatmap',
+    reversescale: true,
     colorscale: [[0, '#0a0a0f'], [0.2, '#1a3a4a'], [0.4, '#0e5e7a'], [0.6, '#f0883e'], [0.8, '#ef4444'], [1, '#ff0040']],
     text: textMatrix,
     hoverinfo: 'text',
-    colorbar: { title: { text: t.ch5_colorbar || 'Лет до T4' }, thickness: 12, len: 0.8 },
+    colorbar: { title: { text: t.ch5_colorbar || 'Лет до T2' }, thickness: 12, len: 0.8 },
   }], {
     ...LAYOUT_BASE,
     xaxis: { ...LAYOUT_BASE.xaxis, title: { text: 'SWE-bench (%)' } },
@@ -2115,7 +2117,7 @@ const LANG = {
     ch_t1:'T1: Понимание', ch_t2:'T2: Предсказуемость', ch_t3:'T3: Контроль', ch_t4:'T4: Влияние',
     ch1_xlabel:'Год', ch1_ylabel:'Прогонов',
     ch3_xlabel:'Год', ch3_ylabel:'P(%)', ch3_pt2:'P(T2)', ch3_pt4:'P(T4)',
-    ch5_label:'Лет до T4', ch5_colorbar:'Лет до T4', ch5_xaxis:'Agency score', ch5_yaxis:'Reasoning score', ch5_loading:'Вычисление матрицы (асинхронно)...',
+    ch5_label:'Лет до T2', ch5_colorbar:'Лет до T2', ch5_xaxis:'SWE-bench (%)', ch5_yaxis:'ARC-AGI (%)', ch5_loading:'Вычисление матрицы (асинхронно)...',
     ch7_ylabel:'Суммарный вклад (log FLOPs)',
     ch8_median:'Медиана (MC)', ch8_p1090:'p10..p90', ch8_p2575:'p25..p75', ch8_real:'Реальные роботы', ch8_t4req:'T4 requirement', ch8_bypass:'HW bypass', ch8_y_main:'Embodiment (0..10)', ch8_x_hist:'embodiment_ceiling', ch8_y_hist:'# частиц',
     fY_suffix:' лет', fY_gt:'> 40 лет',
@@ -2441,7 +2443,7 @@ const LANG = {
     ch_t1:'T1: Understanding', ch_t2:'T2: Predictability', ch_t3:'T3: Control', ch_t4:'T4: Influence',
     ch1_xlabel:'Year', ch1_ylabel:'Runs',
     ch3_xlabel:'Year', ch3_ylabel:'P(%)', ch3_pt2:'P(T2)', ch3_pt4:'P(T4)',
-    ch5_label:'Years to T4', ch5_colorbar:'Years to T4', ch5_xaxis:'Agency score', ch5_yaxis:'Reasoning score', ch5_loading:'Computing matrix (async)...',
+    ch5_label:'Years to T2', ch5_colorbar:'Years to T2', ch5_xaxis:'SWE-bench (%)', ch5_yaxis:'ARC-AGI (%)', ch5_loading:'Computing matrix (async)...',
     ch7_ylabel:'Cumulative contribution (log FLOPs)',
     ch8_median:'Median (MC)', ch8_p1090:'p10..p90', ch8_p2575:'p25..p75', ch8_real:'Real robots', ch8_t4req:'T4 requirement', ch8_bypass:'HW bypass', ch8_y_main:'Embodiment (0..10)', ch8_x_hist:'embodiment_ceiling', ch8_y_hist:'# particles',
     fY_suffix:' yrs', fY_gt:'> 40 yrs',
