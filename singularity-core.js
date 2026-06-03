@@ -1811,8 +1811,10 @@ async function plotSensitivityHeatmap(tracker) {
     c5.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666680;font-family:monospace;">' + (LANG[window._lang || 'ru'].ch5_loading || 'Вычисление матрицы (асинхронно)...') + '</div>';
   }
 
-  const arcRange = [60, 65, 70, 75, 80, 85, 90, 95, 99];
-  const sweRange = [20, 30, 40, 50, 60, 70, 80, 90, 99];
+  const arcRange = [];
+  const sweRange = [];
+  for (let v = 50; v <= 100; v += 5) arcRange.push(v);
+  for (let v = 15; v <= 99; v += 5) sweRange.push(v);
 
   const matrix = await tracker.runSensitivityMatrixAsync(arcRange, sweRange);
 
@@ -1837,7 +1839,9 @@ async function plotSensitivityHeatmap(tracker) {
     ...LAYOUT_BASE,
     xaxis: { ...LAYOUT_BASE.xaxis, title: { text: 'SWE-bench (%)' } },
     yaxis: { ...LAYOUT_BASE.yaxis, title: { text: 'ARC-AGI (%)' } },
-    margin: { ...LAYOUT_BASE.margin, l: 52 },
+    margin: { l: 48, r: 10, t: 36, b: 44 },
+    width: 520,
+    height: 480,
   }, PLOT_CFG);
 }
 
