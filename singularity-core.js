@@ -1919,8 +1919,7 @@ async function plotSensitivityHeatmap(tracker) {
     xaxis: { ...LAYOUT_BASE.xaxis, title: { text: 'SWE-bench (%)' } },
     yaxis: { ...LAYOUT_BASE.yaxis, title: { text: 'ARC-AGI (%)' } },
     margin: { l: 48, r: 10, t: 36, b: 44 },
-    width: 520,
-    height: 480,
+    height: 520,
   }, PLOT_CFG);
 }
 
