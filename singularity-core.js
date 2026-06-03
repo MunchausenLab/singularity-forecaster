@@ -1973,63 +1973,89 @@ function plotHallucinationGap(gt) {
   const years = gt.years;
   const n = years.length;
 
-  // Build filled area: for each point, gap = R - W
-  const gapValues = years.map((yr, i) => gt.reasoning[i] - gt.wm[i]);
-  // Trace 1: red fill where R > W (hallucination zone, above zero-gap line)
-  // Trace 2: green fill where W >= R (healthy zone)
-  // Trace 3+4: R and W lines on top
-
-  // Create filled traces: red zone = max(R-W, 0), green zone = max(W-R, 0)
-  // Red zone: max(gap, 0) — hallucination region
-  // Green zone: max(-gap, 0) = max(W-R, 0) — healthy region (shown below axis as magnitude)
-  const redZone = gapValues.map(g => g > 0 ? g : 0);
-  const greenZone = gapValues.map(g => g < 0 ? -g : 0);
-
-  const traces = [
-    // Red zone (R > W) — hallucination danger
-    {
-      x: years, y: redZone,
-      type: 'scatter', mode: 'none',
-      fill: 'tozeroy',
-      fillcolor: 'rgba(239,68,68,0.35)',
-      name: t.gap_red_zone || 'Зона галлюцинаций (R > W)',
-      showlegend: true,
-      hoverinfo: 'x+y',
-      line: { width: 0 }
-    },
-    // Green zone (W >= R) — healthy alignment
-    {
-      x: years, y: greenZone,
-      type: 'scatter', mode: 'none',
-      fill: 'tozeroy',
-      fillcolor: 'rgba(34,197,94,0.25)',
-      name: t.gap_green_zone || 'Зона согласования (W ≥ R)',
-      showlegend: true,
-      hoverinfo: 'x+y',
-      line: { width: 0 }
-    },
-    // Reasoning line
-    {
-      x: years, y: gt.reasoning,
-      type: 'scatter', mode: 'lines',
-      name: 'Reasoning (R)',
-      line: { color: '#a78bfa', width: 2.5 },
-    },
-    // World Modeling line
-    {
-      x: years, y: gt.wm,
-      type: 'scatter', mode: 'lines',
-      name: 'World Modeling (W)',
-      line: { color: '#22c55e', width: 2.5 },
-    },
-    // Zero reference line (gap = 0, i.e. R = W)
-    {
-      x: [years[0], years[n-1]], y: [0, 0],
-      type: 'scatter', mode: 'lines',
-      name: t.gap_zero_line || 'R = W (равновесие)',
-      line: { color: '#f0883e', width: 1.5, dash: 'dot' },
+  // Для цветовой дифференциации создаём две отдельные заливки
+  // Красная зона: только участки где R > W
+  const redX = [], redY = [];
+  const greenX = [], greenY = [];
+  
+  for (let i = 0; i < n - 1; i++) {
+    const r0 = gt.reasoning[i], w0 = gt.wm[i];
+    const r1 = gt.reasoning[i+1], w1 = gt.wm[i+1];
+    const yr0 = years[i], yr1 = years[i+1];
+    
+    // Разбиваем сегмент если линии пересекаются
+    if ((r0 - w0) * (r1 - w1) < 0) {
+      // Находим точку пересечения линейной интерполяцией
+      const tCross = (r0 - w0) / ((r0 - w0) - (r1 - w1));
+      const yrCross = yr0 + tCross * (yr1 - yr0);
+      const valCross = r0 + tCross * (r1 - r0);
+      
+      if (r0 > w0) {
+        redX.push(yr0, yrCross); redY.push(r0, valCross);
+        greenX.push(yrCross, yr1); greenY.push(valCross, w1);
+      } else {
+        greenX.push(yr0, yrCross); greenY.push(w0, valCross);
+        redX.push(yrCross, yr1); redY.push(valCross, r1);
+      }
+    } else if (r0 > w0 && r1 > w1) {
+      redX.push(yr0, yr1); redY.push(r0, r1);
+    } else {
+      greenX.push(yr0, yr1); greenY.push(w0, w1);
     }
-  ];
+  }
+
+  // Строим trace заливки между R и W для каждой зоны
+  function buildFillTrace(fx, fy, color, name) {
+    if (fx.length < 2) return null;
+    // Интерполируем W по годам fillX для нижней границы заливки
+    const wInterp = fx.map(yr => {
+      let idx = 0;
+      for (let k = 0; k < n - 1; k++) {
+        if (yr >= years[k] && yr <= years[k + 1]) { idx = k; break; }
+        if (k === n - 2) idx = k;
+      }
+      const frac = (yr - years[idx]) / (years[Math.min(idx + 1, n - 1)] - years[idx] || 1);
+      return gt.wm[idx] + frac * (gt.wm[Math.min(idx + 1, n - 1)] - gt.wm[idx]);
+    });
+    
+    return {
+      x: [...fx, ...[...fx].reverse()],
+      y: [...fy, [...wInterp].reverse()],
+      type: 'scatter', mode: 'none',
+      fill: 'toself',
+      fillcolor: color,
+      name: name,
+      showlegend: true,
+      hoverinfo: 'x+y',
+      line: { width: 0 }
+    };
+  }
+
+  const redTrace = buildFillTrace(redX, redY, 'rgba(239,68,68,0.3)', t.gap_red_zone || 'Зона галлюцинаций (R > W)');
+  const greenTrace = buildFillTrace(greenX, greenY, 'rgba(34,197,94,0.25)', t.gap_green_zone || 'Зона согласования (W ≥ R)');
+
+  // Dotted R=W reference line: find where R crosses W
+  const traces = [];
+  if (redTrace) traces.push(redTrace);
+  if (greenTrace) traces.push(greenTrace);
+  
+  // Reasoning and World Modeling lines
+  traces.push({
+    x: years, y: gt.reasoning,
+    type: 'scatter', mode: 'lines',
+    name: 'Reasoning (R)',
+    line: { color: '#a78bfa', width: 2.5 },
+  });
+  traces.push({
+    x: years, y: gt.wm,
+    type: 'scatter', mode: 'lines',
+    name: 'World Modeling (W)',
+    line: { color: '#22c55e', width: 2.5 },
+  });
+
+  // R=W reference (average of R and W at each year, shown as dotted)
+  // Actually, let's draw a line through points where R=W (interpolated crossings)
+  // For simplicity, draw the lower envelope (W) as baseline and label gap
 
   const layout = {
     ...LAYOUT_BASE,
@@ -2039,39 +2065,24 @@ function plotHallucinationGap(gt) {
       ...LAYOUT_BASE.yaxis,
       title: { text: t.gap_y_axis || 'Capability (0..15)' },
       range: [0, Math.max(16, ...gt.reasoning) * 1.1],
-      zeroline: true,
-      zerolinecolor: '#f0883e',
-      zerolinewidth: 1.5,
     },
     legend: { ...LAYOUT_BASE.legend, orientation: 'h', y: -0.25 },
     annotations: [
-      // Label for red zone
       {
         x: years[Math.floor(n * 0.7)],
-        y: Math.max(...redZone) > 0.5 ? Math.max(...redZone) * 0.5 : 1,
-        text: t.gap_red_label || '← Галлюцинации',
+        y: Math.max(...gt.reasoning) * 0.85,
+        text: 'R > W → галлюцинации',
         showarrow: false,
         font: { color: '#ef4444', size: 10 }
       },
-      // Label for green zone
       {
         x: years[Math.floor(n * 0.7)],
-        y: -0.5,
-        text: t.gap_green_label || '← Согласование',
+        y: Math.max(...gt.reasoning) * 0.15,
+        text: 'W ≥ R → согласование',
         showarrow: false,
-        font: { color: '#22c55e', size: 10 },
-        yshift: -20
+        font: { color: '#22c55e', size: 10 }
       }
     ],
-    shapes: [
-      // Horizontal zero line reference
-      {
-        type: 'line',
-        x0: years[0], x1: years[n-1],
-        y0: 0, y1: 0,
-        line: { color: '#f0883e', width: 1, dash: 'dot' }
-      }
-    ]
   };
 
   Plotly.newPlot('c_gap', traces, layout, PLOT_CFG);
@@ -2371,8 +2382,8 @@ const LANG = {
     decomp_p2: '<b>Компоненты $d\\log C(t)$:</b>',
     decomp_p3: '<b>Синтез:</b> Переход от доминирования "Hardware" (экзогенный рост) к "Algorithms" и, наконец, к экспоненциальному взрыву "RSI" визуализирует механизм эндогенного сингулярного взлета.',
     // Hallucination Gap chart
-    tag_gap:'Казуальный разрыв',
-    chart_gap:'5b. Каузальный разрыв (Hallucination Gap)',
+    tag_gap:'6. Казуальный разрыв',
+    chart_gap:'6. Каузальный разрыв (Hallucination Gap)',
     gap_p1:'Расхождение между способностью к формальному выводу (Reasoning) и пониманием причинно-следственных связей в физическом мире (World Modeling).',
     gap_p2:'<b>Интерпретация:</b>',
     gap_p3:'Красная зона: R > W — модель «галлюцинирует», понимает язык, но не понимает причинность. Зелёная зона: W ≥ R — каузальное согласование.',
@@ -2693,8 +2704,8 @@ const LANG = {
     decomp_p2:'<b>Components of $d\\log C(t)$:</b>',
     decomp_p3:'<b>Synthesis:</b> The transition from "Hardware" dominance (exogenous growth) to "Algorithms" and finally the exponential "RSI" explosion visualizes the mechanics of endogenous singular takeoff.',
     // Hallucination Gap chart (en)
-    tag_gap:'Causal Gap',
-    chart_gap:'5b. Hallucination Gap',
+    tag_gap:'6. Causal Gap',
+    chart_gap:'6. Causal Gap (Hallucination Gap)',
     gap_p1:'Divergence between formal reasoning capability (Reasoning) and causal understanding of the physical world (World Modeling).',
     gap_p2:'<b>Interpretation:</b>',
     gap_p3:'Red zone: R > W — model "hallucinates", understands language but not causality. Green zone: W ≥ R — causal alignment.',
