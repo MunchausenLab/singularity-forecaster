@@ -1329,9 +1329,9 @@ class BayesianTracker {
 
   runDecomposition() {
     const cfg = this.cfg;
-    // Use weighted average particle instead of particles[0] (which may have negligible weight)
     const totalW = this.weights.reduce((a, b) => a + b, 0);
     let avgHw = 0, avgAlgo = 0, avgCeiling = 0, avgEmbodimentCeiling = 0;
+    
     if (totalW > 0) {
       for (let i = 0; i < this.n; i++) {
         const w = this.weights[i] / totalW;
@@ -1341,30 +1341,28 @@ class BayesianTracker {
         avgEmbodimentCeiling += (this.particles[i].embodiment_ceiling || cfg.EXPERT.embodimentPriorMean) * w;
       }
     } else {
-      // Fallback: unweighted average
       for (let i = 0; i < this.n; i++) {
         avgHw += this.particles[i].hw_months;
         avgAlgo += this.particles[i].algo_months;
         avgCeiling += this.particles[i].agency_ceiling;
         avgEmbodimentCeiling += this.particles[i].embodiment_ceiling || cfg.EXPERT.embodimentPriorMean;
       }
-      avgHw /= this.n;
-      avgAlgo /= this.n;
-      avgCeiling /= this.n;
-      avgEmbodimentCeiling /= this.n;
+      avgHw /= this.n; avgAlgo /= this.n; avgCeiling /= this.n; avgEmbodimentCeiling /= this.n;
     }
+    
     const dt = 1.0 / 12.0;
     const steps = 40 * 12;
     const years = [], hwComp = [], algoComp = [], paradigmComp = [], rsiComp = [];
+    
     let accumulatedParadigm = 0, accumulatedRsi = 0;
     let flopsLog = cfg.BASE_LOG_FLOPS, algoLog = 0, pureAlgoLog = 0;
-    let baseLog = flopsLog;
     const hwK = Math.log(2) / Math.max(1.0, avgHw / 12.0);
     const algoK = Math.log(2) / Math.max(1.0, avgAlgo / 12.0);
+    
     let cR = cfg.DIMENSIONS.reasoning.ceiling;
     let cA = avgCeiling;
     let cE = avgEmbodimentCeiling || cfg.EXPERT.embodimentPriorMean;
-    // Apply weighted World Model constraints to avgCeiling
+
     let hardWallWeight = 0, slowTakeoffWeight = 0;
     if (totalW > 0) {
       for (let i = 0; i < this.n; i++) {
@@ -1373,7 +1371,7 @@ class BayesianTracker {
         else if (this.particles[i].world_model === 'slow_takeoff') slowTakeoffWeight += w;
       }
     }
-    // Blend: определяем доминирующую парадигму для отрисовки декомпозиции
+    
     const cascadeWeight = 1.0 - hardWallWeight - slowTakeoffWeight;
     const dominantModel = (hardWallWeight > cascadeWeight && hardWallWeight > slowTakeoffWeight) ? 'hard_wall' :
                           (slowTakeoffWeight > cascadeWeight && slowTakeoffWeight > hardWallWeight) ? 'slow_takeoff' : 'cascade';
@@ -1382,25 +1380,25 @@ class BayesianTracker {
       cA = Math.min(cA, cfg.EXPERT.plateauHardWallCeiling);
       cE = Math.min(cE, 4.0);
     }
-    const algoKMultiplier = dominantModel === 'slow_takeoff' ? 0.6 : 1.0;
+    let algoKMultiplier = dominantModel === 'slow_takeoff' ? 0.6 : 1.0;
+    
     let paradigmGeneration = 0;
+    let lastShiftYear = cfg.BASE_YEAR;
+    let t2HitYear = null;
 
     let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
     let roboticsFrontier = cE;
     
-    // PATCH 8: Weighted average RSI efficiency for decomposition
-    let avgRsiEff = 0;
+    let avgRsiEff = 1.0;
     if (totalW > 0) {
+      avgRsiEff = 0;
       for (let i = 0; i < this.n; i++) {
         avgRsiEff += (this.particles[i].rsi_efficiency || 1.0) * (this.weights[i] / totalW);
       }
-    } else {
-      avgRsiEff = 1.0;
     }
 
     for (let step = 0; step < steps; step++) {
       const y = cfg.BASE_YEAR + step * dt;
-      let paradigmBonus = 0;
 
       const rawR = computeDim(stateR, cfg.DIMENSIONS.reasoning.slope, cR);
       const rawA = computeDim(stateA, cfg.DIMENSIONS.agency.slope, cA);
@@ -1415,20 +1413,44 @@ class BayesianTracker {
 
       const C = Math.sqrt(A * W) * Math.max(0, 1.0 - cfg.EXPERT.coordinationFriction);
       const S = Math.pow(R, 0.4) * Math.pow(W, 0.4) * Math.pow(A, 0.2);
-      const M = Math.sqrt(E * C);
-
+      
       const cap = Math.cbrt(R * A * W);
 
-      // ИСПРАВЛЕНИЕ: Логика парадигм синхронизирована
+      if (cap >= cfg.THRESHOLDS.t2 && t2HitYear === null) {
+        t2HitYear = y;
+      }
+
+      // Детерминированная логика сдвигов парадигм (без Math.random)
       const saturation = S / cR;
-      if (y > cfg.CURRENT_YEAR && saturation > cfg.EXPERT.saturationThreshold && Math.random() < cfg.SCALING_LAW.paradigm_shift_prob * dt) {
-        cA *= cfg.SCALING_LAW.shift_multiplier;
-        cR *= cfg.SCALING_LAW.shift_multiplier;
-        cE *= cfg.SCALING_LAW.shift_multiplier; // PATCH 4: Physical limit
+      const canShift = (paradigmGeneration === 0 && y > 2026.5) || 
+                       (paradigmGeneration > 0 && y > lastShiftYear + 4.0);
+
+      if (canShift && saturation > cfg.EXPERT.saturationThreshold) {
+        // Используем настройки Expert Sandbox, а не хардкод
+        let shiftMult = Math.max(
+          cfg.EXPERT.minShiftMultiplier,
+          cfg.EXPERT.baseShiftMultiplier - (paradigmGeneration * cfg.EXPERT.paradigmDecayRate)
+        );
+        
+        if (dominantModel === 'slow_takeoff' && paradigmGeneration === 0) shiftMult = Math.max(shiftMult, 5.0);
+        if (dominantModel === 'hard_wall') shiftMult = 1.001;
+
+        cA *= shiftMult;
+        cR *= shiftMult;
+        cE *= shiftMult;
+        
         algoLog = Math.max(algoLog - (0.4 + paradigmGeneration * 0.1), -3.0);
         paradigmGeneration++;
-        paradigmBonus = cfg.SCALING_LAW.shift_multiplier;
-        accumulatedParadigm += paradigmBonus;
+        lastShiftYear = y;
+        algoKMultiplier = 2.0;
+
+        // Визуальное масштабирование для адекватного отображения
+        accumulatedParadigm += shiftMult * 2.0; 
+      }
+
+      if (paradigmGeneration > 0 && algoKMultiplier > 1.0) {
+        algoKMultiplier -= (1.0 / 4.0) * dt;
+        if (algoKMultiplier < 1.0) algoKMultiplier = 1.0;
       }
 
       years.push(y);
@@ -1436,21 +1458,35 @@ class BayesianTracker {
       algoComp.push(pureAlgoLog);
       paradigmComp.push(accumulatedParadigm);
 
-      let damping = 1.0;
+      // Включаем ВСЕ барьеры в декомпозицию
+      let damping = cfg.EXPERT.governanceMoratoriumProb * cfg.EXPERT.governanceShockDamping + (1.0 - cfg.EXPERT.governanceMoratoriumProb);
+      
       if (y > cfg.BOTTLENECKS.econ_wall_start && (R - A) > 2.0) {
         damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (R - A - 2.0));
       }
-      // PATCH 8: Apply weighted average RSI efficiency
+
+      let nashDamping = 1.0;
+      if (cap >= cfg.THRESHOLDS.t3) {
+        nashDamping = 1.0 / (1.0 + cfg.EXPERT.barrierNashFriction * (cap - cfg.THRESHOLDS.t3));
+      }
+
+      let demandDamping = 1.0;
+      if (cap >= cfg.THRESHOLDS.t2 && t2HitYear !== null && (y - t2HitYear) < cfg.EXPERT.barrierDemandGrace) {
+        demandDamping = 0.6;
+      }
+
       const rsi = calculateRSI(S, C, cfg.EXPERT) * avgRsiEff;
       accumulatedRsi += rsi * dt;
       rsiComp.push(accumulatedRsi);
+      
       const bypassActivation = sigmoid(1.5 * (E - cfg.EXPERT.embodimentBypassThreshold));
       const hwBonus = 1.0 + bypassActivation * (cfg.EXPERT.embodimentHWBonusMultiplier - 1.0);
-      // [NEW] Проклятие атомов + термодинамика
-      let hwDelta = hwK * damping * hwBonus;
+      
+      let hwDelta = hwK * damping * nashDamping * demandDamping * hwBonus;
       hwDelta = Math.min(hwDelta, cfg.EXPERT.barrierAtomsLimit * Math.LN2);
       if (flopsLog >= cfg.EXPERT.barrierEnergyLog) hwDelta = 0;
-      let algoDelta = algoK * algoKMultiplier * damping + rsi;
+      
+      let algoDelta = algoK * algoKMultiplier * damping * nashDamping * demandDamping + rsi;
 
       const dCompute = (hwDelta + algoDelta) * dt;
       stateR += dCompute;
@@ -1461,7 +1497,9 @@ class BayesianTracker {
 
       flopsLog += hwDelta * dt;
       algoLog += algoDelta * dt;
-      pureAlgoLog += (algoK * algoKMultiplier * damping) * dt;
+      
+      // pureAlgoLog - базовый алгоритмический рост (без учета RSI)
+      pureAlgoLog += (algoK * algoKMultiplier * damping * nashDamping * demandDamping) * dt;
     }
     return { years, hwComp, algoComp, paradigmComp, rsiComp };
   }
