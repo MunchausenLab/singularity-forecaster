@@ -397,7 +397,7 @@ function simulateToYear(particle, targetYear, cfg) {
 
   // PATCH 1 & 3: Independent states and robotics frontier limit
   let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
-  let roboticsFrontier = ceilingE;
+  let roboticsFrontier = 3.0; // Hard start from real 2023 robotics level
 
   for (let step = 0; step < steps; step++) {
     const currentYear = cfg.BASE_YEAR + step * dt;
@@ -512,10 +512,15 @@ function simulateToYear(particle, targetYear, cfg) {
     // PATCH 1, 2, 3: Differential state integration with cross-dependencies
     const dCompute = (hwDelta + algoDelta) * dt;
     stateR += dCompute;
-    stateW += 0.7 * dCompute + (0.2 * (R / ceilingR)) * Math.max(0, dCompute);
+    // Wet-lab experimental cycle limit: max 1.5 units/year of world model growth
+    const dW_ideal = 0.7 * dCompute + (0.2 * (R / ceilingR)) * Math.max(0, dCompute);
+    const dW_real = Math.min(dW_ideal, 1.5 * dt);
+    stateW += dW_real;
     stateA += 0.4 * dCompute + (0.3 * (R / ceilingR) + 0.3 * (W / ceilingWM)) * Math.max(0, dCompute);
     stateE += 0.5 * dCompute + 0.2 * (A / ceilingA) * Math.max(0, dCompute);
-    roboticsFrontier += (0.15 + 0.1 * (R > 7.0 ? 1 : 0)) * dt; // Real robotics linear growth
+    const buildBaseSpeed = 0.10;
+    const buildRoboticsBonus = 0.15 * (1.0 / (1.0 + Math.exp(-(E - 4.5))));
+    roboticsFrontier += (buildBaseSpeed + buildRoboticsBonus) * dt; // Real robotics linear growth
 
     flopsLog += hwDelta * dt;
     algoLog += algoDelta * dt;
@@ -767,7 +772,7 @@ class BayesianTracker {
       let algoKMultiplier = 1.0;
 
       let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
-      let roboticsFrontier = ceilingEmbodiment;
+      let roboticsFrontier = 3.0; // Hard start from real 2023 robotics level
 
       for (let step = 0; step < maxSteps; step++) {
         const currentYear = this.cfg.BASE_YEAR + step * dt;
@@ -1004,10 +1009,15 @@ class BayesianTracker {
 
         const dCompute = (hwDelta + algoDelta) * dt;
         stateR += dCompute;
-        stateW += 0.7 * dCompute + (0.2 * (R / ceilingReasoning)) * Math.max(0, dCompute);
+        // Wet-lab experimental cycle limit: max 1.5 units/year of world model growth
+        const dW_ideal = 0.7 * dCompute + (0.2 * (R / ceilingReasoning)) * Math.max(0, dCompute);
+        const dW_real = Math.min(dW_ideal, 1.5 * dt);
+        stateW += dW_real;
         stateA += 0.4 * dCompute + (0.3 * (R / ceilingReasoning) + 0.3 * (W / ceilingWM)) * Math.max(0, dCompute);
         stateE += 0.5 * dCompute + 0.2 * (A / ceilingAgency) * Math.max(0, dCompute);
-        roboticsFrontier += (0.15 + 0.1 * (R > 7.0 ? 1 : 0)) * dt;
+        const buildBaseSpeed = 0.10;
+    const buildRoboticsBonus = 0.15 * (1.0 / (1.0 + Math.exp(-(E - 4.5))));
+    roboticsFrontier += (buildBaseSpeed + buildRoboticsBonus) * dt;
 
         flopsLog += hwDelta * dt;
         algoLog += algoDelta * dt;
@@ -1142,7 +1152,7 @@ class BayesianTracker {
       let govMoratoriumYears = 0;
 
       let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
-      let roboticsFrontier = cE;
+      let roboticsFrontier = 3.0; // Hard start from real 2023 robotics level
 
       const years = [], caps = [];
       for (let step = 0; step < steps; step++) {
@@ -1321,10 +1331,15 @@ class BayesianTracker {
 
         const dCompute = (hwDelta + algoDelta) * dt;
         stateR += dCompute;
-        stateW += 0.7 * dCompute + (0.2 * (R / cR)) * Math.max(0, dCompute);
+        // Wet-lab experimental cycle limit: max 1.5 units/year of world model growth
+        const dW_ideal = 0.7 * dCompute + (0.2 * (R / cR)) * Math.max(0, dCompute);
+        const dW_real = Math.min(dW_ideal, 1.5 * dt);
+        stateW += dW_real;
         stateA += 0.4 * dCompute + (0.3 * (R / cR) + 0.3 * (W / cWM)) * Math.max(0, dCompute);
         stateE += 0.5 * dCompute + 0.2 * (A / cA) * Math.max(0, dCompute);
-        roboticsFrontier += (0.15 + 0.1 * (R > 7.0 ? 1 : 0)) * dt;
+        const buildBaseSpeed = 0.10;
+    const buildRoboticsBonus = 0.15 * (1.0 / (1.0 + Math.exp(-(E - 4.5))));
+    roboticsFrontier += (buildBaseSpeed + buildRoboticsBonus) * dt;
 
         flopsLog += hwDelta * dt;
         algoLog += algoDelta * dt;
@@ -1395,7 +1410,7 @@ class BayesianTracker {
     let t2HitYear = null;
 
     let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
-    let roboticsFrontier = cE;
+    let roboticsFrontier = 3.0; // Hard start from real 2023 robotics level
     
     let avgRsiEff = 1.0;
     if (totalW > 0) {
@@ -1499,10 +1514,15 @@ class BayesianTracker {
 
       const dCompute = (hwDelta + algoDelta) * dt;
       stateR += dCompute;
-      stateW += 0.7 * dCompute + (0.2 * (R / cR)) * Math.max(0, dCompute);
+      // Wet-lab experimental cycle limit: max 1.5 units/year of world model growth
+      const dW_ideal = 0.7 * dCompute + (0.2 * (R / cR)) * Math.max(0, dCompute);
+      const dW_real = Math.min(dW_ideal, 1.5 * dt);
+      stateW += dW_real;
       stateA += 0.4 * dCompute + (0.3 * (R / cR) + 0.3 * (W / cWM)) * Math.max(0, dCompute);
       stateE += 0.5 * dCompute + 0.2 * (A / cA) * Math.max(0, dCompute);
-      roboticsFrontier += (0.15 + 0.1 * (R > 7.0 ? 1 : 0)) * dt;
+      const buildBaseSpeed = 0.10;
+    const buildRoboticsBonus = 0.15 * (1.0 / (1.0 + Math.exp(-(E - 4.5))));
+    roboticsFrontier += (buildBaseSpeed + buildRoboticsBonus) * dt;
 
       flopsLog += hwDelta * dt;
       algoLog += algoDelta * dt;
@@ -4070,7 +4090,7 @@ function updateObsMetrics() {
     cum += samples[i].w;
     if (cum >= 0.5) { medR10 = samples[i].r; break; }
   }
-  const costPerM = Math.max(0.005, 19.625 * Math.exp(-0.5973 * medR10));
+  const costPerM = Math.max(0.01, 19.625 * Math.exp(-0.4 * medR10));
 
   const e1 = document.getElementById('omSWE');
   const e2 = document.getElementById('omARC');
