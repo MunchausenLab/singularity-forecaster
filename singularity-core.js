@@ -61,6 +61,11 @@ const EXPERT_CONFIG = {
   embodimentHWBonusMultiplier: 3.0,// [Embodiment] Множитель HW-роста при активации bypass
   realRoboticsWeight: 0.30,         // [Embodiment] Вес realEmbodimentIndex в likelihood (0=игнор, 1=строгое следование)
 
+  // === EMBODIMENT 3 NEW PARAMS ===
+  embodimentRealityAnchor: 3.0,     // Жёсткий стартовый физический уровень робототехники в 2023 (Figure 01 / Optimus Gen 1)
+  embodimentBuildBaseSpeed: 0.10,   // Скорость строительства заводов людьми (прирост roboticsFrontier в год)
+  maxPhysicalExperimentRate: 1.5,   // Лимит скорости научных экспериментов в год (wet-lab constraint для T2→T3)
+
   // Категория 4: Эпистемология (World Models)
   worldModels: { cascade: 0.60, hardWall: 0.25, slowTakeoff: 0.15 },
   // Категория 5: Априорные допущения (Philosophical Priors)
@@ -397,7 +402,7 @@ function simulateToYear(particle, targetYear, cfg) {
 
   // PATCH 1 & 3: Independent states and robotics frontier limit
   let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
-  let roboticsFrontier = 3.0; // Hard start from real 2023 robotics level
+  let roboticsFrontier = EXPERT_CONFIG.embodimentRealityAnchor; // Hard start from real 2023 robotics level
 
   for (let step = 0; step < steps; step++) {
     const currentYear = cfg.BASE_YEAR + step * dt;
@@ -514,11 +519,11 @@ function simulateToYear(particle, targetYear, cfg) {
     stateR += dCompute;
     // Wet-lab experimental cycle limit: max 1.5 units/year of world model growth
     const dW_ideal = 0.7 * dCompute + (0.2 * (R / ceilingR)) * Math.max(0, dCompute);
-    const dW_real = Math.min(dW_ideal, 1.5 * dt);
+    const dW_real = Math.min(dW_ideal, EXPERT_CONFIG.maxPhysicalExperimentRate * dt);
     stateW += dW_real;
     stateA += 0.4 * dCompute + (0.3 * (R / ceilingR) + 0.3 * (W / ceilingWM)) * Math.max(0, dCompute);
     stateE += 0.5 * dCompute + 0.2 * (A / ceilingA) * Math.max(0, dCompute);
-    const buildBaseSpeed = 0.10;
+    const buildBaseSpeed = EXPERT_CONFIG.embodimentBuildBaseSpeed;
     const buildRoboticsBonus = 0.15 * (1.0 / (1.0 + Math.exp(-(E - 4.5))));
     roboticsFrontier += (buildBaseSpeed + buildRoboticsBonus) * dt; // Real robotics linear growth
 
@@ -772,7 +777,7 @@ class BayesianTracker {
       let algoKMultiplier = 1.0;
 
       let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
-      let roboticsFrontier = 3.0; // Hard start from real 2023 robotics level
+      let roboticsFrontier = this.cfg.EXPERT.embodimentRealityAnchor; // Hard start from real 2023 robotics level
 
       for (let step = 0; step < maxSteps; step++) {
         const currentYear = this.cfg.BASE_YEAR + step * dt;
@@ -1011,13 +1016,13 @@ class BayesianTracker {
         stateR += dCompute;
         // Wet-lab experimental cycle limit: max 1.5 units/year of world model growth
         const dW_ideal = 0.7 * dCompute + (0.2 * (R / ceilingReasoning)) * Math.max(0, dCompute);
-        const dW_real = Math.min(dW_ideal, 1.5 * dt);
+        const dW_real = Math.min(dW_ideal, this.cfg.EXPERT.maxPhysicalExperimentRate * dt);
         stateW += dW_real;
         stateA += 0.4 * dCompute + (0.3 * (R / ceilingReasoning) + 0.3 * (W / ceilingWM)) * Math.max(0, dCompute);
         stateE += 0.5 * dCompute + 0.2 * (A / ceilingAgency) * Math.max(0, dCompute);
-        const buildBaseSpeed = 0.10;
-    const buildRoboticsBonus = 0.15 * (1.0 / (1.0 + Math.exp(-(E - 4.5))));
-    roboticsFrontier += (buildBaseSpeed + buildRoboticsBonus) * dt;
+        const buildBaseSpeed = this.cfg.EXPERT.embodimentBuildBaseSpeed;
+        const buildRoboticsBonus = 0.15 * (1.0 / (1.0 + Math.exp(-(E - 4.5))));
+        roboticsFrontier += (buildBaseSpeed + buildRoboticsBonus) * dt;
 
         flopsLog += hwDelta * dt;
         algoLog += algoDelta * dt;
@@ -1152,7 +1157,7 @@ class BayesianTracker {
       let govMoratoriumYears = 0;
 
       let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
-      let roboticsFrontier = 3.0; // Hard start from real 2023 robotics level
+      let roboticsFrontier = cfg.EXPERT.embodimentRealityAnchor; // Hard start from real 2023 robotics level
 
       const years = [], caps = [];
       for (let step = 0; step < steps; step++) {
@@ -1333,13 +1338,13 @@ class BayesianTracker {
         stateR += dCompute;
         // Wet-lab experimental cycle limit: max 1.5 units/year of world model growth
         const dW_ideal = 0.7 * dCompute + (0.2 * (R / cR)) * Math.max(0, dCompute);
-        const dW_real = Math.min(dW_ideal, 1.5 * dt);
+        const dW_real = Math.min(dW_ideal, cfg.EXPERT.maxPhysicalExperimentRate * dt);
         stateW += dW_real;
         stateA += 0.4 * dCompute + (0.3 * (R / cR) + 0.3 * (W / cWM)) * Math.max(0, dCompute);
         stateE += 0.5 * dCompute + 0.2 * (A / cA) * Math.max(0, dCompute);
-        const buildBaseSpeed = 0.10;
-    const buildRoboticsBonus = 0.15 * (1.0 / (1.0 + Math.exp(-(E - 4.5))));
-    roboticsFrontier += (buildBaseSpeed + buildRoboticsBonus) * dt;
+        const buildBaseSpeed = cfg.EXPERT.embodimentBuildBaseSpeed;
+        const buildRoboticsBonus = 0.15 * (1.0 / (1.0 + Math.exp(-(E - 4.5))));
+        roboticsFrontier += (buildBaseSpeed + buildRoboticsBonus) * dt;
 
         flopsLog += hwDelta * dt;
         algoLog += algoDelta * dt;
@@ -1410,7 +1415,7 @@ class BayesianTracker {
     let t2HitYear = null;
 
     let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
-    let roboticsFrontier = 3.0; // Hard start from real 2023 robotics level
+    let roboticsFrontier = cfg.EXPERT.embodimentRealityAnchor; // Hard start from real 2023 robotics level
     
     let avgRsiEff = 1.0;
     if (totalW > 0) {
@@ -1516,13 +1521,13 @@ class BayesianTracker {
       stateR += dCompute;
       // Wet-lab experimental cycle limit: max 1.5 units/year of world model growth
       const dW_ideal = 0.7 * dCompute + (0.2 * (R / cR)) * Math.max(0, dCompute);
-      const dW_real = Math.min(dW_ideal, 1.5 * dt);
+      const dW_real = Math.min(dW_ideal, cfg.EXPERT.maxPhysicalExperimentRate * dt);
       stateW += dW_real;
       stateA += 0.4 * dCompute + (0.3 * (R / cR) + 0.3 * (W / cWM)) * Math.max(0, dCompute);
       stateE += 0.5 * dCompute + 0.2 * (A / cA) * Math.max(0, dCompute);
-      const buildBaseSpeed = 0.10;
-    const buildRoboticsBonus = 0.15 * (1.0 / (1.0 + Math.exp(-(E - 4.5))));
-    roboticsFrontier += (buildBaseSpeed + buildRoboticsBonus) * dt;
+      const buildBaseSpeed = cfg.EXPERT.embodimentBuildBaseSpeed;
+      const buildRoboticsBonus = 0.15 * (1.0 / (1.0 + Math.exp(-(E - 4.5))));
+      roboticsFrontier += (buildBaseSpeed + buildRoboticsBonus) * dt;
 
       flopsLog += hwDelta * dt;
       algoLog += algoDelta * dt;
