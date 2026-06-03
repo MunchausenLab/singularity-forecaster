@@ -1532,6 +1532,11 @@ function runBacktest(trainEnd, kPred) {
   const btTracker = new BayesianTracker(1000);
   trainData.forEach(d => btTracker.observeRealData(d.year, d));
 
+  // Подготавливаем кумулятивные веса для правильного сэмплинга (взвешенный выбор)
+  const cumw = new Float64Array(btTracker.n);
+  cumw[0] = btTracker.weights[0];
+  for (let i = 1; i < btTracker.n; i++) cumw[i] = cumw[i - 1] + btTracker.weights[i];
+
   const residuals = [];
   const dims = ['sweBench', 'arcAgi', 'arenaElo', 'flopsLog', 'horizon', 'simToReal', 'moravec', 'autoAssembly'];
   const sqErr = { sweBench:0, arcAgi:0, arenaElo:0, flopsLog:0, horizon:0, simToReal:0, moravec:0, autoAssembly:0 };
@@ -1541,35 +1546,62 @@ function runBacktest(trainEnd, kPred) {
   for (let t = 0; t < testData.length; t++) {
     const obs = testData[t];
     const samples = [];
-    for (let i = 0; i < btTracker.n; i += 5) {
-      const pred = simulateToYear(btTracker.particles[i], obs.year, btTracker.cfg);
+    
+    // Генерируем 200 взвешенных прогнозов
+    for (let k = 0; k < 200; k++) {
+      const u = Math.random();
+      let idx = 0; while (idx < btTracker.n - 1 && cumw[idx] < u) idx++;
+      
+      const pred = simulateToYear(btTracker.particles[idx], obs.year, btTracker.cfg);
       const m = getNumericObservables(pred.reasoning, pred.agency, pred.embodiment, btTracker.cfg.EXPERT);
+      
+      // Добавляем шум измерений (Posterior Predictive Distribution)
+      const getSig = (dimKey) => (obs[dimKey + '_sigma'] !== undefined) ? obs[dimKey + '_sigma'] : BENCHMARK_SIGMAS[dimKey];
+      
+      m.sweBench = clamp(m.sweBench + randnRange(0, getSig('sweBench')), 0, 100);
+      m.arcAgi = clamp(m.arcAgi + randnRange(0, getSig('arcAgi')), 0, 100);
+      m.arenaElo += randnRange(0, getSig('arenaElo'));
+      m.flopsLog += randnRange(0, getSig('flopsLog'));
+      m.horizon += randnRange(0, getSig('horizon'));
+      m.simToReal = clamp(m.simToReal + randnRange(0, getSig('simToReal')), 0, 100);
+      m.moravec = clamp(m.moravec + randnRange(0, getSig('moravec')), 0, 100);
+      m.autoAssembly += randnRange(0, getSig('autoAssembly'));
+
       samples.push(m);
     }
+
     const medianSample = {};
     for (const dim of dims) {
       const vals = samples.map(s => s[dim]).filter(v => isFinite(v)).sort((a,b)=>a-b);
-      const _m = Math.floor(vals.length / 2); medianSample[dim] = vals.length > 0 ? (vals.length % 2 === 0 ? (vals[_m - 1] + vals[_m]) / 2 : vals[_m]) : 0;
-      const p10 = vals.length > 0 ? vals[Math.floor(vals.length * 0.10)] : 0;
-      const p90 = vals.length > 0 ? vals[Math.floor(vals.length * 0.90)] : 0;
+      const _m = Math.floor(vals.length / 2); 
+      medianSample[dim] = vals.length > 0 ? (vals.length % 2 === 0 ? (vals[_m - 1] + vals[_m]) / 2 : vals[_m]) : 0;
+      
+      // Берем 5-й и 95-й перцентили (в сумме дают 90% доверительный интервал)
+      const p05 = vals.length > 0 ? vals[Math.floor(vals.length * 0.05)] : 0;
+      const p95 = vals.length > 0 ? vals[Math.floor(vals.length * 0.95)] : 0;
+      
       if (obs[dim] !== undefined) {
-        // autoAssembly и horizon предсказываются в log10(часах), а в obs лежат реальные часы. Конвертируем.
         const obsInModelScale = (dim === 'autoAssembly') ? Math.log10(Math.max(0.001, obs[dim])) :
                                 (dim === 'horizon') ? Math.log10(Math.max(0.01, obs[dim])) :
                                 obs[dim];
+                                
         const err = obsInModelScale - medianSample[dim];
         sqErr[dim] += err * err;
         cnt[dim]++;
-        if (obsInModelScale >= p10 && obsInModelScale <= p90) inCI90++;
+        
+        // Проверка попадания в 90% интервал
+        if (obsInModelScale >= p05 && obsInModelScale <= p95) inCI90++;
         totalCIEval++;
       }
     }
     residuals.push({ year: obs.year, observed: obs, predicted: medianSample });
   }
+  
   const perDim = {};
   for (const dim of dims) {
     perDim[dim] = cnt[dim] > 0 ? Math.sqrt(sqErr[dim] / cnt[dim]) : null;
   }
+  
   return {
     trainEnd, kPred,
     trainYears: `${trainData[0].year}..${trainData[trainData.length-1].year}`,
