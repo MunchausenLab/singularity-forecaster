@@ -293,21 +293,24 @@ function getNumericObservables(r10, a10, e10, expertCfg) {
     const blendedReasoning = r10 * reasoningWeight + a10 * autonomyWeight;
     const embodimentVal = (typeof e10 === 'number') ? e10 : 4.0; // fallback если не передано
 
+    // --- ПАТЧ 4: Социотехническая перекалибровка (v5.0) ---
+    // P (Persuasion) - способность быть убедительным для человека.
+    // Так как W (World Modeling) сюда не передается напрямую, мы аппроксимируем его как W ≈ R.
+    const w10 = r10;
+    const P = Math.cbrt(r10 * w10 * a10);
+    // -------------------------------------------------------
+
     return {
         sweBench: 100 * sigmoid(0.55 * blendedReasoning - 2.5),
         arcAgi: 100 * sigmoid(0.6 * r10 - 4.0),
-        arenaElo: 800 + 70 * r10,
-        // Предсказанный log10(FLOPs): калибровка ~23.5 при r10≈0, растёт с reasoning
-        // k ≈ 0.13: при r10=7 → ~25.5, при r10=10 → ~26.5, при r10=13 → ~27.5
+
+        // Chatbot Arena теперь измеряет Убедительность (P), а не чистый интеллект (R)
+        arenaElo: 800 + 70 * P,
+
         flopsLog: 23.5 + 0.3 * r10,
-        // log10(autonomous task hours). Калибровка: a10=0 → 0.5h, a10=5 → 6h, a10=10 → 74h, a10=13 → 443h
-        // (формула та же что в mapToObservables, но в log-шкале)
         horizon: Math.log10(Math.min(365 * 24, 0.5 * Math.exp(0.5 * a10))),
-        // Sim-to-Real: % роботизированных задач. e=0 → 0%, e=5 → 12%, e=10 → 73%, e=13 → 95%
         simToReal: 100 * sigmoid(0.5 * embodimentVal - 2.5),
-        // Moravec: 1-100, моторика+восприятие. e=0 → 0, e=5 → 8, e=10 → 50, e=13 → 88
         moravec: Math.max(0, Math.min(100, 2 + 7.5 * (embodimentVal - 0.5))),
-        // Auto-Assembly: log10(часы сборки фабрики). e=0 → 0.1h, e=5 → 7.4h, e=10 → 550h, e=13 → 18000h
         autoAssembly: Math.log10(Math.max(0.1, 0.5 * Math.exp(0.7 * embodimentVal)))
     };
 }
@@ -404,6 +407,10 @@ function simulateToYear(particle, targetYear, cfg) {
   let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
   let roboticsFrontier = EXPERT_CONFIG.embodimentRealityAnchor; // Hard start from real 2023 robotics level
 
+  // --- SOCIOTECHNICAL STATES (v5.0) ---
+  let IL = 0.0; // Institutional Legitimacy (0..1)
+  let IC = 0.0; // Institutional Capture (0..1)
+
   for (let step = 0; step < steps; step++) {
     const currentYear = cfg.BASE_YEAR + step * dt;
 
@@ -428,6 +435,14 @@ function simulateToYear(particle, targetYear, cfg) {
     const softCap = Math.cbrt(R * A * W);
     const civCap = Math.pow(R * A * W * E * C * M, 1 / 6);
     const cap = softCap; // fallback для T1-T3 и барьеров
+
+    // --- SOCIOTECHNICAL LAYER (v5.0 Patch 1) ---
+    const P = Math.cbrt(R * W * A);
+    const DP = sigmoid(0.5 * P + 0.3 * A - 5.0);
+    IL += 0.5 * DP * (1.0 - IL) * dt;
+    IC = Math.min(1.0, IC + 0.2 * IL * Math.max(0, (A - 4.0) / 10.0) * dt);
+    const DR = (IC * 0.7) + (IC * (Math.min(10.0, E) / 10.0) * 0.3);
+    // -------------------------------------------
 
     // Deterministic paradigm shift: наука драйвит архитектуры
     const canShift = (paradigmGeneration === 0 && currentYear > 2026.5)
@@ -779,6 +794,10 @@ class BayesianTracker {
       let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
       let roboticsFrontier = this.cfg.EXPERT.embodimentRealityAnchor; // Hard start from real 2023 robotics level
 
+      // --- SOCIOTECHNICAL STATES (v5.0) ---
+      let IL = 0.0; // Institutional Legitimacy (0..1)
+      let IC = 0.0; // Institutional Capture (0..1)
+
       for (let step = 0; step < maxSteps; step++) {
         const currentYear = this.cfg.BASE_YEAR + step * dt;
 
@@ -800,6 +819,18 @@ class BayesianTracker {
         const softCap = Math.cbrt(R * A * W);
         const civCap = Math.pow(R * A * W * E * C * M, 1 / 6);
         const cap = softCap;
+
+        // --- SOCIOTECHNICAL LAYER (v5.0 Patch 1) ---
+        // 1. Persuasion (Убедительность)
+        const P = Math.cbrt(R * W * A);
+        // 2. Delegation Pressure (Давление делегирования)
+        const DP = sigmoid(0.5 * P + 0.3 * A - 5.0);
+        // 3. Интегрирование Легитимности (IL) и Захвата (IC)
+        IL += 0.5 * DP * (1.0 - IL) * dt;
+        IC = Math.min(1.0, IC + 0.2 * IL * Math.max(0, (A - 4.0) / 10.0) * dt);
+        // 4. Dependency Ratio (Зависимость цивилизации)
+        const DR = (IC * 0.7) + (IC * (Math.min(10.0, E) / 10.0) * 0.3);
+        // -------------------------------------------
 
         // Архитектурный каскад
         const canShift = (paradigmGeneration === 0 && currentYear > 2026.5)
@@ -897,29 +928,38 @@ class BayesianTracker {
           shockDamping *= 0.2; // Инвестиции рухнули
         }
 
-        // --- БАРЬЕР 3: Геополитика (государственный шок после T2) ---
-        if (cap >= this.cfg.THRESHOLDS.t2 && !stateIntervention && Math.random() < this.cfg.EXPERT.barrierGeopoliticsRisk * dt) {
+        // --- ПАТЧ 2: Эндогенные социотехнические барьеры (v5.0) ---
+
+        // БАРЬЕР 3: Геополитика (Государственный шок)
+        // Государства паникуют от давления делегирования (DP), но могут вмешаться
+        // только если институциональный захват (IC) еще не стал критическим (< 0.5)
+        const interventionRisk = Math.max(0, DP - IC * 2.0) * this.cfg.EXPERT.barrierGeopoliticsRisk;
+        if (IL > 0.2 && IC < 0.5 && !stateIntervention && Math.random() < interventionRisk * dt) {
           stateIntervention = true;
           interventionCooldown = 3.0; // 3 года жесточайшей регуляции / заморозки
         }
-    if (stateIntervention) {
-      interventionCooldown -= dt;
-      if (interventionCooldown <= 0) stateIntervention = false;
-    }
-    if (stateIntervention) damping *= 0.1; // [PATCH Bug 5] Государственная заморозка замедляет прогресс на 90%
+        if (stateIntervention) {
+          interventionCooldown -= dt;
+          if (interventionCooldown <= 0) stateIntervention = false;
+        }
+        if (stateIntervention) damping *= 0.1;
 
-    // --- БАРЬЕР 4: Конкуренция ИИ (Эффект Черной Королевы после T3) ---
+        // БАРЬЕР 4: Конкуренция ИИ (Эффект Черной Королевы)
+        // Трение координации начинается, когда ИИ глубоко проникает в институты (IC > 0.6)
         let nashDamping = 1.0;
-        if (cap >= this.cfg.THRESHOLDS.t3) {
-          nashDamping = 1.0 / (1.0 + this.cfg.EXPERT.barrierNashFriction * (cap - this.cfg.THRESHOLDS.t3));
+        if (IC > 0.6) {
+          nashDamping = 1.0 / (1.0 + this.cfg.EXPERT.barrierNashFriction * (IC - 0.6) * 10.0);
         }
 
-        // --- БАРЬЕР 5: Смысловой предел (Шок спроса) ---
+        // БАРЬЕР 5: Смысловой предел (Шок спроса)
+        // Если ИИ уже умный (R > 8), но люди не хотят ему делегировать задачи (DP < 0.3),
+        // экономика тормозит внедрение и инвестиции.
         let demandDamping = 1.0;
-        if (cap >= this.cfg.THRESHOLDS.t2 && t2HitYear !== null && (currentYear - t2HitYear) < this.cfg.EXPERT.barrierDemandGrace) {
+        if (R > 8.0 && DP < 0.3) {
           demandDamping = 0.6;
         }
-        
+        // -----------------------------------------------------------
+
         if (currentYear >= this.cfg.CURRENT_YEAR && plotIdx < plotSteps) {
             trajYears[plotIdx] = currentYear;
             trajCaps[plotIdx].push(cap);
@@ -929,16 +969,24 @@ class BayesianTracker {
             plotIdx++;
         }
         
-                // ПАТЧ 5: Смысловые, наблюдаемые пороги Сингулярности
-                const t1Condition = R >= this.cfg.THRESHOLDS.t1 && W >= this.cfg.THRESHOLDS.t1 * 0.8; // AI R&D > лучшего человека
-                const t2Condition = A >= this.cfg.THRESHOLDS.t2 && R >= 8.0; // Автономные компании
+                // --- ПАТЧ 3: Социотехнические пороги Сингулярности (v5.0) ---
 
-                // Пользовательские значения t3 и t4 могли остаться огромными (25 и 100), поэтому кэпируем их для новых реалистичных шкал
-                const t3Req = Math.min(this.cfg.THRESHOLDS.t3, 15.0);
-                const t3Condition = S >= t3Req && A >= 12.0; // Автономный научный цикл
+                // T1: Потеря понимания (Cognitive Dominance)
+                // Система превосходит экспертов, использование становится ритуальным. Оставляем когнитивный порог.
+                const t1Condition = R >= this.cfg.THRESHOLDS.t1 && W >= this.cfg.THRESHOLDS.t1 * 0.8;
 
-                const t4Req = Math.min(this.cfg.THRESHOLDS.t4, 18.0);
-                const t4Condition = E >= this.cfg.EXPERT.embodimentT4Requirement && A >= t4Req && W >= 14.0; // Автономная инфраструктура
+                // T2: Потеря предсказуемости (Autonomous Legitimacy)
+                // Люди массово делегируют решения (Давление > 50%, Легитимность > 30%)
+                const t2Condition = DP > 0.5 && IL > 0.3;
+
+                // T3: Потеря контроля (Institutional Capture)
+                // Отключение ИИ вызывает коллапс институтов (Захват > 60%)
+                const t3Condition = IC > 0.6;
+
+                // T4: Потеря влияния (Civilizational Dependency)
+                // Тотальная зависимость, включая физический мир (DR > 90% и достаточный контроль над атомами)
+                const t4Condition = DR > 0.9 && E >= this.cfg.EXPERT.embodimentT4Requirement;
+                // -----------------------------------------------------------
 
                 if (yT1 === null && t1Condition) yT1 = currentYear;
                 if (yT2 === null && t2Condition) { yT2 = currentYear; t2HitYear = currentYear; }
@@ -947,7 +995,7 @@ class BayesianTracker {
                     yT4 = currentYear;
                     break;
                 }
-        
+
         // [FIX] Строка `let damping = 1.0;` отсюда удалена, т.к. переменная объявлена выше
 
         // Проверка на лопнувший пузырь (AI Winter)
