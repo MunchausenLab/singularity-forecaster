@@ -496,9 +496,9 @@ function simulateToYear(particle, targetYear, cfg) {
     const bypassActivation = sigmoid(1.5 * (E - cfg.EXPERT.embodimentBypassThreshold));
     const hwBonus = 1.0 + bypassActivation * (cfg.EXPERT.embodimentHWBonusMultiplier - 1.0);
 
-    // --- БАРЬЕР 3: Геополитика (государственный шок после T2) ---
-    // Детерминированный: срабатывает при превышении порога риска (не случайно)
-    if (cap >= cfg.THRESHOLDS.t2 && !stateIntervention && cfg.EXPERT.barrierGeopoliticsRisk > 0.5) {
+    // --- БАРЬЕР 3: Геополитика (Государственный шок) ---
+    const interventionRisk = Math.max(0, DP - IC * 2.0) * cfg.EXPERT.barrierGeopoliticsRisk;
+    if (IL > 0.2 && IC < 0.5 && !stateIntervention && interventionRisk > 0.5) { // Детерминированный триггер
       stateIntervention = true;
       interventionCooldown = 3.0;
     }
@@ -506,17 +506,17 @@ function simulateToYear(particle, targetYear, cfg) {
       interventionCooldown -= dt;
       if (interventionCooldown <= 0) stateIntervention = false;
     }
-    if (stateIntervention) damping *= 0.1; // [PATCH Bug 5] Государственная заморозка замедляет прогресс на 90%
+    if (stateIntervention) damping *= 0.1;
 
-    // --- БАРЬЕР 4: Конкуренция ИИ (Эффект Черной Королевы после T3) ---
+    // --- БАРЬЕР 4: Конкуренция ИИ (Эффект Черной Королевы) ---
     let nashDamping = 1.0;
-    if (cap >= cfg.THRESHOLDS.t3) {
-      nashDamping = 1.0 / (1.0 + cfg.EXPERT.barrierNashFriction * (cap - cfg.THRESHOLDS.t3));
+    if (IC > 0.6) {
+      nashDamping = 1.0 / (1.0 + cfg.EXPERT.barrierNashFriction * (IC - 0.6) * 10.0);
     }
 
     // --- БАРЬЕР 5: Смысловой предел (Шок спроса) ---
     let demandDamping = 1.0;
-    if (cap >= cfg.THRESHOLDS.t2 && (currentYear - cfg.BASE_YEAR) < cfg.EXPERT.barrierDemandGrace) {
+    if (R > 8.0 && DP < 0.3) {
       demandDamping = 0.6;
     }
 
@@ -1026,8 +1026,10 @@ class BayesianTracker {
 
         const marketUtility = R * 0.3 + A * 0.7;
         const investorExpectations = (currentYear - 2023.0) * 1.5;
+        // Деньги зависят от хайпа, но если институты легализовали ИИ (IL растет), инвестиции гарантированы
         let capitalMultiplier = Math.max(0.1, Math.min(this.cfg.EXPERT.maxCapitalMultiplier,
-            marketUtility / Math.max(1.0, investorExpectations)));
+            (marketUtility / Math.max(1.0, investorExpectations)) + (IL * 2.0)
+        ));
         if (paradigmGeneration > 0 && hypeGracePeriod > 0) {
           capitalMultiplier = Math.max(capitalMultiplier, 2.0);
         }
@@ -1191,7 +1193,11 @@ class BayesianTracker {
         algoK *= 0.6;
       }
 
-      let paradigmGeneration = 0;
+      // --- SOCIOTECHNICAL STATES (v5.0) ---
+      let IL = 0.0;
+      let IC = 0.0;
+
+      let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
       let lastShiftYear = cfg.BASE_YEAR;
       let hypeGracePeriod = 0.0;
       let algoKMultiplier = 1.0;
@@ -1204,7 +1210,6 @@ class BayesianTracker {
       let govMoratorium = false;
       let govMoratoriumYears = 0;
 
-      let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
       let roboticsFrontier = cfg.EXPERT.embodimentRealityAnchor; // Hard start from real 2023 robotics level
 
       const years = [], caps = [];
@@ -1228,6 +1233,13 @@ class BayesianTracker {
 
         const cap = Math.cbrt(R * A * W);
 
+        // --- SOCIOTECHNICAL LAYER (v5.0) ---
+        const P = Math.cbrt(R * W * A);
+        const DP = sigmoid(0.5 * P + 0.3 * A - 5.0);
+        IL += 0.5 * DP * (1.0 - IL) * dt;
+        IC = Math.min(1.0, IC + 0.2 * IL * Math.max(0, (A - 4.0) / 10.0) * dt);
+        const DR = (IC * 0.7) + (IC * (Math.min(10.0, E) / 10.0) * 0.3);
+
         // [PATCH Bug 4] Парадигмальные сдвиги + Hype Overhang
         const canShift = (paradigmGeneration === 0 && y > 2026.5)
                        || (paradigmGeneration > 0 && y > lastShiftYear + 4.0);
@@ -1236,7 +1248,8 @@ class BayesianTracker {
             if (saturation > cfg.EXPERT.saturationThreshold) {
               const _marketUtility = R * 0.3 + A * 0.7;
               const _investorExpectations = (y - 2023.0) * 1.5;
-              const _capMult = Math.max(0.1, Math.min(cfg.EXPERT.maxCapitalMultiplier, _marketUtility / Math.max(1.0, _investorExpectations)));
+              // Деньги зависят от хайпа, но если институты легализовали ИИ (IL растет), инвестиции гарантированы
+              const _capMult = Math.max(0.1, Math.min(cfg.EXPERT.maxCapitalMultiplier, (_marketUtility / Math.max(1.0, _investorExpectations)) + (IL * 2.0)));
               const _hypeMult = (paradigmGeneration > 0 && hypeGracePeriod > 0) ? Math.max(_capMult, 2.0) : _capMult;
               const computeOverhang = Math.max(1.0, _hypeMult);
 
@@ -1293,8 +1306,9 @@ class BayesianTracker {
           shockDamping *= 0.2;
         }
 
-        // [PATCH Bug 5] Геополитический шок
-        if (cap >= cfg.THRESHOLDS.t2 && !stateIntervention && Math.random() < cfg.EXPERT.barrierGeopoliticsRisk * dt) {
+        // БАРЬЕР 3: Геополитика (v5.0)
+        const interventionRisk = Math.max(0, DP - IC * 2.0) * cfg.EXPERT.barrierGeopoliticsRisk;
+        if (IL > 0.2 && IC < 0.5 && !stateIntervention && Math.random() < interventionRisk * dt) {
           stateIntervention = true;
           interventionCooldown = 3.0;
         }
@@ -1317,13 +1331,15 @@ class BayesianTracker {
         if (stateIntervention) damping *= 0.1;
         if (govMoratorium) damping *= cfg.EXPERT.governanceShockDamping;
 
+        // БАРЬЕР 4: Конкуренция ИИ (v5.0)
         let nashDamping = 1.0;
-        if (cap >= cfg.THRESHOLDS.t3) {
-          nashDamping = 1.0 / (1.0 + cfg.EXPERT.barrierNashFriction * (cap - cfg.THRESHOLDS.t3));
+        if (IC > 0.6) {
+          nashDamping = 1.0 / (1.0 + cfg.EXPERT.barrierNashFriction * (IC - 0.6) * 10.0);
         }
 
+        // БАРЬЕР 5: Шок спроса (v5.0)
         let demandDamping = 1.0;
-        if (cap >= cfg.THRESHOLDS.t2 && (y - cfg.BASE_YEAR) < cfg.EXPERT.barrierDemandGrace) {
+        if (R > 8.0 && DP < 0.3) {
           demandDamping = 0.6;
         }
 
@@ -1464,7 +1480,11 @@ class BayesianTracker {
 
     let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
     let roboticsFrontier = cfg.EXPERT.embodimentRealityAnchor; // Hard start from real 2023 robotics level
-    
+
+    // --- SOCIOTECHNICAL STATES (v5.0) ---
+    let IL = 0.0;
+    let IC = 0.0;
+
     let avgRsiEff = 1.0;
     if (totalW > 0) {
       avgRsiEff = 0;
@@ -1491,6 +1511,13 @@ class BayesianTracker {
       const S = Math.pow(R, 0.4) * Math.pow(W, 0.4) * Math.pow(A, 0.2);
       
       const cap = Math.cbrt(R * A * W);
+
+      // --- SOCIOTECHNICAL LAYER (v5.0) ---
+      const P = Math.cbrt(R * W * A);
+      const DP = sigmoid(0.5 * P + 0.3 * A - 5.0);
+      IL += 0.5 * DP * (1.0 - IL) * dt;
+      IC = Math.min(1.0, IC + 0.2 * IL * Math.max(0, (A - 4.0) / 10.0) * dt);
+      const DR = (IC * 0.7) + (IC * (Math.min(10.0, E) / 10.0) * 0.3);
 
       if (cap >= cfg.THRESHOLDS.t2 && t2HitYear === null) {
         t2HitYear = y;
@@ -1535,20 +1562,22 @@ class BayesianTracker {
       algoComp.push(pureAlgoLog);
       paradigmComp.push(accumulatedParadigm);
 
-      // Включаем ВСЕ барьеры в декомпозицию
+      // Включаем ВСЕ барьеры в декомпозицию (v5.0)
       let damping = cfg.EXPERT.governanceMoratoriumProb * cfg.EXPERT.governanceShockDamping + (1.0 - cfg.EXPERT.governanceMoratoriumProb);
-      
+
       if (y > cfg.BOTTLENECKS.econ_wall_start && (R - A) > 2.0) {
         damping *= Math.exp(-cfg.BOTTLENECKS.econ_damping * (R - A - 2.0));
       }
 
+      // БАРЬЕР 4: Конкуренция ИИ (v5.0)
       let nashDamping = 1.0;
-      if (cap >= cfg.THRESHOLDS.t3) {
-        nashDamping = 1.0 / (1.0 + cfg.EXPERT.barrierNashFriction * (cap - cfg.THRESHOLDS.t3));
+      if (IC > 0.6) {
+        nashDamping = 1.0 / (1.0 + cfg.EXPERT.barrierNashFriction * (IC - 0.6) * 10.0);
       }
 
+      // БАРЬЕР 5: Шок спроса (v5.0)
       let demandDamping = 1.0;
-      if (cap >= cfg.THRESHOLDS.t2 && t2HitYear !== null && (y - t2HitYear) < cfg.EXPERT.barrierDemandGrace) {
+      if (R > 8.0 && DP < 0.3) {
         demandDamping = 0.6;
       }
 
