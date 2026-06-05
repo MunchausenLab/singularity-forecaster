@@ -2040,11 +2040,12 @@ function plotScenarioFan(tracker) {
 
   const yrRange = [2026, 2055];
   const lim = tracker.cfg.THRESHOLDS;
+
+  // ВЕРСИЯ 5.0: Оставляем только T1.
+  // T2, T3 и T4 теперь социотехнические состояния (IL, IC, DR),
+  // их нельзя отобразить прямой горизонтальной линией на оси когнитивных способностей.
   traces.push(
-    { x: yrRange, y: [lim.t1, lim.t1], type: 'scatter', mode: 'lines', name: t.ch_t1, line: { color: '#eab308', dash: 'dot', width: 1 } },
-    { x: yrRange, y: [lim.t2, lim.t2], type: 'scatter', mode: 'lines', name: t.ch_t2, line: { color: '#f97316', dash: 'dot', width: 1 } },
-    { x: yrRange, y: [lim.t3, lim.t3], type: 'scatter', mode: 'lines', name: t.ch_t3, line: { color: '#ef4444', dash: 'dot', width: 1 } },
-    { x: yrRange, y: [lim.t4, lim.t4], type: 'scatter', mode: 'lines', name: t.ch_t4, line: { color: '#8b5cf6', dash: 'dot', width: 1 } }
+    { x: yrRange, y: [lim.t1, lim.t1], type: 'scatter', mode: 'lines', name: t.ch_t1, line: { color: '#eab308', dash: 'dot', width: 1 } }
   );
 
   Plotly.newPlot('c6', traces, {
@@ -3315,6 +3316,15 @@ function eventHorizonReset() {
 window.addEventListener('load', async () => {
   try {
     setLang('ru');
+
+    // Скрываем устаревшие ползунки T2, T3, T4, так как в v5.0 они вычисляются органически
+    ['e-t2Threshold', 'e-t3Threshold', 'e-t4Threshold'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && el.closest('.expert-row')) {
+        el.closest('.expert-row').style.display = 'none';
+      }
+    });
+
     injectExpertPresets();
 
     // Показываем оверлей загрузки
