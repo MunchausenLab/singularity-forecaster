@@ -1268,6 +1268,7 @@ class BayesianTracker {
       let II = 0.0;
 
       let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
+      let paradigmGeneration = 0;
 
       const years = [], caps = [];
       for (let step = 0; step < steps; step++) {
@@ -2009,10 +2010,10 @@ function updateUI(r) {
 
   // Advanced charts: отрисовываем мгновенные графики без блокировки
   requestAnimationFrame(() => {
-    plotScenarioFan(tracker);
-    plotDecomposition(tracker);
-    plotHallucinationGap(r.gapTrajectory);
-    plotEmbodimentDiagnostics(tracker, r.embodimentTrajectory);
+    try { plotScenarioFan(tracker); } catch(e) { console.error('c6:', e); }
+    try { plotDecomposition(tracker); } catch(e) { console.error('c7:', e); }
+    try { plotHallucinationGap(r.gapTrajectory); } catch(e) { console.error('c_gap:', e); }
+    try { plotEmbodimentDiagnostics(tracker, r.embodimentTrajectory); } catch(e) { console.error('c8:', e); }
   });
 
   // Тяжелую тепловую карту запускаем асинхронно, чтобы она не "вешала" остальные графики
