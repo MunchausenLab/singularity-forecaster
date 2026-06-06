@@ -554,9 +554,11 @@ function simulateToYear(particle, targetYear, cfg) {
     // PATCH 1, 2, 3: Differential state integration with cross-dependencies
     const dCompute = (hwDelta + algoDelta) * dt;
     stateR += dCompute;
-    // Decoupled World Modeling: Epistemic Grounding based on Embodiment
-    const epistemicGrounding = 0.1 + 0.9 * sigmoid(1.0 * (E - 3.0));
-    const dW_ideal = (0.4 * dCompute * epistemicGrounding) + (0.3 * (R / ceilingR)) * Math.max(0, dCompute);
+    // Decoupled World Modeling: Epistemic Grounding (Physical + Digital)
+    const digitalGrounding = sigmoid(0.5 * (A - 5.0)); // Познание через цифровые среды
+    const physicalGrounding = sigmoid(1.0 * (E - 3.0)); // Познание через роботов
+    const epistemicGrounding = 0.3 + 0.4 * digitalGrounding + 0.3 * physicalGrounding;
+    const dW_ideal = (0.6 * dCompute * epistemicGrounding) + (0.2 * (R / ceilingR)) * Math.max(0, dCompute);
     const dW_real = Math.min(dW_ideal, EXPERT_CONFIG.maxPhysicalExperimentRate * dt);
     stateW += dW_real;
     stateA += 0.4 * dCompute + (0.3 * (R / ceilingR) + 0.3 * (W / ceilingWM)) * Math.max(0, dCompute);
@@ -1020,7 +1022,7 @@ class BayesianTracker {
 
                 // T1: Потеря понимания (Cognitive Dominance)
                 // Система превосходит экспертов, использование становится ритуальным. Оставляем когнитивный порог.
-                const t1Condition = R >= this.cfg.THRESHOLDS.t1 && W >= this.cfg.THRESHOLDS.t1 * 0.8;
+                const t1Condition = R >= this.cfg.THRESHOLDS.t1 && W >= this.cfg.THRESHOLDS.t1 * 0.6;
 
                 // T2: Потеря предсказуемости (Autonomous Legitimacy)
                 // Люди массово делегируют решения (Давление > 50%, Легитимность > 30%)
@@ -1113,9 +1115,11 @@ class BayesianTracker {
 
         const dCompute = (hwDelta + algoDelta) * dt;
         stateR += dCompute;
-        // Decoupled World Modeling: Epistemic Grounding based on Embodiment
-        const epistemicGrounding = 0.1 + 0.9 * sigmoid(1.0 * (E - 3.0));
-        const dW_ideal = (0.4 * dCompute * epistemicGrounding) + (0.3 * (R / ceilingReasoning)) * Math.max(0, dCompute);
+        // Decoupled World Modeling: Epistemic Grounding (Physical + Digital)
+        const digitalGrounding = sigmoid(0.5 * (A - 5.0));
+        const physicalGrounding = sigmoid(1.0 * (E - 3.0));
+        const epistemicGrounding = 0.3 + 0.4 * digitalGrounding + 0.3 * physicalGrounding;
+        const dW_ideal = (0.6 * dCompute * epistemicGrounding) + (0.2 * (R / ceilingReasoning)) * Math.max(0, dCompute);
         const dW_real = Math.min(dW_ideal, this.cfg.EXPERT.maxPhysicalExperimentRate * dt);
         stateW += dW_real;
         stateA += 0.4 * dCompute + (0.3 * (R / ceilingReasoning) + 0.3 * (W / ceilingWM)) * Math.max(0, dCompute);
@@ -1467,9 +1471,11 @@ class BayesianTracker {
 
         const dCompute = (hwDelta + algoDelta) * dt;
         stateR += dCompute;
-        // Decoupled World Modeling
-        const epistemicGrounding = 0.1 + 0.9 * sigmoid(1.0 * (E - 3.0));
-        const dW_ideal = (0.4 * dCompute * epistemicGrounding) + (0.3 * (R / cR)) * Math.max(0, dCompute);
+        // Decoupled World Modeling (Physical + Digital)
+        const digitalGrounding = sigmoid(0.5 * (A - 5.0));
+        const physicalGrounding = sigmoid(1.0 * (E - 3.0));
+        const epistemicGrounding = 0.3 + 0.4 * digitalGrounding + 0.3 * physicalGrounding;
+        const dW_ideal = (0.6 * dCompute * epistemicGrounding) + (0.2 * (R / cR)) * Math.max(0, dCompute);
         const dW_real = Math.min(dW_ideal, cfg.EXPERT.maxPhysicalExperimentRate * dt);
         stateW += dW_real;
         stateA += 0.4 * dCompute + (0.3 * (R / cR) + 0.3 * (W / cWM)) * Math.max(0, dCompute);
@@ -1687,9 +1693,11 @@ class BayesianTracker {
 
       const dCompute = (hwDelta + algoDelta) * dt;
       stateR += dCompute;
-      // Decoupled World Modeling
-      const epistemicGrounding = 0.1 + 0.9 * sigmoid(1.0 * (E - 3.0));
-      const dW_ideal = (0.4 * dCompute * epistemicGrounding) + (0.3 * (R / cR)) * Math.max(0, dCompute);
+      // Decoupled World Modeling (Physical + Digital)
+      const digitalGrounding = sigmoid(0.5 * (A - 5.0));
+      const physicalGrounding = sigmoid(1.0 * (E - 3.0));
+      const epistemicGrounding = 0.3 + 0.4 * digitalGrounding + 0.3 * physicalGrounding;
+      const dW_ideal = (0.6 * dCompute * epistemicGrounding) + (0.2 * (R / cR)) * Math.max(0, dCompute);
       const dW_real = Math.min(dW_ideal, cfg.EXPERT.maxPhysicalExperimentRate * dt);
       stateW += dW_real;
       stateA += 0.4 * dCompute + (0.3 * (R / cR) + 0.3 * (W / cWM)) * Math.max(0, dCompute);
