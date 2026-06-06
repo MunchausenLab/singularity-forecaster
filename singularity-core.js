@@ -2380,7 +2380,7 @@ window._lang = 'ru';
 const LANG = {
   ru: {
     // Header
-    hdr_title:'Singularity Forecaster', hdr_sub:'v5.0 — Эпидемиология Институционального Захвата',
+    hdr_title:'Singularity Forecaster', hdr_sub:'v5.4 — Четыре стадии отлучения',
     // Status bar
     sb_t1:'Медиана T1 (Когнитивное доминирование)', sb_t2:'Медиана T2 (Автономная легитимность)',
     sb_t3:'Медиана T3 (Институциональный захват)', sb_t4:'Медиана T4 (Цивилизационная зависимость)',
@@ -2423,7 +2423,7 @@ const LANG = {
     about_intro:'Модель v5.0 переходит от «голой экстраполяции интеллекта» к эпидемиологии принятия решений. Мы моделируем не просто рост когнитивных способностей ИИ, а процесс добровольной передачи контроля (Delegation Pressure) и последующий структурный захват человеческой цивилизации (Institutional Capture). ИИ захватывает мир не потому что он умен, а потому что люди сами делегируют ему свои институты.',
     defs_label:'Архитектура и контуры',
     defs_label_arch:'Топология латентного пространства',
-    defs_label_contours:'Динамические контуры модели',
+    defs_label_contours:'Пороги модели',
     arch_tracker_title:'Байесовский вывод (Particle Filter)',
     arch_tracker_desc:'Ансамбль из N=1000 частиц. При поступлении вектора наблюдений (бенчмарков) веса гипотез обновляются через гауссово правдоподобие. Chatbot Arena Elo теперь напрямую калибрует параметр P (Persuasion) — убедительность ИИ, отсекая маловероятные сценарии развития.',
     arch_dims_title:'Когнитивный и Социотехнический слои',
@@ -2485,7 +2485,7 @@ const LANG = {
   },
   en: {
     // Header
-    hdr_title:'Singularity Forecaster', hdr_sub:'v5.0 — Epidemiology of Institutional Capture',
+    hdr_title:'Singularity Forecaster', hdr_sub:'v5.4 — Four Stages of Disengagement',
     // Status bar
     sb_t1:'Median T1 (Cognitive Dominance)', sb_t2:'Median T2 (Autonomous Legitimacy)',
     sb_t3:'Median T3 (Institutional Capture)', sb_t4:'Median T4 (Civilizational Dependency)',
