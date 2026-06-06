@@ -1412,6 +1412,9 @@ class BayesianTracker {
 
         flopsLog += hwDelta * dt;
         algoLog += algoDelta * dt;
+
+        years.push(y);
+        caps.push(cap);
       }
       scenarios.push({ years, caps });
     }
@@ -3320,8 +3323,10 @@ window.addEventListener('load', async () => {
     // Скрываем устаревшие ползунки T2, T3, T4, так как в v5.0 они вычисляются органически
     ['e-t2Threshold', 'e-t3Threshold', 'e-t4Threshold'].forEach(id => {
       const el = document.getElementById(id);
-      if (el && el.closest('.expert-row')) {
-        el.closest('.expert-row').style.display = 'none';
+      if (el) {
+        // Находим ближайший контейнер .expert-param и скрываем его
+        const container = el.closest('.expert-param') || el.parentElement;
+        if (container) container.style.display = 'none';
       }
     });
 
