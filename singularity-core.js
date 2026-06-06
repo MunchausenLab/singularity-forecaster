@@ -9,6 +9,12 @@ function percentile(arr, p) { if (!arr || arr.length === 0) return undefined; co
 function cdf(list, x) { const c = list.filter(v => isFinite(v) && v <= x).length; return list.length ? (c / list.length) * 100 : 0; }
 
 // ============================================================================
+// HISTORICALLY DETERMINED CONSTANTS (not user-configurable)
+// ============================================================================
+const EMBODIMENT_REALITY_ANCHOR = 3.0;    // 2023 robotics level (Figure 01 / Optimus Gen 1)
+const EMBODIMENT_BUILD_BASE_SPEED = 0.10;  // Factory construction speed by humans (roboticsFrontier/year)
+
+// ============================================================================
 // EXPERT SANDBOX — Параметры по умолчанию (соответствуют текущему поведению)
 // ============================================================================
 const EXPERT_CONFIG = {
@@ -61,9 +67,6 @@ const EXPERT_CONFIG = {
   embodimentHWBonusMultiplier: 3.0,// [Embodiment] Множитель HW-роста при активации bypass
   realRoboticsWeight: 0.30,         // [Embodiment] Вес realEmbodimentIndex в likelihood (0=игнор, 1=строгое следование)
 
-  // === EMBODIMENT 3 NEW PARAMS ===
-  embodimentRealityAnchor: 3.0,     // Жёсткий стартовый физический уровень робототехники в 2023 (Figure 01 / Optimus Gen 1)
-  embodimentBuildBaseSpeed: 0.10,   // Скорость строительства заводов людьми (прирост roboticsFrontier в год)
   maxPhysicalExperimentRate: 1.5,   // Лимит скорости научных экспериментов в год (wet-lab constraint для T2→T3)
 
   // Категория 4: Эпистемология (World Models)
@@ -405,7 +408,7 @@ function simulateToYear(particle, targetYear, cfg) {
 
   // PATCH 1 & 3: Independent states and robotics frontier limit
   let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
-  let roboticsFrontier = EXPERT_CONFIG.embodimentRealityAnchor; // Hard start from real 2023 robotics level
+  let roboticsFrontier = EMBODIMENT_REALITY_ANCHOR; // Hard start from real 2023 robotics level
 
   // --- SOCIOTECHNICAL STATES (v5.0) ---
   let IL = 0.0; // Institutional Legitimacy (0..1)
@@ -558,7 +561,7 @@ function simulateToYear(particle, targetYear, cfg) {
     stateW += dW_real;
     stateA += 0.4 * dCompute + (0.3 * (R / ceilingR) + 0.3 * (W / ceilingWM)) * Math.max(0, dCompute);
     stateE += 0.5 * dCompute + 0.2 * (A / ceilingA) * Math.max(0, dCompute);
-    const buildBaseSpeed = EXPERT_CONFIG.embodimentBuildBaseSpeed;
+    const buildBaseSpeed = EMBODIMENT_BUILD_BASE_SPEED;
     const buildRoboticsBonus = 0.15 * (1.0 / (1.0 + Math.exp(-(E - 4.5))));
     roboticsFrontier += (buildBaseSpeed + buildRoboticsBonus) * dt; // Real robotics linear growth
 
@@ -818,7 +821,7 @@ class BayesianTracker {
       let algoKMultiplier = 1.0;
 
       let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
-      let roboticsFrontier = this.cfg.EXPERT.embodimentRealityAnchor; // Hard start from real 2023 robotics level
+      let roboticsFrontier = EMBODIMENT_REALITY_ANCHOR; // Hard start from real 2023 robotics level
 
       // --- SOCIOTECHNICAL STATES (v5.0) ---
       let IL = 0.0; // Institutional Legitimacy (0..1)
@@ -1117,7 +1120,7 @@ class BayesianTracker {
         stateW += dW_real;
         stateA += 0.4 * dCompute + (0.3 * (R / ceilingReasoning) + 0.3 * (W / ceilingWM)) * Math.max(0, dCompute);
         stateE += 0.5 * dCompute + 0.2 * (A / ceilingAgency) * Math.max(0, dCompute);
-        const buildBaseSpeed = this.cfg.EXPERT.embodimentBuildBaseSpeed;
+        const buildBaseSpeed = EMBODIMENT_BUILD_BASE_SPEED;
         const buildRoboticsBonus = 0.15 * (1.0 / (1.0 + Math.exp(-(E - 4.5))));
         roboticsFrontier += (buildBaseSpeed + buildRoboticsBonus) * dt;
 
@@ -1252,7 +1255,7 @@ class BayesianTracker {
       let govMoratorium = false;
       let govMoratoriumYears = 0;
 
-      let roboticsFrontier = cfg.EXPERT.embodimentRealityAnchor; // Hard start from real 2023 robotics level
+      let roboticsFrontier = EMBODIMENT_REALITY_ANCHOR; // Hard start from real 2023 robotics level
 
       // --- SOCIOTECHNICAL STATES (v5.0) ---
       let IL = 0.0;
@@ -1471,7 +1474,7 @@ class BayesianTracker {
         stateW += dW_real;
         stateA += 0.4 * dCompute + (0.3 * (R / cR) + 0.3 * (W / cWM)) * Math.max(0, dCompute);
         stateE += 0.5 * dCompute + 0.2 * (A / cA) * Math.max(0, dCompute);
-        const buildBaseSpeed = cfg.EXPERT.embodimentBuildBaseSpeed;
+        const buildBaseSpeed = EMBODIMENT_BUILD_BASE_SPEED;
         const buildRoboticsBonus = 0.15 * (1.0 / (1.0 + Math.exp(-(E - 4.5))));
         roboticsFrontier += (buildBaseSpeed + buildRoboticsBonus) * dt;
 
@@ -1551,7 +1554,7 @@ class BayesianTracker {
     let t2HitYear = null;
 
     let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
-    let roboticsFrontier = cfg.EXPERT.embodimentRealityAnchor; // Hard start from real 2023 robotics level
+    let roboticsFrontier = EMBODIMENT_REALITY_ANCHOR; // Hard start from real 2023 robotics level
 
     // --- SOCIOTECHNICAL STATES (v5.0) ---
     let IL = 0.0;
@@ -1691,7 +1694,7 @@ class BayesianTracker {
       stateW += dW_real;
       stateA += 0.4 * dCompute + (0.3 * (R / cR) + 0.3 * (W / cWM)) * Math.max(0, dCompute);
       stateE += 0.5 * dCompute + 0.2 * (A / cA) * Math.max(0, dCompute);
-      const buildBaseSpeed = cfg.EXPERT.embodimentBuildBaseSpeed;
+      const buildBaseSpeed = EMBODIMENT_BUILD_BASE_SPEED;
       const buildRoboticsBonus = 0.15 * (1.0 / (1.0 + Math.exp(-(E - 4.5))));
       roboticsFrontier += (buildBaseSpeed + buildRoboticsBonus) * dt;
 
