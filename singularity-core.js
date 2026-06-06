@@ -1205,7 +1205,8 @@ class BayesianTracker {
       for (const swe of sweRange) {
         this.restoreState(state);
         this.observeRealData(baseObs.year, { arcAgi: arc, sweBench: swe });
-        const mc = this.runMonteCarloForecast(300);
+        // Снижаем кол-во MC прогонов для тепловой карты (ускорение в 6 раз)
+        const mc = this.runMonteCarloForecast(50);
         const finite = mc.t2Years.filter(isFinite);
         row.push(finite.length > 0 ? percentile(finite, 50) : 40);
       }
@@ -1653,7 +1654,8 @@ class BayesianTracker {
       }
 
       years.push(y);
-      hwComp.push(flopsLog - cfg.BASE_LOG_FLOPS);
+      // Защита Plotly stackgroup: отсекаем отрицательные значения при крахе GPU-пузыря
+      hwComp.push(Math.max(0, flopsLog - cfg.BASE_LOG_FLOPS));
       algoComp.push(pureAlgoLog);
       paradigmComp.push(accumulatedParadigm);
 
@@ -2095,8 +2097,9 @@ async function plotSensitivityHeatmap(tracker) {
 
   const arcRange = [];
   const sweRange = [];
-  for (let v = 50; v <= 100; v += 5) arcRange.push(v);
-  for (let v = 15; v <= 99; v += 5) sweRange.push(v);
+  // Оптимизированная сетка для быстрого рендеринга
+  for (let v = 60; v <= 100; v += 10) arcRange.push(v);
+  for (let v = 20; v <= 99; v += 10) sweRange.push(v);
 
   const matrix = await tracker.runSensitivityMatrixAsync(arcRange, sweRange);
 
@@ -2318,8 +2321,8 @@ function plotHallucinationGap(gt) {
 
   // Dotted R=W reference line: find where R crosses W
   const traces = [];
-  if (redTrace) traces.push(redTrace);
-  if (greenTrace) traces.push(greenTrace);
+  if (redTrace && redX.length > 0) traces.push(redTrace);
+  if (greenTrace && greenX.length > 0) traces.push(greenTrace);
   
   // Reasoning and World Modeling lines
   traces.push({
