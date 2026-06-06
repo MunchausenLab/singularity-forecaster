@@ -1488,8 +1488,10 @@ class BayesianTracker {
         flopsLog += hwDelta * dt;
         algoLog += algoDelta * dt;
 
+        // [FIX] Удалено ошибочное дублирование years.push и caps.push,
+        // из-за которого Plotly рисовал вертикальные зигзаги на графике.
         years.push(y);
-        caps.push(cap);
+        caps.push(Math.min(R, A)); // [FIX] Базовый интеллект не ограничивается embodiment
       }
       scenarios.push({ years, caps });
     }
@@ -2002,17 +2004,19 @@ function updateUI(r) {
   const noT2El = document.getElementById('v3NoAgi');
   if (noT2El) noT2El.style.display = isFinite(s.t2Median) ? 'none' : '';
   plotHistogram(r.histogram); plotCumulative(r.cumulative);
-  // Advanced charts (async-like, yield between heavy plots)
-  requestAnimationFrame(async () => {
-    const tracker = getTracker();
-    await plotSensitivityHeatmap(tracker);
-    requestAnimationFrame(() => {
-      plotScenarioFan(tracker);
-      plotDecomposition(tracker);
-      plotHallucinationGap(r.gapTrajectory);
-      plotEmbodimentDiagnostics(tracker, r.embodimentTrajectory);
-    });
+
+  const tracker = getTracker();
+
+  // Advanced charts: отрисовываем мгновенные графики без блокировки
+  requestAnimationFrame(() => {
+    plotScenarioFan(tracker);
+    plotDecomposition(tracker);
+    plotHallucinationGap(r.gapTrajectory);
+    plotEmbodimentDiagnostics(tracker, r.embodimentTrajectory);
   });
+
+  // Тяжелую тепловую карту запускаем асинхронно, чтобы она не "вешала" остальные графики
+  setTimeout(() => plotSensitivityHeatmap(tracker), 50);
 }
 
 function setVal(id, txt, cls) { const el = document.getElementById(id); if (el) { el.innerHTML = txt; el.className = 'status-value ' + (cls||''); } }
@@ -2097,9 +2101,9 @@ async function plotSensitivityHeatmap(tracker) {
 
   const arcRange = [];
   const sweRange = [];
-  // Оптимизированная сетка для быстрого рендеринга
-  for (let v = 60; v <= 100; v += 10) arcRange.push(v);
-  for (let v = 20; v <= 99; v += 10) sweRange.push(v);
+  // Разреженная сетка для моментального рендера без потери смысла
+  for (let v = 50; v <= 100; v += 10) arcRange.push(v);
+  for (let v = 15; v <= 99; v += 12) sweRange.push(v);
 
   const matrix = await tracker.runSensitivityMatrixAsync(arcRange, sweRange);
 
@@ -2321,8 +2325,8 @@ function plotHallucinationGap(gt) {
 
   // Dotted R=W reference line: find where R crosses W
   const traces = [];
-  if (redTrace && redX.length > 0) traces.push(redTrace);
-  if (greenTrace && greenX.length > 0) traces.push(greenTrace);
+  if (redTrace && redTrace.x && redTrace.x.length > 0) traces.push(redTrace);
+  if (greenTrace && greenTrace.x && greenTrace.x.length > 0) traces.push(greenTrace);
   
   // Reasoning and World Modeling lines
   traces.push({
