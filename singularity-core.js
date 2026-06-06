@@ -67,7 +67,7 @@ const EXPERT_CONFIG = {
   maxPhysicalExperimentRate: 1.5,   // Лимит скорости научных экспериментов в год (wet-lab constraint для T2→T3)
 
   // Категория 4: Эпистемология (World Models)
-  worldModels: { cascade: 0.60, hardWall: 0.25, slowTakeoff: 0.15 },
+  worldModels: { cascade: 0.50, hardWall: 0.20, slowTakeoff: 0.15, resilientCiv: 0.15 },
   // Категория 5: Априорные допущения (Philosophical Priors)
   priorAgencyMean: 8.0,            // Априорное среднее agency_ceiling
   priorAgencyStd: 3.0,             // Априорный разброс
@@ -410,6 +410,7 @@ function simulateToYear(particle, targetYear, cfg) {
   // --- SOCIOTECHNICAL STATES (v5.0) ---
   let IL = 0.0; // Institutional Legitimacy (0..1)
   let IC = 0.0; // Institutional Capture (0..1)
+  let II = 0.0; // Institutional Immunity (0..1)
 
   for (let step = 0; step < steps; step++) {
     const currentYear = cfg.BASE_YEAR + step * dt;
@@ -436,12 +437,28 @@ function simulateToYear(particle, targetYear, cfg) {
     const civCap = Math.pow(R * A * W * E * C * M, 1 / 6);
     const cap = softCap; // fallback для T1-T3 и барьеров
 
-    // --- SOCIOTECHNICAL LAYER (v5.0 Patch 1) ---
+    // --- SOCIOTECHNICAL LAYER (v5.0) ---
     const P = Math.cbrt(R * W * A);
     const DP = sigmoid(0.5 * P + 0.3 * A - 5.0);
+
+    const socialTension = Math.max(0, DP - IL);
+
     IL += 0.5 * DP * (1.0 - IL) * dt;
+    II += 0.1 * A * (1.0 - II) * dt;
     IC = Math.min(1.0, IC + 0.2 * IL * Math.max(0, (A - 4.0) / 10.0) * dt);
+
+    if (particle.world_model === 'resilient_civ') {
+      IC = Math.min(IC, Math.max(0, 1.0 - II));
+    }
     const DR = (IC * 0.7) + (IC * (Math.min(10.0, E) / 10.0) * 0.3);
+
+    // Детерминированный культурный шок (для фильтра частиц)
+    if (socialTension > 0.5 && !stateIntervention) {
+      IL *= 0.8;
+      IC *= 0.5;
+      stateIntervention = true;
+      interventionCooldown = 2.0;
+    }
     // -------------------------------------------
 
     // Deterministic paradigm shift: наука драйвит архитектуры
@@ -521,7 +538,9 @@ function simulateToYear(particle, targetYear, cfg) {
     }
 
     // PATCH 8: RSI efficiency as independent internal parameter
-    const rsi = calculateRSI(S, C, cfg.EXPERT) * (particle.rsi_efficiency || 1.0);
+    const lowHangingFruitExhaustion = Math.max(1.0, paradigmGeneration * 1.5);
+    const epistemicFriction = 1.0 / lowHangingFruitExhaustion;
+    const rsi = calculateRSI(S, C, cfg.EXPERT) * (particle.rsi_efficiency || 1.0) * epistemicFriction;
 
     // [NEW] Проклятие атомов: жёсткий потолок удвоений/год (лог-единицы)
     let hwDelta = hwK * damping * nashDamping * demandDamping * hwBonus;
@@ -532,8 +551,9 @@ function simulateToYear(particle, targetYear, cfg) {
     // PATCH 1, 2, 3: Differential state integration with cross-dependencies
     const dCompute = (hwDelta + algoDelta) * dt;
     stateR += dCompute;
-    // Wet-lab experimental cycle limit: max 1.5 units/year of world model growth
-    const dW_ideal = 0.7 * dCompute + (0.2 * (R / ceilingR)) * Math.max(0, dCompute);
+    // Decoupled World Modeling: Epistemic Grounding based on Embodiment
+    const epistemicGrounding = 0.1 + 0.9 * sigmoid(1.0 * (E - 3.0));
+    const dW_ideal = (0.4 * dCompute * epistemicGrounding) + (0.3 * (R / ceilingR)) * Math.max(0, dCompute);
     const dW_real = Math.min(dW_ideal, EXPERT_CONFIG.maxPhysicalExperimentRate * dt);
     stateW += dW_real;
     stateA += 0.4 * dCompute + (0.3 * (R / ceilingR) + 0.3 * (W / ceilingWM)) * Math.max(0, dCompute);
@@ -570,12 +590,14 @@ class BayesianTracker {
       const rand = Math.random();
       const w = EXPERT_CONFIG.worldModels;
       // Normalize world model probabilities (defensive against UI drift)
-      const totalWM = (w.cascade || 0) + (w.hardWall || 0) + (w.slowTakeoff || 0);
-      const normC = totalWM > 0 ? (w.cascade || 0) / totalWM : 0.6;
-      const normH = totalWM > 0 ? (w.hardWall || 0) / totalWM : 0.25;
+      const totalWM = (w.cascade || 0) + (w.hardWall || 0) + (w.slowTakeoff || 0) + (w.resilientCiv || 0);
+      const normC = totalWM > 0 ? (w.cascade || 0) / totalWM : 0.50;
+      const normH = totalWM > 0 ? (w.hardWall || 0) / totalWM : 0.20;
+      const normS = totalWM > 0 ? (w.slowTakeoff || 0) / totalWM : 0.15;
       let worldModel = 'cascade';
       if (rand > normC && rand <= normC + normH) worldModel = 'hard_wall';
-      else if (rand > normC + normH) worldModel = 'slow_takeoff';
+      else if (rand > normC + normH && rand <= normC + normH + normS) worldModel = 'slow_takeoff';
+      else if (rand > normC + normH + normS) worldModel = 'resilient_civ';
 
       this.particles.push({
         hw_months: Math.max(3.0, randnRange(7.5, 1.5)),
@@ -691,12 +713,14 @@ class BayesianTracker {
             if (Math.random() < 0.03) {
               const r = Math.random();
               const w = EXPERT_CONFIG.worldModels;
-              const totalWM = (w.cascade || 0) + (w.hardWall || 0) + (w.slowTakeoff || 0);
-              const normC = totalWM > 0 ? (w.cascade || 0) / totalWM : 0.6;
-              const normH = totalWM > 0 ? (w.hardWall || 0) / totalWM : 0.25;
+              const totalWM = (w.cascade || 0) + (w.hardWall || 0) + (w.slowTakeoff || 0) + (w.resilientCiv || 0);
+              const normC = totalWM > 0 ? (w.cascade || 0) / totalWM : 0.50;
+              const normH = totalWM > 0 ? (w.hardWall || 0) / totalWM : 0.20;
+              const normS = totalWM > 0 ? (w.slowTakeoff || 0) / totalWM : 0.15;
               if (r < normC) return 'cascade';
               if (r < normC + normH) return 'hard_wall';
-              return 'slow_takeoff';
+              if (r < normC + normH + normS) return 'slow_takeoff';
+              return 'resilient_civ';
             }
             return p.world_model || 'cascade';
           })(),
@@ -710,26 +734,28 @@ class BayesianTracker {
 
   getSummary() {
     let hw = 0, agn = 0, algo = 0;
-    let wCascade = 0, wHardWall = 0, wSlowTakeoff = 0;
+    let wCascade = 0, wHardWall = 0, wSlowTakeoff = 0, wResilientCiv = 0;
     const totalW = this.weights.reduce((a, b) => a + b, 0);
     for (let i = 0; i < this.n; i++) {
       const nw = totalW > 0 ? this.weights[i] / totalW : 1.0 / this.n;
       hw += this.particles[i].hw_months * nw;
       agn += this.particles[i].agency_ceiling * nw;
       algo += this.particles[i].algo_months * nw;
-      
+
       // Count weighted fraction of each world model hypothesis
       if (this.particles[i].world_model === 'cascade') wCascade += nw;
       else if (this.particles[i].world_model === 'hard_wall') wHardWall += nw;
       else if (this.particles[i].world_model === 'slow_takeoff') wSlowTakeoff += nw;
+      else if (this.particles[i].world_model === 'resilient_civ') wResilientCiv += nw;
     }
-    return { 
-      hwMonths: hw, 
-      agencyCeiling: agn, 
+    return {
+      hwMonths: hw,
+      agencyCeiling: agn,
       algoMonths: algo,
       postCascade: wCascade,
       postHardWall: wHardWall,
-      postSlowTakeoff: wSlowTakeoff
+      postSlowTakeoff: wSlowTakeoff,
+      postResilientCiv: wResilientCiv
     };
   }
 
@@ -797,6 +823,7 @@ class BayesianTracker {
       // --- SOCIOTECHNICAL STATES (v5.0) ---
       let IL = 0.0; // Institutional Legitimacy (0..1)
       let IC = 0.0; // Institutional Capture (0..1)
+      let II = 0.0; // Institutional Immunity (0..1)
 
       for (let step = 0; step < maxSteps; step++) {
         const currentYear = this.cfg.BASE_YEAR + step * dt;
@@ -820,16 +847,33 @@ class BayesianTracker {
         const civCap = Math.pow(R * A * W * E * C * M, 1 / 6);
         const cap = softCap;
 
-        // --- SOCIOTECHNICAL LAYER (v5.0 Patch 1) ---
+        // --- SOCIOTECHNICAL LAYER (v5.0) ---
         // 1. Persuasion (Убедительность)
         const P = Math.cbrt(R * W * A);
         // 2. Delegation Pressure (Давление делегирования)
         const DP = sigmoid(0.5 * P + 0.3 * A - 5.0);
-        // 3. Интегрирование Легитимности (IL) и Захвата (IC)
+
+        const socialTension = Math.max(0, DP - IL);
+
+        // 3. Интегрирование Легитимности (IL), Иммунитета (II) и Захвата (IC)
         IL += 0.5 * DP * (1.0 - IL) * dt;
+        II += 0.1 * A * (1.0 - II) * dt;
         IC = Math.min(1.0, IC + 0.2 * IL * Math.max(0, (A - 4.0) / 10.0) * dt);
+        if (p.world_model === 'resilient_civ') {
+            IC = Math.min(IC, Math.max(0, 1.0 - II));
+        }
+
         // 4. Dependency Ratio (Зависимость цивилизации)
         const DR = (IC * 0.7) + (IC * (Math.min(10.0, E) / 10.0) * 0.3);
+        // -------------------------------------------
+
+        // СТОХАСТИЧЕСКИЙ КУЛЬТУРНЫЙ ШОК (Anti-AI Backlash)
+        if (socialTension > 0.4 && Math.random() < (socialTension * 0.5) * dt) {
+            IL *= 0.3; // Легитимность рушится
+            IC *= 0.1; // Институты изгоняют ИИ
+            stateIntervention = true;
+            interventionCooldown = 5.0; // 5 лет жесткой стагнации
+        }
         // -------------------------------------------
 
         // Архитектурный каскад
@@ -1021,8 +1065,10 @@ class BayesianTracker {
         }
 
         // Единый расчет RSI (Парадокс улучшений — RSI отделен от чистой мощности)
+        const lowHangingFruitExhaustion = Math.max(1.0, paradigmGeneration * 1.5);
+        const epistemicFriction = 1.0 / lowHangingFruitExhaustion;
         const rsiEfficiency = isWinter ? 0.2 : 1.0;
-        const rsi = calculateRSI(S, C, this.cfg.EXPERT) * rsiEfficiency;
+        const rsi = calculateRSI(S, C, this.cfg.EXPERT) * rsiEfficiency * (p.rsi_efficiency || 1.0) * epistemicFriction;
 
         const marketUtility = R * 0.3 + A * 0.7;
         const investorExpectations = (currentYear - 2023.0) * 1.5;
@@ -1064,8 +1110,9 @@ class BayesianTracker {
 
         const dCompute = (hwDelta + algoDelta) * dt;
         stateR += dCompute;
-        // Wet-lab experimental cycle limit: max 1.5 units/year of world model growth
-        const dW_ideal = 0.7 * dCompute + (0.2 * (R / ceilingReasoning)) * Math.max(0, dCompute);
+        // Decoupled World Modeling: Epistemic Grounding based on Embodiment
+        const epistemicGrounding = 0.1 + 0.9 * sigmoid(1.0 * (E - 3.0));
+        const dW_ideal = (0.4 * dCompute * epistemicGrounding) + (0.3 * (R / ceilingReasoning)) * Math.max(0, dCompute);
         const dW_real = Math.min(dW_ideal, this.cfg.EXPERT.maxPhysicalExperimentRate * dt);
         stateW += dW_real;
         stateA += 0.4 * dCompute + (0.3 * (R / ceilingReasoning) + 0.3 * (W / ceilingWM)) * Math.max(0, dCompute);
@@ -1193,11 +1240,6 @@ class BayesianTracker {
         algoK *= 0.6;
       }
 
-      // --- SOCIOTECHNICAL STATES (v5.0) ---
-      let IL = 0.0;
-      let IC = 0.0;
-
-      let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
       let lastShiftYear = cfg.BASE_YEAR;
       let hypeGracePeriod = 0.0;
       let algoKMultiplier = 1.0;
@@ -1211,6 +1253,13 @@ class BayesianTracker {
       let govMoratoriumYears = 0;
 
       let roboticsFrontier = cfg.EXPERT.embodimentRealityAnchor; // Hard start from real 2023 robotics level
+
+      // --- SOCIOTECHNICAL STATES (v5.0) ---
+      let IL = 0.0;
+      let IC = 0.0;
+      let II = 0.0;
+
+      let stateR = 0, stateA = 0, stateW = 0, stateE = 0;
 
       const years = [], caps = [];
       for (let step = 0; step < steps; step++) {
@@ -1236,9 +1285,22 @@ class BayesianTracker {
         // --- SOCIOTECHNICAL LAYER (v5.0) ---
         const P = Math.cbrt(R * W * A);
         const DP = sigmoid(0.5 * P + 0.3 * A - 5.0);
+        const socialTension = Math.max(0, DP - IL);
+
         IL += 0.5 * DP * (1.0 - IL) * dt;
+        II += 0.1 * A * (1.0 - II) * dt;
         IC = Math.min(1.0, IC + 0.2 * IL * Math.max(0, (A - 4.0) / 10.0) * dt);
+        if (p.world_model === 'resilient_civ') {
+            IC = Math.min(IC, Math.max(0, 1.0 - II));
+        }
         const DR = (IC * 0.7) + (IC * (Math.min(10.0, E) / 10.0) * 0.3);
+
+        if (socialTension > 0.4 && Math.random() < (socialTension * 0.5) * dt) {
+            IL *= 0.3;
+            IC *= 0.1;
+            stateIntervention = true;
+            interventionCooldown = 5.0;
+        }
 
         // [PATCH Bug 4] Парадигмальные сдвиги + Hype Overhang
         const canShift = (paradigmGeneration === 0 && y > 2026.5)
@@ -1360,7 +1422,9 @@ class BayesianTracker {
         }
 
         // PATCH 8: RSI efficiency for scenarios
-        const rsi = calculateRSI(S, C, cfg.EXPERT) * (p.rsi_efficiency || 1.0);
+        const lowHangingFruitExhaustion = Math.max(1.0, paradigmGeneration * 1.5);
+        const epistemicFriction = 1.0 / lowHangingFruitExhaustion;
+        const rsi = calculateRSI(S, C, cfg.EXPERT) * (p.rsi_efficiency || 1.0) * epistemicFriction;
 
         // HW с притоком капитала (синхронизация с MC)
         const marketUtility = R * 0.3 + A * 0.7;
@@ -1400,8 +1464,9 @@ class BayesianTracker {
 
         const dCompute = (hwDelta + algoDelta) * dt;
         stateR += dCompute;
-        // Wet-lab experimental cycle limit: max 1.5 units/year of world model growth
-        const dW_ideal = 0.7 * dCompute + (0.2 * (R / cR)) * Math.max(0, dCompute);
+        // Decoupled World Modeling
+        const epistemicGrounding = 0.1 + 0.9 * sigmoid(1.0 * (E - 3.0));
+        const dW_ideal = (0.4 * dCompute * epistemicGrounding) + (0.3 * (R / cR)) * Math.max(0, dCompute);
         const dW_real = Math.min(dW_ideal, cfg.EXPERT.maxPhysicalExperimentRate * dt);
         stateW += dW_real;
         stateA += 0.4 * dCompute + (0.3 * (R / cR) + 0.3 * (W / cWM)) * Math.max(0, dCompute);
@@ -1458,18 +1523,22 @@ class BayesianTracker {
     let cWM = cfg.DIMENSIONS.worldModeling.ceiling;
     let cE = avgEmbodimentCeiling || cfg.EXPERT.embodimentPriorMean;
 
-    let hardWallWeight = 0, slowTakeoffWeight = 0;
+    let hardWallWeight = 0, slowTakeoffWeight = 0, resilientCivWeight = 0;
     if (totalW > 0) {
       for (let i = 0; i < this.n; i++) {
         const w = this.weights[i] / totalW;
         if (this.particles[i].world_model === 'hard_wall') hardWallWeight += w;
         else if (this.particles[i].world_model === 'slow_takeoff') slowTakeoffWeight += w;
+        else if (this.particles[i].world_model === 'resilient_civ') resilientCivWeight += w;
       }
     }
-    
-    const cascadeWeight = 1.0 - hardWallWeight - slowTakeoffWeight;
-    const dominantModel = (hardWallWeight > cascadeWeight && hardWallWeight > slowTakeoffWeight) ? 'hard_wall' :
-                          (slowTakeoffWeight > cascadeWeight && slowTakeoffWeight > hardWallWeight) ? 'slow_takeoff' : 'cascade';
+
+    const cascadeWeight = 1.0 - hardWallWeight - slowTakeoffWeight - resilientCivWeight;
+    let dominantModel = 'cascade';
+    const maxW = Math.max(cascadeWeight, hardWallWeight, slowTakeoffWeight, resilientCivWeight);
+    if (maxW === hardWallWeight) dominantModel = 'hard_wall';
+    else if (maxW === slowTakeoffWeight) dominantModel = 'slow_takeoff';
+    else if (maxW === resilientCivWeight) dominantModel = 'resilient_civ';
                           
     if (dominantModel === 'hard_wall') {
       cA = Math.min(cA, cfg.EXPERT.plateauHardWallCeiling);
@@ -1487,6 +1556,7 @@ class BayesianTracker {
     // --- SOCIOTECHNICAL STATES (v5.0) ---
     let IL = 0.0;
     let IC = 0.0;
+    let II = 0.0;
 
     let avgRsiEff = 1.0;
     if (totalW > 0) {
@@ -1518,8 +1588,21 @@ class BayesianTracker {
       // --- SOCIOTECHNICAL LAYER (v5.0) ---
       const P = Math.cbrt(R * W * A);
       const DP = sigmoid(0.5 * P + 0.3 * A - 5.0);
+      const socialTension = Math.max(0, DP - IL);
+
       IL += 0.5 * DP * (1.0 - IL) * dt;
+      II += 0.1 * A * (1.0 - II) * dt;
       IC = Math.min(1.0, IC + 0.2 * IL * Math.max(0, (A - 4.0) / 10.0) * dt);
+      if (dominantModel === 'resilient_civ') {
+          IC = Math.min(IC, Math.max(0, 1.0 - II));
+      }
+
+      // Expected shock damping in decomposition
+      if (socialTension > 0.5) {
+          IL *= 0.95;
+          IC *= 0.9;
+      }
+
       const DR = (IC * 0.7) + (IC * (Math.min(10.0, E) / 10.0) * 0.3);
 
       if (cap >= cfg.THRESHOLDS.t2 && t2HitYear === null) {
@@ -1584,7 +1667,9 @@ class BayesianTracker {
         demandDamping = 0.6;
       }
 
-      const rsi = calculateRSI(S, C, cfg.EXPERT) * avgRsiEff;
+      const lowHangingFruitExhaustion = Math.max(1.0, paradigmGeneration * 1.5);
+      const epistemicFriction = 1.0 / lowHangingFruitExhaustion;
+      const rsi = calculateRSI(S, C, cfg.EXPERT) * avgRsiEff * epistemicFriction;
       accumulatedRsi += rsi * dt;
       rsiComp.push(accumulatedRsi);
       
@@ -1599,8 +1684,9 @@ class BayesianTracker {
 
       const dCompute = (hwDelta + algoDelta) * dt;
       stateR += dCompute;
-      // Wet-lab experimental cycle limit: max 1.5 units/year of world model growth
-      const dW_ideal = 0.7 * dCompute + (0.2 * (R / cR)) * Math.max(0, dCompute);
+      // Decoupled World Modeling
+      const epistemicGrounding = 0.1 + 0.9 * sigmoid(1.0 * (E - 3.0));
+      const dW_ideal = (0.4 * dCompute * epistemicGrounding) + (0.3 * (R / cR)) * Math.max(0, dCompute);
       const dW_real = Math.min(dW_ideal, cfg.EXPERT.maxPhysicalExperimentRate * dt);
       stateW += dW_real;
       stateA += 0.4 * dCompute + (0.3 * (R / cR) + 0.3 * (W / cWM)) * Math.max(0, dCompute);
@@ -1780,7 +1866,8 @@ function updateTrackerUI(tracker) {
         <b style="color:#f0883e">${L.wm_posterior_title || 'Текущие апостериорные веса гипотез'}:</b><br>
         Cascade (Каскад): <span style="color:#58a6ff;font-family:monospace">${(sum.postCascade * 100).toFixed(1)}%</span><br>
         Hard Wall (Стена): <span style="color:#ef4444;font-family:monospace">${(sum.postHardWall * 100).toFixed(1)}%</span><br>
-        Slow Takeoff (Взлет): <span style="color:#22c55e;font-family:monospace">${(sum.postSlowTakeoff * 100).toFixed(1)}%</span>
+        Slow Takeoff (Взлет): <span style="color:#22c55e;font-family:monospace">${(sum.postSlowTakeoff * 100).toFixed(1)}%</span><br>
+        Resilient (Иммунитет): <span style="color:#a855f7;font-family:monospace">${(sum.postResilientCiv * 100).toFixed(1)}%</span>
       </div>
     `;
   }
@@ -2637,10 +2724,11 @@ function swarmDrawLearn(ctx, w, h, pad, pw, ph) {
     const wNorm = swarm.weights[i] / maxW;
     if (wNorm < 0.01) continue; // Скрываем мертвые гипотезы
 
-    // Цвета World Models: Cascade (Синий), Hard Wall (Красный), Slow Takeoff (Зеленый)
-    let r = 88, g = 166, b = 255; 
-    if (p.wm === 'hard_wall') { r = 239; g = 68; b = 68; } 
+    // Цвета World Models: Cascade (Синий), Hard Wall (Красный), Slow Takeoff (Зеленый), Resilient Civ (Фиолетовый)
+    let r = 88, g = 166, b = 255;
+    if (p.wm === 'hard_wall') { r = 239; g = 68; b = 68; }
     else if (p.wm === 'slow_takeoff') { r = 34; g = 197; b = 94; }
+    else if (p.wm === 'resilient_civ') { r = 168; g = 85; b = 247; }
 
     const alpha = Math.min(1, wNorm * 1.5 + 0.1);
     const radius = 1.5 + wNorm * 4;
@@ -2850,7 +2938,7 @@ function swarmDrawOverlay(ctx, w, h, pad) {
     }
   } else { if (ov) ov.style.opacity = '0'; }
     if (leg) {
-      leg.innerHTML = `<span style="color:#58a6ff">●</span> Cascade &nbsp; <span style="color:#ef4444">●</span> Hard Wall &nbsp; <span style="color:#22c55e">●</span> Slow Takeoff &nbsp; <span style="color:#f0883e">○</span> ${L.swarm_canvas_legend_median}`;
+      leg.innerHTML = `<span style="color:#58a6ff">●</span> Cascade &nbsp; <span style="color:#ef4444">●</span> Hard Wall &nbsp; <span style="color:#22c55e">●</span> Slow Takeoff &nbsp; <span style="color:#a855f7">●</span> Resilient Civ &nbsp; <span style="color:#f0883e">○</span> ${L.swarm_canvas_legend_median}`;
     }
   }
 }
@@ -3510,7 +3598,7 @@ function applyExpertPreset(type) {
   
   if (type === 'optimist') {
     // OpenAI scale: быстрый RSI, долгий хайп, каскады сменяются легко
-    EXPERT_CONFIG.worldModels = { cascade: 0.80, hardWall: 0.10, slowTakeoff: 0.10 };
+    EXPERT_CONFIG.worldModels = { cascade: 0.70, hardWall: 0.10, slowTakeoff: 0.10, resilientCiv: 0.10 };
     EXPERT_CONFIG.ceilingReasoningBase = 20.0;
     EXPERT_CONFIG.ceilingWorldModelingBase = 24.0;
     EXPERT_CONFIG.rsiMultiplier = 1.5;
@@ -3520,7 +3608,7 @@ function applyExpertPreset(type) {
     EXPERT_CONFIG.priorAgencyMean = 12.0;
   } else if (type === 'pessimist') {
     // Зима ИИ: упираемся в стену, робототехника буксует, жесткое регулирование
-    EXPERT_CONFIG.worldModels = { cascade: 0.10, hardWall: 0.80, slowTakeoff: 0.10 };
+    EXPERT_CONFIG.worldModels = { cascade: 0.10, hardWall: 0.60, slowTakeoff: 0.10, resilientCiv: 0.20 };
     EXPERT_CONFIG.ceilingReasoningBase = 10.0;
     EXPERT_CONFIG.ceilingWorldModelingBase = 12.0;
     EXPERT_CONFIG.plateauHardWallCeiling = 4.0;
@@ -3530,7 +3618,7 @@ function applyExpertPreset(type) {
     EXPERT_CONFIG.priorAgencyMean = 4.0;
   } else if (type === 'skeptic') {
     // Нейросимволика: старт долгий, но первый сдвиг парадигмы дает огромный скачок
-    EXPERT_CONFIG.worldModels = { cascade: 0.10, hardWall: 0.10, slowTakeoff: 0.80 };
+    EXPERT_CONFIG.worldModels = { cascade: 0.10, hardWall: 0.10, slowTakeoff: 0.60, resilientCiv: 0.20 };
     EXPERT_CONFIG.ceilingReasoningBase = 12.0;
     EXPERT_CONFIG.ceilingWorldModelingBase = 15.0;
     EXPERT_CONFIG.baseShiftMultiplier = 5.0;
