@@ -217,6 +217,12 @@ const FALLBACK_BENCHMARK_HISTORY = [
     arenaElo: 1561, arcAgi: 96.5, sweBench: 82.6, trainingFlopsLog: 27.2, horizon: 168.0, simToReal: 50.0, moravec: 60.0, autoAssembly: 1.9,
     arenaElo_sigma: 20, arcAgi_sigma: 4, sweBench_sigma: 3, trainingFlopsLog_sigma: 0.2, horizon_sigma: 0.4, simToReal_sigma: 5, moravec_sigma: 5, autoAssembly_sigma: 0.3,
     notes: "Май 2026. Абсолютный SOTA. Эффективный предел текущих бенчмарков."
+  },
+  {
+    year: 2026.44, event: "Claude Fable 5",
+    arenaElo: 1585, arcAgi: 97.2, sweBench: 80.3, trainingFlopsLog: 27.5, horizon: 200.0, simToReal: 55.0, moravec: 62.0, autoAssembly: 2.0,
+    arenaElo_sigma: 20, arcAgi_sigma: 4, sweBench_sigma: 4, trainingFlopsLog_sigma: 0.3, horizon_sigma: 0.4, simToReal_sigma: 5, moravec_sigma: 5, autoAssembly_sigma: 0.3,
+    notes: "Июнь 2026. Mythos-class модель. SWE-Bench Pro 80.3%, FrontierCode Diamond — лучший среди frontier-моделей. OSWorld-Verified 85.0%. HLE with tools 64.5%. ExploitBench (cybersecurity) 78.0%. HealthBench 66.0%. Computer use 85.0%. GDPval-AA 1932. Сейфгарды на кибербезопасность и биологию (Fable 5 перенапрягает в Opus 4.8 на этих темах). Mythos 5 — та же модель без ограничений, доступна для cyberdefenders через Project Glasswing."
   }
 ];
 
