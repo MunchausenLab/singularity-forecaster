@@ -108,7 +108,7 @@ let userObservations = [];
 let simulationRunning = false;
 let currentResults = null;
 
-const BENCHMARKS_API_URL = 'https://raw.githubusercontent.com/slavabelik79/ai-metrics/main/benchmarks_history.json';
+const BENCHMARKS_API_URL = 'https://raw.githubusercontent.com/MunchausenLab/ai-metrics/main/benchmarks_history.json';
 
 // Шум (дисперсия) для каждого бенчмарка. Отражает степень доверия к тесту.
 const BENCHMARK_SIGMAS = {
@@ -1439,12 +1439,16 @@ class BayesianTracker {
         // PATCH 8: RSI efficiency for scenarios
         const lowHangingFruitExhaustion = Math.max(1.0, paradigmGeneration * 1.5);
         const epistemicFriction = 1.0 / lowHangingFruitExhaustion;
-        const rsi = calculateRSI(S, C, cfg.EXPERT) * (p.rsi_efficiency || 1.0) * epistemicFriction;
+        const rsiEfficiency = isWinter ? 0.2 : 1.0;
+        const rsi = calculateRSI(S, C, cfg.EXPERT) * rsiEfficiency * (p.rsi_efficiency || 1.0) * epistemicFriction;
 
         // HW с притоком капитала (синхронизация с MC)
         const marketUtility = R * 0.3 + A * 0.7;
         const investorExpectations = (y - 2023.0) * 1.5;
-        let capitalMultiplier = Math.max(0.1, Math.min(cfg.EXPERT.maxCapitalMultiplier, marketUtility / Math.max(1.0, investorExpectations)));
+        // Деньги зависят от хайпа, но если институты легализовали ИИ (IL растет), инвестиции гарантированы
+        let capitalMultiplier = Math.max(0.1, Math.min(cfg.EXPERT.maxCapitalMultiplier,
+            (marketUtility / Math.max(1.0, investorExpectations)) + (IL * 2.0)
+        ));
         if (paradigmGeneration > 0 && hypeGracePeriod > 0) {
           capitalMultiplier = Math.max(capitalMultiplier, 2.0);
         }
@@ -1494,11 +1498,6 @@ class BayesianTracker {
 
         flopsLog += hwDelta * dt;
         algoLog += algoDelta * dt;
-
-        // [FIX] Удалено ошибочное дублирование years.push и caps.push,
-        // из-за которого Plotly рисовал вертикальные зигзаги на графике.
-        years.push(y);
-        caps.push(Math.min(R, A)); // [FIX] Базовый интеллект не ограничивается embodiment
       }
       scenarios.push({ years, caps });
     }
@@ -1846,13 +1845,19 @@ function addObservation() {
   const sweVal = sweEl && sweEl.value ? +sweEl.value : undefined;
   const eloVal = eloEl && eloEl.value ? +eloEl.value : undefined;
 
+  // Валидация: отбрасываем NaN и нечисловые значения
+  const safeArc = (arcVal !== undefined && isFinite(arcVal)) ? arcVal : undefined;
+  const safeHorizon = (horizonVal !== undefined && isFinite(horizonVal) && horizonVal > 0) ? horizonVal : undefined;
+  const safeSwe = (sweVal !== undefined && isFinite(sweVal) && sweVal >= 0 && sweVal <= 100) ? sweVal : undefined;
+  const safeElo = (eloVal !== undefined && isFinite(eloVal) && eloVal > 0) ? eloVal : undefined;
+
   const y = coreTracker ? coreTracker.cfg.CURRENT_YEAR : (new Date().getFullYear() + new Date().getMonth() / 12);
   
   const newObs = { year: y };
-  if (arcVal !== undefined) newObs.arcAgi = arcVal;
-  if (horizonVal !== undefined) newObs.horizon = horizonVal;
-  if (sweVal !== undefined) newObs.sweBench = sweVal;
-  if (eloVal !== undefined) newObs.arenaElo = eloVal;
+  if (safeArc !== undefined) newObs.arcAgi = safeArc;
+  if (safeHorizon !== undefined) newObs.horizon = safeHorizon;
+  if (safeSwe !== undefined) newObs.sweBench = safeSwe;
+  if (safeElo !== undefined) newObs.arenaElo = safeElo;
 
   userObservations = userObservations.filter(o => o.year < y - 0.01);
   if (Object.keys(newObs).length > 1) { // Добавляем, только если есть хотя бы 1 метрика кроме year
@@ -1981,10 +1986,10 @@ async function runSimulation() {
         t3: yq.map(y => cdf(t3List, y)), t4: yq.map(y => cdf(t4List, y))
       },
       summary: {
-        t1Median: percentile(finiteT1, 50),
-        t2Median: percentile(finiteT2, 50),
-        t3Median: percentile(finiteT3, 50),
-        t4Median: percentile(finiteT4, 50),
+        t1Median: percentile(finiteT1, 50) ?? Infinity,
+        t2Median: percentile(finiteT2, 50) ?? Infinity,
+        t3Median: percentile(finiteT3, 50) ?? Infinity,
+        t4Median: percentile(finiteT4, 50) ?? Infinity,
         pT2_2029: cdf(t2List, 3), pT2_2033: cdf(t2List, 7), pT2_2040: cdf(t2List, 14),
         pT4_2035: cdf(t4List, 9), pT4_2045: cdf(t4List, 19), nRuns: n
       },
@@ -2496,6 +2501,37 @@ const LANG = {
     // v3 params panel
     v3_params_title:'Параметры симуляции', v3_no_t4:'T4 не достигнут ни одной частицей к 2068',
     wm_posterior_title:'Текущие апостериорные веса гипотез',
+    // Swarm canvas
+    swarm_canvas_median:'Медиана',
+    canvas_hw_doubling:'Удвоение HW (мес)',
+    canvas_agency_ceiling:'Потолок Agency',
+    canvas_particles:'Частиц',
+    legend_early:'Ранние',
+    legend_mid:'Средние',
+    legend_late:'Поздние',
+    legend_not_reached:'Не достигнут',
+    forecast_xaxis:'Год T2',
+    forecast_yaxis:'Удвоение HW (мес)',
+    forecast_pagi:'P(T2)',
+    forecast_median:'Медиана T2',
+    forecast_overlay_hypotheses:'Гипотезы:',
+    forecast_overlay_by:'к',
+    swarm_play:'Запуск',
+    swarm_play_forecast:'Анимация',
+    swarm_canvas_legend_median:'Медиана',
+    // Hallucination gap
+    gap_red_zone:'Зона галлюцинаций (R > W)',
+    gap_green_zone:'Зона согласования (W ≥ R)',
+    gap_y_axis:'Capability (0..15)',
+    // Embodiment chart
+    ch8_hist:'Частиц',
+    ch8_p10:'p10',
+    ch8_p25:'p25',
+    ch8_t4req:'Порог T4',
+    ch8_bypass:'Обход HW',
+    ch8_y_main:'Воплощённость (0..10)',
+    ch8_x_hist:'embodiment_ceiling',
+    ch8_y_hist:'# частиц',
   },
   en: {
     // Header
@@ -2603,6 +2639,37 @@ const LANG = {
     wm_posterior_title:'Current Posterior Hypothesis Weights',
     // Footer / misc
     footer_note_en:'Data is estimated',
+    // Swarm canvas
+    swarm_canvas_median:'Median',
+    canvas_hw_doubling:'HW Doubling (months)',
+    canvas_agency_ceiling:'Agency Ceiling',
+    canvas_particles:'Particles',
+    legend_early:'Early',
+    legend_mid:'Mid',
+    legend_late:'Late',
+    legend_not_reached:'Not reached',
+    forecast_xaxis:'T2 Year',
+    forecast_yaxis:'HW Doubling (mo)',
+    forecast_pagi:'P(T2)',
+    forecast_median:'Median T2',
+    forecast_overlay_hypotheses:'Hypotheses:',
+    forecast_overlay_by:'by',
+    swarm_play:'Play',
+    swarm_play_forecast:'Animate',
+    swarm_canvas_legend_median:'Median',
+    // Hallucination gap
+    gap_red_zone:'Hallucination zone (R > W)',
+    gap_green_zone:'Aligned zone (W ≥ R)',
+    gap_y_axis:'Capability (0..15)',
+    // Embodiment chart
+    ch8_hist:'Particles',
+    ch8_p10:'p10',
+    ch8_p25:'p25',
+    ch8_t4req:'T4 requirement',
+    ch8_bypass:'HW bypass',
+    ch8_y_main:'Embodiment (0..10)',
+    ch8_x_hist:'embodiment_ceiling',
+    ch8_y_hist:'# particles',
   }
 };
 
